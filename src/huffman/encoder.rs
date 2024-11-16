@@ -2,52 +2,20 @@ use std::{error::Error, mem};
 
 use dsi_bitstream::traits::{BitWrite, Endianness};
 
-// TODO: remove pub from struct and fields: only for debugging
-#[derive(Clone, Copy, Default, Debug)]
-pub struct HuffmanSymbolInfo {
-    pub present: u8,
-    pub nbits: u8,
-    pub bits: u8,
-}
-
-const MAX_HUFFMAN_BITS: usize = 8;
-const NUM_SYMBOLS: usize = 1 << MAX_HUFFMAN_BITS;
-
-// Variable integer encoding scheme that puts bits either in an entropy-coded
-// symbol or as raw bits, depending on the specified configuration.
-// log2 of the number of explicit tokens (referred as k in the paper)
-const LOG2_NUM_EXPLICIT: u32 = 4;
-// number of less significant bit in token (referred as i in the paper)
-const MSB_IN_TOKEN: u32 = 2;
-// number of most significant bit in token (referred as j in the paper)
-const LSB_IN_TOKEN: u32 = 1;
-
-fn encode(value: u64) -> (usize, usize, u64) {
-    let split_token = 1 << LOG2_NUM_EXPLICIT;
-    if value < split_token {
-        (value as usize, 0, 0)
-    } else {
-        let n = usize::BITS - 1 - value.leading_zeros();
-        let m = value - (1 << n);
-        let token = split_token
-            + ((n - LOG2_NUM_EXPLICIT) << (MSB_IN_TOKEN + LSB_IN_TOKEN)) as u64
-            + ((m >> (n - MSB_IN_TOKEN)) << LSB_IN_TOKEN)
-            + (m & ((1 << LSB_IN_TOKEN) - 1));
-        let nbits = n - MSB_IN_TOKEN - LSB_IN_TOKEN;
-        let bits = (value >> LSB_IN_TOKEN) & ((1 << nbits) - 1);
-        (token as usize, nbits as usize, bits)
-    }
-}
+use super::common::{
+    encode, DefaultEncodeParams, EncodeParams, HuffmanSymbolInfo, MAX_HUFFMAN_BITS, NUM_SYMBOLS,
+};
 
 // TODO: remove pub from info_ field used only for encoding
-pub struct HuffmanEncoder {
+pub struct HuffmanEncoder<EP: EncodeParams = DefaultEncodeParams> {
     pub info_: [HuffmanSymbolInfo; 1 << MAX_HUFFMAN_BITS],
+    _marker: core::marker::PhantomData<EP>,
 }
 
-fn compute_histogram(data: &[u64]) -> [usize; NUM_SYMBOLS] {
+fn compute_histogram<EP: EncodeParams>(data: &[u64]) -> [usize; NUM_SYMBOLS] {
     let mut histogram = [0; NUM_SYMBOLS];
     for value in data {
-        let (token, _, _) = encode(*value);
+        let (token, _, _) = encode::<EP>(*value);
         histogram[token] += 1;
     }
     histogram
@@ -137,13 +105,16 @@ fn compute_symbol_bits(infos: &mut [HuffmanSymbolInfo; NUM_SYMBOLS]) -> bool {
     true
 }
 
-impl HuffmanEncoder {
+impl<EP: EncodeParams> HuffmanEncoder<EP> {
     pub fn new(data: &[u64]) -> Self {
-        let histogram = compute_histogram(data);
+        let histogram = compute_histogram::<EP>(data);
         let mut info = [HuffmanSymbolInfo::default(); NUM_SYMBOLS];
         compute_symbol_num_bits(&histogram, &mut info);
         debug_assert!(compute_symbol_bits(&mut info));
-        Self { info_: info }
+        Self {
+            info_: info,
+            _marker: core::marker::PhantomData,
+        }
     }
 
     /// Write the value into the bit stream, if successfull returns a tuple with the
@@ -153,7 +124,7 @@ impl HuffmanEncoder {
         value: u64,
         writer: &mut impl BitWrite<E>,
     ) -> Result<(usize, usize), Box<dyn Error>> {
-        let (token, nbits, bits) = encode(value);
+        let (token, nbits, bits) = encode::<EP>(value);
         debug_assert!(self.info_[token].present == 1, "Unknown value {value}");
         let nbits_per_token = self.info_[token].nbits as usize;
         writer.write_bits(self.info_[token].bits as u64, nbits_per_token)?;

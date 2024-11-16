@@ -6,7 +6,7 @@ use dsi_bitstream::{
 };
 use rand::{rngs::SmallRng, Rng, SeedableRng};
 
-use hybrid_integer_encoding::huffman::HuffmanEncoder;
+use hybrid_integer_encoding::huffman::{DefaultEncodeParams, HuffmanEncoder};
 
 fn generate_random_data(low: u64, high: u64, nsamples: usize) -> Vec<u64> {
     let mut rng = SmallRng::seed_from_u64(0);
@@ -21,7 +21,7 @@ fn generate_random_data(low: u64, high: u64, nsamples: usize) -> Vec<u64> {
 
 fn main() -> Result<(), Box<dyn Error>> {
     let data = generate_random_data(0, 100, 1000);
-    let encoder = HuffmanEncoder::new(&data);
+    let encoder = HuffmanEncoder::<DefaultEncodeParams>::new(&data);
     let word_write = MemWordWriterVec::new(Vec::<u64>::new());
     let mut writer = BufBitWriter::<LE, _>::new(word_write);
     for (i, symbol) in encoder.info_.iter().enumerate() {
