@@ -1,0 +1,8 @@
+[package]
+name = "hybrid-integer-encoding"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+dsi-bitstream = "0.4.2"
+rand = "0.8.5"
