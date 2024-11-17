@@ -1,9 +1,34 @@
-use std::{char::MAX, error::Error};
+use std::error::Error;
 
 use dsi_bitstream::traits::{BitRead, Endianness};
 
-use super::{compute_symbol_bits, HuffmanSymbolInfo, MAX_HUFFMAN_BITS, NUM_SYMBOLS};
+use super::{compute_symbol_bits, EncodeParams, HuffmanSymbolInfo, MAX_HUFFMAN_BITS, NUM_SYMBOLS};
 use common_traits::*;
+
+pub trait EntropyCoder {
+    fn read_token(&mut self) -> Result<u8, Box<dyn Error>>;
+
+    fn read_bits(&mut self, n: usize) -> Result<u64, Box<dyn Error>>;
+
+    fn read<EP: EncodeParams>(&mut self) -> Result<u8, Box<dyn Error>> {
+        let split_token = 1 << EP::LOG2_NUM_EXPLICIT;
+        let mut token = self.read_token()?;
+        if token < split_token {
+            return Ok(token);
+        }
+        let nbits = EP::LOG2_NUM_EXPLICIT - (EP::MSB_IN_TOKEN + EP::LSB_IN_TOKEN)
+            + ((token - split_token) as u32 >> (EP::MSB_IN_TOKEN + EP::LSB_IN_TOKEN));
+        let low = token & ((1 << EP::LSB_IN_TOKEN) - 1);
+        token >>= EP::LSB_IN_TOKEN;
+        let bits = self.read_bits(nbits as usize)? as u8;
+        let ret = (((((1 << EP::MSB_IN_TOKEN) | (token & ((1 << EP::MSB_IN_TOKEN) - 1)))
+            << nbits)
+            | bits)
+            << EP::LSB_IN_TOKEN)
+            | low;
+        Ok(ret)
+    }
+}
 
 // TODO: pub only on evrithing for debug
 #[derive(Clone, Copy, Default, Debug)]
@@ -12,9 +37,9 @@ pub struct HuffmanDecoderInfo {
     pub symbol: u8,
 }
 
-// TODO: pub on info_ only for debug
+// TODO: pub on info_ and reader only for debug
 pub struct HuffmanReader<E: Endianness, R: BitRead<E>> {
-    reader: R,
+    pub reader: R,
     pub info_: [HuffmanDecoderInfo; 1 << MAX_HUFFMAN_BITS],
     _marker: core::marker::PhantomData<E>,
 }
@@ -90,7 +115,9 @@ impl<E: Endianness, R: BitRead<E>> HuffmanReader<E, R> {
             _marker: std::marker::PhantomData,
         })
     }
+}
 
+impl<E: Endianness, R: BitRead<E>> EntropyCoder for HuffmanReader<E, R> {
     fn read_token(&mut self) -> Result<u8, Box<dyn Error>> {
         let bits: u64 = self.reader.peek_bits(MAX_HUFFMAN_BITS)?.cast();
         let info = self.info_[bits as usize];
@@ -99,9 +126,8 @@ impl<E: Endianness, R: BitRead<E>> HuffmanReader<E, R> {
         Ok(info.symbol)
     }
 
-    /*
-    fn read(&mut self) -> Result<u8, Box<dyn Error>> {
-
+    fn read_bits(&mut self, n: usize) -> Result<u64, Box<dyn Error>> {
+        let bits = self.reader.read_bits(n)?;
+        Ok(bits)
     }
-    */
 }

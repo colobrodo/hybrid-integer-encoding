@@ -1,12 +1,15 @@
 use std::error::Error;
 
+use common_traits::CastableInto;
 use dsi_bitstream::{
     impls::{BufBitReader, BufBitWriter, MemWordReader, MemWordWriterVec},
-    traits::{BitWrite, LE},
+    traits::{BitRead, BitSeek, BitWrite, LE},
 };
-use rand::{rngs::SmallRng, Rng, SeedableRng};
+use rand::{rngs::SmallRng, thread_rng, Rng, SeedableRng};
 
-use hybrid_integer_encoding::huffman::{DefaultEncodeParams, HuffmanEncoder, HuffmanReader};
+use hybrid_integer_encoding::huffman::{
+    DefaultEncodeParams, EncodeParams, EntropyCoder, HuffmanEncoder, HuffmanReader,
+};
 
 fn generate_random_data(low: u64, high: u64, nsamples: usize) -> Vec<u64> {
     let mut rng = SmallRng::seed_from_u64(0);
@@ -20,29 +23,37 @@ fn generate_random_data(low: u64, high: u64, nsamples: usize) -> Vec<u64> {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let data = generate_random_data(0, 100, 1000);
+    let nsamples = 1000;
+    let data = generate_random_data(0, 100, nsamples);
+    println!("Generated random");
+    for value in data.iter() {
+        println!("{}", *value);
+    }
     let encoder = HuffmanEncoder::<DefaultEncodeParams>::new(&data);
     let word_write = MemWordWriterVec::new(Vec::<u64>::new());
     let mut writer = BufBitWriter::<LE, _>::new(word_write);
-    println!("Encoded symbols");
-    for (i, symbol) in encoder.info_.iter().enumerate() {
-        if symbol.present == 0 {
-            debug_assert!(symbol.nbits == 0);
-            continue;
-        }
-        println!("{}: {}, {:#b}", i, symbol.nbits, symbol.bits);
-    }
 
     encoder.write_header(&mut writer)?;
     for value in data.iter() {
         encoder.write(*value, &mut writer)?;
     }
     writer.flush()?;
-    let binary_data = writer.into_inner()?.into_inner();
 
-    let binary_data = unsafe { std::mem::transmute::<_, Vec<u32>>(binary_data) };
+    let binary_data = writer.into_inner()?.into_inner();
+    // let binary_data = unsafe { std::mem::transmute::<_, Vec<u32>>(binary_data) };
     let reader = BufBitReader::<LE, _>::new(MemWordReader::new(binary_data));
-    let reader = HuffmanReader::new(reader).unwrap();
+    let mut reader = HuffmanReader::new(reader)?;
+
+    for (i, original) in (0..data.len()).zip(data.iter()) {
+        let value = reader.read::<DefaultEncodeParams>()?;
+        if value != *original as u8 {
+            println!(
+                " getted {} but expected {} on sample n {}",
+                value, original, i
+            );
+            break;
+        }
+    }
 
     Ok(())
 }
