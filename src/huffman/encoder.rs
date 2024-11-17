@@ -2,6 +2,8 @@ use std::{error::Error, mem};
 
 use dsi_bitstream::traits::{BitWrite, Endianness};
 
+use crate::huffman::compute_symbol_bits;
+
 use super::common::{
     encode, DefaultEncodeParams, EncodeParams, HuffmanSymbolInfo, MAX_HUFFMAN_BITS, NUM_SYMBOLS,
 };
@@ -80,37 +82,12 @@ fn compute_symbol_num_bits(histogram: &[usize], infos: &mut [HuffmanSymbolInfo; 
     }
 }
 
-// For a given array of HuffmanSymbolInfo, where only the `present` and `nbits`
-// fields are set, fill up the `bits` field by building a Canonical Huffman code
-// (https://en.wikipedia.org/wiki/Canonical_Huffman_code).
-fn compute_symbol_bits(infos: &mut [HuffmanSymbolInfo; NUM_SYMBOLS]) -> bool {
-    let mut syms = Vec::new();
-    for (i, info) in infos.iter().enumerate() {
-        if info.present == 0 {
-            continue;
-        }
-        syms.push((info.nbits, i as u8));
-    }
-    syms.sort();
-    let present_symbols = syms.len();
-    let mut x: u8 = 0;
-    for (s, sym) in syms.iter().enumerate() {
-        infos[sym.1 as usize].bits =
-            u8::reverse_bits(x) >> (MAX_HUFFMAN_BITS as u8 - infos[sym.1 as usize].nbits);
-        x += 1;
-        if s + 1 != present_symbols {
-            x <<= syms[s + 1].0 - sym.0;
-        }
-    }
-    true
-}
-
 impl<EP: EncodeParams> HuffmanEncoder<EP> {
     pub fn new(data: &[u64]) -> Self {
         let histogram = compute_histogram::<EP>(data);
         let mut info = [HuffmanSymbolInfo::default(); NUM_SYMBOLS];
         compute_symbol_num_bits(&histogram, &mut info);
-        debug_assert!(compute_symbol_bits(&mut info));
+        compute_symbol_bits(&mut info);
         Self {
             info_: info,
             _marker: core::marker::PhantomData,
