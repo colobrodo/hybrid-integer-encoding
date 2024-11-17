@@ -1,14 +1,13 @@
 use std::error::Error;
 
-use common_traits::CastableInto;
 use dsi_bitstream::{
     impls::{BufBitReader, BufBitWriter, MemWordReader, MemWordWriterVec},
-    traits::{BitRead, BitSeek, BitWrite, LE},
+    traits::{BitWrite, LE},
 };
-use rand::{rngs::SmallRng, thread_rng, Rng, SeedableRng};
+use rand::{rngs::SmallRng, Rng, SeedableRng};
 
 use hybrid_integer_encoding::huffman::{
-    DefaultEncodeParams, EncodeParams, EntropyCoder, HuffmanEncoder, HuffmanReader,
+    DefaultEncodeParams, EntropyCoder, HuffmanEncoder, HuffmanReader,
 };
 
 fn generate_random_data(low: u64, high: u64, nsamples: usize) -> Vec<u64> {
