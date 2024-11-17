@@ -1,12 +1,11 @@
 pub const MAX_HUFFMAN_BITS: usize = 8;
 pub const NUM_SYMBOLS: usize = 1 << MAX_HUFFMAN_BITS;
 
-// TODO: remove pub from struct and fields: only for debugging
 #[derive(Clone, Copy, Default, Debug)]
-pub struct HuffmanSymbolInfo {
-    pub present: u8,
-    pub nbits: u8,
-    pub bits: u8,
+pub(crate) struct HuffmanSymbolInfo {
+    pub(crate) present: u8,
+    pub(crate) nbits: u8,
+    pub(crate) bits: u8,
 }
 
 pub trait EncodeParams {

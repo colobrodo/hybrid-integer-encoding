@@ -33,6 +33,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let word_write = MemWordWriterVec::new(Vec::<u64>::new());
     let mut writer = BufBitWriter::<LE, _>::new(word_write);
 
+    println!("Write to the input stream");
     encoder.write_header(&mut writer)?;
     for value in data.iter() {
         encoder.write(*value, &mut writer)?;
@@ -44,6 +45,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let reader = BufBitReader::<LE, _>::new(MemWordReader::new(binary_data));
     let mut reader = HuffmanReader::new(reader)?;
 
+    println!("Readed from the stream");
     for (i, original) in (0..data.len()).zip(data.iter()) {
         let value = reader.read::<DefaultEncodeParams>()?;
         if value != *original as u8 {

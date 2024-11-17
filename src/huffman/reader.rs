@@ -30,17 +30,15 @@ pub trait EntropyCoder {
     }
 }
 
-// TODO: pub only on evrithing for debug
 #[derive(Clone, Copy, Default, Debug)]
-pub struct HuffmanDecoderInfo {
-    pub nbits: u8,
-    pub symbol: u8,
+struct HuffmanDecoderInfo {
+    nbits: u8,
+    symbol: u8,
 }
 
-// TODO: pub on info_ and reader only for debug
 pub struct HuffmanReader<E: Endianness, R: BitRead<E>> {
-    pub reader: R,
-    pub info_: [HuffmanDecoderInfo; 1 << MAX_HUFFMAN_BITS],
+    reader: R,
+    info_: [HuffmanDecoderInfo; 1 << MAX_HUFFMAN_BITS],
     _marker: core::marker::PhantomData<E>,
 }
 

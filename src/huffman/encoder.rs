@@ -8,9 +8,8 @@ use super::common::{
     encode, DefaultEncodeParams, EncodeParams, HuffmanSymbolInfo, MAX_HUFFMAN_BITS, NUM_SYMBOLS,
 };
 
-// TODO: remove pub from info_ field used only for encoding
 pub struct HuffmanEncoder<EP: EncodeParams = DefaultEncodeParams> {
-    pub info_: [HuffmanSymbolInfo; 1 << MAX_HUFFMAN_BITS],
+    info_: [HuffmanSymbolInfo; 1 << MAX_HUFFMAN_BITS],
     _marker: core::marker::PhantomData<EP>,
 }
 
