@@ -1,22 +1,21 @@
-use core::num;
 use std::{
     error::Error,
-    fs::{self, File},
-    io::{self, BufRead, BufReader, Read},
+    fs::File,
+    io::{BufRead, BufReader},
+    marker::PhantomData,
     path::PathBuf,
 };
 
 use dsi_bitstream::{
-    impls::{BufBitReader, BufBitWriter, MemWordReader, MemWordWriterVec, WordAdapter},
-    traits::{BitWrite, LE},
+    impls::{BufBitReader, BufBitWriter, WordAdapter},
+    traits::{BitWrite, Endianness, LE},
 };
-use rand::{rngs::SmallRng, Rng, SeedableRng};
 
 use hybrid_integer_encoding::huffman::{
     DefaultEncodeParams, EntropyCoder, HuffmanEncoder, HuffmanReader,
 };
 
-use clap::{Args, Parser, Subcommand};
+use clap::{Parser, Subcommand};
 
 #[derive(Parser, Debug)]
 #[clap(name = "hybrid-integer-encoding", version)]
@@ -41,28 +40,64 @@ enum Command {
     },
 }
 
+struct StatBitWriter<E: Endianness, W: BitWrite<E>> {
+    writer: W,
+    written_bits: usize,
+    _marker: PhantomData<E>,
+}
+
+impl<E: Endianness, W: BitWrite<E>> BitWrite<E> for StatBitWriter<E, W> {
+    type Error = W::Error;
+
+    fn write_bits(&mut self, value: u64, n: usize) -> Result<usize, Self::Error> {
+        let written = self.writer.write_bits(value, n)?;
+        self.written_bits += n;
+        Ok(written)
+    }
+
+    fn write_unary(&mut self, value: u64) -> Result<usize, Self::Error> {
+        let written = self.writer.write_unary(value)?;
+        self.written_bits += value as usize;
+        Ok(written)
+    }
+
+    fn flush(&mut self) -> Result<usize, Self::Error> {
+        self.writer.flush()
+    }
+}
+
+impl<E: Endianness, W: BitWrite<E>> StatBitWriter<E, W> {
+    fn new(writer: W) -> Self {
+        Self {
+            writer,
+            written_bits: 0,
+            _marker: core::marker::PhantomData::<E>,
+        }
+    }
+}
+
 fn encode_file(input_path: PathBuf, output_path: PathBuf) -> Result<(), Box<dyn Error>> {
     let file = File::open(input_path)?;
     let reader = BufReader::new(file);
 
     let mut numbers = Vec::new();
-    for line in reader.lines() {
-        if let Ok(num_str) = line {
-            // Split the line by whitespace and parse each number as u8
-            for num in num_str.split_whitespace() {
-                match num.parse::<u64>() {
-                    Ok(n) => numbers.push(n),
-                    Err(_) => println!("Skipping invalid number: {}", num),
-                }
+    for line in reader.lines().map_while(Result::ok) {
+        // Split the line by whitespace and parse each number as u8
+        for num in line.split_whitespace() {
+            match num.parse::<u64>() {
+                Ok(n) => numbers.push(n),
+                Err(_) => println!("Skipping invalid number: {}", num),
             }
         }
     }
 
     let outfile = File::create(output_path)?;
-    let mut writer = BufBitWriter::<LE, _>::new(WordAdapter::<u32, _>::new(outfile));
+    let writer = BufBitWriter::<LE, _>::new(WordAdapter::<u32, _>::new(outfile));
+    let mut writer = StatBitWriter::new(writer);
     let encoder = HuffmanEncoder::<DefaultEncodeParams>::new(&numbers);
 
     encoder.write_header(&mut writer)?;
+    println!("Header took {} bits", writer.written_bits);
     for number in numbers {
         encoder.write(number, &mut writer)?;
     }
