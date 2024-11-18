@@ -57,10 +57,10 @@ pub(crate) fn compute_symbol_bits(infos: &mut [HuffmanSymbolInfo; NUM_SYMBOLS]) 
     }
     syms.sort();
     let present_symbols = syms.len();
-    let mut x: u8 = 0;
+    let mut x: usize = 0;
     for (s, sym) in syms.iter().enumerate() {
         infos[sym.1 as usize].bits =
-            u8::reverse_bits(x) >> (MAX_HUFFMAN_BITS as u8 - infos[sym.1 as usize].nbits);
+            u8::reverse_bits(x as u8) >> (MAX_HUFFMAN_BITS as u8 - infos[sym.1 as usize].nbits);
         x += 1;
         if s + 1 != present_symbols {
             x <<= syms[s + 1].0 - sym.0;
