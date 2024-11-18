@@ -1,7 +1,13 @@
-use std::error::Error;
+use core::num;
+use std::{
+    error::Error,
+    fs::{self, File},
+    io::{self, BufRead, BufReader, Read},
+    path::PathBuf,
+};
 
 use dsi_bitstream::{
-    impls::{BufBitReader, BufBitWriter, MemWordReader, MemWordWriterVec},
+    impls::{BufBitReader, BufBitWriter, MemWordReader, MemWordWriterVec, WordAdapter},
     traits::{BitWrite, LE},
 };
 use rand::{rngs::SmallRng, Rng, SeedableRng};
@@ -10,49 +16,87 @@ use hybrid_integer_encoding::huffman::{
     DefaultEncodeParams, EntropyCoder, HuffmanEncoder, HuffmanReader,
 };
 
-fn generate_random_data(low: u64, high: u64, nsamples: usize) -> Vec<u64> {
-    let mut rng = SmallRng::seed_from_u64(0);
-    let mut samples = Vec::new();
-    for _ in 0..nsamples {
-        let x1 = rng.gen_range(0.0..1.0);
-        let k = x1 * x1 * (high - low) as f64;
-        samples.push(k.ceil() as u64 + low);
+use clap::{Args, Parser, Subcommand};
+
+#[derive(Parser, Debug)]
+#[clap(name = "hybrid-integer-encoding", version)]
+struct App {
+    #[clap(subcommand)]
+    command: Command,
+}
+
+#[derive(Debug, Subcommand)]
+enum Command {
+    /// Encode a file in ASCII format containing a set of integers.
+    Encode {
+        /// the input path to encode
+        input_path: PathBuf,
+        output_path: PathBuf,
+    },
+
+    /// Reads a compressed file and outputs the content to stdout.
+    Decode {
+        /// The path of the compressed file
+        path: PathBuf,
+    },
+}
+
+fn encode_file(input_path: PathBuf, output_path: PathBuf) -> Result<(), Box<dyn Error>> {
+    let file = File::open(input_path)?;
+    let reader = BufReader::new(file);
+
+    let mut numbers = Vec::new();
+    for line in reader.lines() {
+        if let Ok(num_str) = line {
+            // Split the line by whitespace and parse each number as u8
+            for num in num_str.split_whitespace() {
+                match num.parse::<u64>() {
+                    Ok(n) => numbers.push(n),
+                    Err(_) => println!("Skipping invalid number: {}", num),
+                }
+            }
+        }
     }
-    samples
+
+    let outfile = File::create(output_path)?;
+    let mut writer = BufBitWriter::<LE, _>::new(WordAdapter::<u32, _>::new(outfile));
+    let encoder = HuffmanEncoder::<DefaultEncodeParams>::new(&numbers);
+
+    encoder.write_header(&mut writer)?;
+    for number in numbers {
+        encoder.write(number, &mut writer)?;
+    }
+
+    writer.flush()?;
+
+    Ok(())
+}
+
+fn decode_file(path: PathBuf) -> Result<(), Box<dyn Error>> {
+    let file = File::open(path)?;
+    let reader = BufBitReader::<LE, _>::new(WordAdapter::<u32, _>::new(BufReader::new(file)));
+    let mut reader = HuffmanReader::new(reader)?;
+    while let Ok(value) = reader.read::<DefaultEncodeParams>() {
+        if value == 0 {
+            break;
+        }
+        println!("{}", value);
+    }
+
+    Ok(())
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let nsamples = 1000;
-    let data = generate_random_data(0, 100, nsamples);
-    println!("Generated random");
-    for value in data.iter() {
-        println!("{}", *value);
-    }
-    let encoder = HuffmanEncoder::<DefaultEncodeParams>::new(&data);
-    let word_write = MemWordWriterVec::new(Vec::<u64>::new());
-    let mut writer = BufBitWriter::<LE, _>::new(word_write);
-
-    println!("Write to the input stream");
-    encoder.write_header(&mut writer)?;
-    for value in data.iter() {
-        encoder.write(*value, &mut writer)?;
-    }
-    writer.flush()?;
-
-    let binary_data = writer.into_inner()?.into_inner();
-    // let binary_data = unsafe { std::mem::transmute::<_, Vec<u32>>(binary_data) };
-    let reader = BufBitReader::<LE, _>::new(MemWordReader::new(binary_data));
-    let mut reader = HuffmanReader::new(reader)?;
-
-    println!("Readed from the stream");
-    for (i, original) in (0..data.len()).zip(data.iter()) {
-        let value = reader.read::<DefaultEncodeParams>()?;
-        if value != *original as u8 {
-            println!(
-                " getted {} but expected {} on sample n {}",
-                value, original, i
-            );
-            break;
+    let args = App::parse();
+    match args.command {
+        Command::Encode {
+            input_path,
+            output_path,
+        } => {
+            encode_file(input_path, output_path)?;
+        }
+        Command::Decode { path } => {
+            decode_file(path)?;
         }
     }
 
