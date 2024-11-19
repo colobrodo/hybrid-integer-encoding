@@ -173,7 +173,6 @@ mod tests {
         let word_write = MemWordWriterVec::new(Vec::<u64>::new());
         let mut writer = BufBitWriter::<LE, _>::new(word_write);
 
-        println!("Write to the input stream");
         encoder.write_header(&mut writer).unwrap();
         for value in &data {
             encoder.write(*value, &mut writer).unwrap();
@@ -185,7 +184,6 @@ mod tests {
         let reader = BufBitReader::<LE, _>::new(MemWordReader::new(binary_data));
         let mut reader = HuffmanReader::new(reader).unwrap();
 
-        println!("Readed from the stream");
         for original in &data {
             let value = reader.read::<DefaultEncodeParams>().unwrap();
             assert_eq!(value, *original as u8);
