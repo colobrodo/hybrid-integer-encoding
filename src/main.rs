@@ -16,6 +16,7 @@ use hybrid_integer_encoding::huffman::{
     DefaultEncodeParams, EntropyCoder, HuffmanEncoder, HuffmanReader,
 };
 
+use anyhow::Result;
 use clap::{Parser, Subcommand};
 use rand::{rngs::SmallRng, Rng, SeedableRng};
 
@@ -93,7 +94,7 @@ impl<E: Endianness, W: BitWrite<E>> StatBitWriter<E, W> {
     }
 }
 
-fn encode_file(input_path: PathBuf, output_path: PathBuf) -> Result<(), Box<dyn Error>> {
+fn encode_file(input_path: PathBuf, output_path: PathBuf) -> Result<()> {
     let file = File::open(input_path)?;
     let reader = BufReader::new(file);
 
@@ -124,7 +125,7 @@ fn encode_file(input_path: PathBuf, output_path: PathBuf) -> Result<(), Box<dyn 
     Ok(())
 }
 
-fn decode_file(path: PathBuf, lenght: u64) -> Result<(), Box<dyn Error>> {
+fn decode_file(path: PathBuf, lenght: u64) -> Result<()> {
     let file = File::open(path)?;
     let reader = BufBitReader::<LE, _>::new(WordAdapter::<u32, _>::new(BufReader::new(file)));
     let mut reader = HuffmanReader::new(reader)?;
@@ -187,7 +188,7 @@ fn bench(repeats: usize, nsamples: u64, seed: u64) {
     )
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<()> {
     let args = App::parse();
     match args.command {
         Command::Encode {

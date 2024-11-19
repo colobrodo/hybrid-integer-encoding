@@ -5,12 +5,14 @@ use dsi_bitstream::traits::{BitRead, Endianness};
 use super::{compute_symbol_bits, EncodeParams, HuffmanSymbolInfo, MAX_HUFFMAN_BITS, NUM_SYMBOLS};
 use common_traits::*;
 
+use anyhow::{anyhow, Result};
+
 pub trait EntropyCoder {
-    fn read_token(&mut self) -> Result<u8, Box<dyn Error>>;
+    fn read_token(&mut self) -> Result<u8>;
 
-    fn read_bits(&mut self, n: usize) -> Result<u64, Box<dyn Error>>;
+    fn read_bits(&mut self, n: usize) -> Result<u64>;
 
-    fn read<EP: EncodeParams>(&mut self) -> Result<u8, Box<dyn Error>> {
+    fn read<EP: EncodeParams>(&mut self) -> Result<u8> {
         let split_token = 1 << EP::LOG2_NUM_EXPLICIT;
         let mut token = self.read_token()?;
         if token < split_token {
@@ -45,7 +47,7 @@ pub struct HuffmanReader<E: Endianness, R: BitRead<E>> {
 fn decode_symbol_num_bits<E: Endianness, R: BitRead<E>>(
     infos: &mut [HuffmanSymbolInfo; NUM_SYMBOLS],
     reader: &mut R,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<()> {
     let ms = reader.read_bits(8)? as usize;
     for info in infos.iter_mut().take(ms + 1) {
         info.present = reader.read_bits(1)? as u8;
@@ -63,7 +65,7 @@ fn decode_symbol_num_bits<E: Endianness, R: BitRead<E>>(
 // decoder.
 fn compute_decoder_table(
     sym_infos: &[HuffmanSymbolInfo; NUM_SYMBOLS],
-) -> Result<[HuffmanDecoderInfo; NUM_SYMBOLS], Box<dyn Error>> {
+) -> Result<[HuffmanDecoderInfo; NUM_SYMBOLS]> {
     let cnt = sym_infos.iter().filter(|sym| sym.present != 0).count();
     let s = sym_infos
         .iter()
@@ -92,7 +94,7 @@ fn compute_decoder_table(
             }
         }
         if s == NUM_SYMBOLS {
-            return Err("Invalid table".into());
+            return Err(anyhow!("Invalid table"));
         }
         decoder_infos[i as usize].nbits = sym_infos[s].nbits;
         decoder_infos[i as usize].symbol = s as u8;
@@ -101,7 +103,7 @@ fn compute_decoder_table(
 }
 
 impl<E: Endianness, R: BitRead<E>> HuffmanReader<E, R> {
-    pub fn new(reader: R) -> Result<Self, Box<dyn Error>> {
+    pub fn new(reader: R) -> Result<Self> {
         let mut reader = reader;
         let mut symbol_info = [HuffmanSymbolInfo::default(); NUM_SYMBOLS];
         decode_symbol_num_bits(&mut symbol_info, &mut reader)?;
@@ -116,7 +118,7 @@ impl<E: Endianness, R: BitRead<E>> HuffmanReader<E, R> {
 }
 
 impl<E: Endianness, R: BitRead<E>> EntropyCoder for HuffmanReader<E, R> {
-    fn read_token(&mut self) -> Result<u8, Box<dyn Error>> {
+    fn read_token(&mut self) -> Result<u8> {
         let bits: u64 = self.reader.peek_bits(MAX_HUFFMAN_BITS)?.cast();
         let info = self.info_[bits as usize];
         self.reader
@@ -124,7 +126,7 @@ impl<E: Endianness, R: BitRead<E>> EntropyCoder for HuffmanReader<E, R> {
         Ok(info.symbol)
     }
 
-    fn read_bits(&mut self, n: usize) -> Result<u64, Box<dyn Error>> {
+    fn read_bits(&mut self, n: usize) -> Result<u64> {
         let bits = self.reader.read_bits(n)?;
         Ok(bits)
     }

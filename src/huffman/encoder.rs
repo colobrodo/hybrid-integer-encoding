@@ -1,4 +1,4 @@
-use std::{default, error::Error, mem};
+use std::mem;
 
 use dsi_bitstream::traits::{BitWrite, Endianness};
 
@@ -7,6 +7,8 @@ use crate::huffman::compute_symbol_bits;
 use super::common::{
     encode, DefaultEncodeParams, EncodeParams, HuffmanSymbolInfo, MAX_HUFFMAN_BITS, NUM_SYMBOLS,
 };
+
+use anyhow::Result;
 
 pub struct HuffmanEncoder<EP: EncodeParams = DefaultEncodeParams> {
     info_: [HuffmanSymbolInfo; 1 << MAX_HUFFMAN_BITS],
@@ -101,7 +103,7 @@ impl<EP: EncodeParams> HuffmanEncoder<EP> {
         &self,
         value: u64,
         writer: &mut impl BitWrite<E>,
-    ) -> Result<(usize, usize), Box<dyn Error>> {
+    ) -> Result<(usize, usize)> {
         let (token, nbits, bits) = encode::<EP>(value);
         debug_assert!(self.info_[token].present == 1, "Unknown value {value}");
         let nbits_per_token = self.info_[token].nbits as usize;
@@ -113,10 +115,7 @@ impl<EP: EncodeParams> HuffmanEncoder<EP> {
     // Very simple encoding: number of symbols (8 bits) followed by, for each
     // symbol, 1 bit for presence/absence, and 3 bits for symbol length if present.
     // TODO: short encoding for empty ctxs, RLE for missing symbols.
-    pub fn write_header<E: Endianness>(
-        &self,
-        writer: &mut impl BitWrite<E>,
-    ) -> Result<(), Box<dyn Error>> {
+    pub fn write_header<E: Endianness>(&self, writer: &mut impl BitWrite<E>) -> Result<()> {
         let mut ms = 0;
         for (i, info) in self.info_.iter().enumerate() {
             if info.present != 0 {
