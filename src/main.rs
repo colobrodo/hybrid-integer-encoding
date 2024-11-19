@@ -1,13 +1,14 @@
 use std::{
     error::Error,
     fs::File,
+    hint::black_box,
     io::{BufRead, BufReader},
     marker::PhantomData,
     path::PathBuf,
 };
 
 use dsi_bitstream::{
-    impls::{BufBitReader, BufBitWriter, WordAdapter},
+    impls::{BufBitReader, BufBitWriter, MemWordReader, MemWordWriterVec, WordAdapter},
     traits::{BitWrite, Endianness, LE},
 };
 
@@ -16,6 +17,7 @@ use hybrid_integer_encoding::huffman::{
 };
 
 use clap::{Parser, Subcommand};
+use rand::{rngs::SmallRng, Rng, SeedableRng};
 
 #[derive(Parser, Debug)]
 #[clap(name = "hybrid-integer-encoding", version)]
@@ -39,6 +41,19 @@ enum Command {
         lenght: u64,
         /// The path of the compressed file
         path: PathBuf,
+    },
+
+    /// Reads a compressed file and outputs the content to stdout.
+    Bench {
+        /// Number of samples to test
+        #[arg(short = 'r', long, default_value = "10000")]
+        samples: u64,
+        /// The number of repeats
+        #[arg(short = 'R', long, default_value = "10")]
+        repeats: usize,
+        /// Seed to reproduce the experiment
+        #[arg(short = 's', long, default_value = "0")]
+        seed: u64,
     },
 }
 
@@ -126,6 +141,52 @@ fn decode_file(path: PathBuf, lenght: u64) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+fn bench(repeats: usize, nsamples: u64, seed: u64) {
+    let mut rng = SmallRng::seed_from_u64(seed);
+    let data = (0..nsamples)
+        .map(|_| {
+            let x1 = rng.gen_range(0.0..1.0);
+            let k = x1 * x1 * 100f64;
+            k.ceil() as u64
+        })
+        .collect::<Vec<_>>();
+
+    let overall_start = std::time::Instant::now();
+
+    let encoder = HuffmanEncoder::<DefaultEncodeParams>::new(&data);
+    let word_write = MemWordWriterVec::new(Vec::<u64>::new());
+    let mut writer = BufBitWriter::<LE, _>::new(word_write);
+
+    encoder.write_header(&mut writer).unwrap();
+    for value in &data {
+        encoder.write(*value, &mut writer).unwrap();
+    }
+    writer.flush().unwrap();
+
+    let binary_data = writer.into_inner().unwrap().into_inner();
+    // let binary_data = unsafe { std::mem::transmute::<_, Vec<u32>>(binary_data) };
+
+    for _ in 0..repeats {
+        let reader = BufBitReader::<LE, _>::new(MemWordReader::new(&binary_data));
+        let mut reader = HuffmanReader::new(reader).unwrap();
+
+        let start = std::time::Instant::now();
+
+        for _ in &data {
+            let _value = black_box(reader.read::<DefaultEncodeParams>().unwrap());
+        }
+        println!(
+            "Decode:    {:>20} ns/sample",
+            (start.elapsed().as_secs_f64() / nsamples as f64) * 1e9
+        );
+    }
+
+    println!(
+        "Executed bench in {:>20} s",
+        overall_start.elapsed().as_secs_f64()
+    )
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     let args = App::parse();
     match args.command {
@@ -138,6 +199,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         Command::Decode { path, lenght } => {
             decode_file(path, lenght)?;
         }
+        Command::Bench {
+            samples,
+            repeats,
+            seed,
+        } => bench(repeats, samples, seed),
     }
 
     Ok(())
