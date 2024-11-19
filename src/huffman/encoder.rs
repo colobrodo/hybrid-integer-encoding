@@ -1,4 +1,4 @@
-use std::{error::Error, mem};
+use std::{default, error::Error, mem};
 
 use dsi_bitstream::traits::{BitWrite, Endianness};
 
@@ -12,6 +12,8 @@ pub struct HuffmanEncoder<EP: EncodeParams = DefaultEncodeParams> {
     info_: [HuffmanSymbolInfo; 1 << MAX_HUFFMAN_BITS],
     _marker: core::marker::PhantomData<EP>,
 }
+
+type Bag = (usize, Vec<u8>);
 
 fn compute_histogram<EP: EncodeParams>(data: &[u64]) -> [usize; NUM_SYMBOLS] {
     let mut histogram = [0; NUM_SYMBOLS];
@@ -45,7 +47,7 @@ fn compute_symbol_num_bits(histogram: &[usize], infos: &mut [HuffmanSymbolInfo; 
     }
 
     // Create a list of symbols for any given cost.
-    let mut bags = vec![Vec::<(usize, Vec<u8>)>::default(); MAX_HUFFMAN_BITS];
+    let mut bags = vec![Vec::<Bag>::default(); MAX_HUFFMAN_BITS];
     for bag in bags.iter_mut() {
         for s in 0..NUM_SYMBOLS {
             if infos[s].present == 0 {
