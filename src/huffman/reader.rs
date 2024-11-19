@@ -1,5 +1,3 @@
-use std::error::Error;
-
 use dsi_bitstream::traits::{BitRead, Endianness};
 
 use super::{compute_symbol_bits, EncodeParams, HuffmanSymbolInfo, MAX_HUFFMAN_BITS, NUM_SYMBOLS};

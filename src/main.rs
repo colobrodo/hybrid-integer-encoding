@@ -1,5 +1,4 @@
 use std::{
-    error::Error,
     fs::File,
     hint::black_box,
     io::{BufRead, BufReader},
