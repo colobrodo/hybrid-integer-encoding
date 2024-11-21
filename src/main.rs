@@ -3,6 +3,7 @@ use std::{
     hint::black_box,
     io::{BufRead, BufReader},
     marker::PhantomData,
+    mem,
     path::PathBuf,
 };
 
@@ -158,7 +159,11 @@ fn bench(repeats: usize, nsamples: u64, seed: u64) {
     writer.flush().unwrap();
 
     let binary_data = writer.into_inner().unwrap().into_inner();
-    // let binary_data = unsafe { std::mem::transmute::<_, Vec<u32>>(binary_data) };
+    let mut binary_data = mem::ManuallyDrop::new(binary_data);
+    let binary_data = unsafe {
+        let ptr = binary_data.as_mut_ptr() as *mut u32;
+        Vec::from_raw_parts(ptr, binary_data.len() * 2, binary_data.capacity() * 2)
+    };
 
     for _ in 0..repeats {
         let reader = BufBitReader::<LE, _>::new(MemWordReader::new(&binary_data));
@@ -205,6 +210,8 @@ fn main() -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use std::mem;
+
     use dsi_bitstream::{
         impls::{BufBitReader, BufBitWriter, MemWordReader, MemWordWriterVec},
         traits::{BitWrite, LE},
@@ -240,7 +247,12 @@ mod tests {
         writer.flush().unwrap();
 
         let binary_data = writer.into_inner().unwrap().into_inner();
-        // let binary_data = unsafe { std::mem::transmute::<_, Vec<u32>>(binary_data) };
+        let mut binary_data = mem::ManuallyDrop::new(binary_data);
+        let binary_data = unsafe {
+            let ptr = binary_data.as_mut_ptr() as *mut u32;
+            Vec::from_raw_parts(ptr, binary_data.len() * 2, binary_data.capacity() * 2)
+        };
+
         let reader = BufBitReader::<LE, _>::new(MemWordReader::new(binary_data));
         let mut reader = HuffmanReader::new(reader).unwrap();
 
