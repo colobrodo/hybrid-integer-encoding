@@ -43,12 +43,12 @@ enum Command {
         path: PathBuf,
     },
 
-    /// Reads a compressed file and outputs the content to stdout.
+    /// Measure the time taken to decode an encoded sample of random numbers
     Bench {
-        /// Number of samples to test
+        /// Number of samples to decode
         #[arg(short = 'r', long, default_value = "10000")]
         samples: u64,
-        /// The number of repeats
+        /// The number of time to repeat the tests
         #[arg(short = 'R', long, default_value = "10")]
         repeats: usize,
         /// Seed to reproduce the experiment
@@ -101,7 +101,7 @@ fn encode_file(input_path: PathBuf, output_path: PathBuf) -> Result<()> {
     for line in reader.lines().map_while(Result::ok) {
         // Split the line by whitespace and parse each number as u8
         for num in line.split_whitespace() {
-            match num.parse::<u64>() {
+            match num.parse::<u32>() {
                 Ok(n) => numbers.push(n),
                 Err(_) => println!("Skipping invalid number: {}", num),
             }
@@ -143,13 +143,7 @@ fn decode_file(path: PathBuf, lenght: u64) -> Result<()> {
 
 fn bench(repeats: usize, nsamples: u64, seed: u64) {
     let mut rng = SmallRng::seed_from_u64(seed);
-    let data = (0..nsamples)
-        .map(|_| {
-            let x1 = rng.gen_range(0.0..1.0);
-            let k = x1 * x1 * 100f64;
-            k.ceil() as u64
-        })
-        .collect::<Vec<_>>();
+    let data = (0..nsamples).map(|_| rng.gen::<u32>()).collect::<Vec<_>>();
 
     let overall_start = std::time::Instant::now();
 
@@ -220,13 +214,13 @@ mod tests {
     };
     use rand::{rngs::SmallRng, Rng, SeedableRng};
 
-    fn generate_random_data(low: u64, high: u64, nsamples: usize) -> Vec<u64> {
+    fn generate_random_data(low: u32, high: u32, nsamples: usize) -> Vec<u32> {
         let mut rng = SmallRng::seed_from_u64(0);
         let mut samples = Vec::new();
         for _ in 0..nsamples {
             let x1 = rng.gen_range(0.0..1.0);
-            let k = x1 * x1 * (high - low) as f64;
-            samples.push(k.ceil() as u64 + low);
+            let k = x1 * x1 * (high - low) as f32;
+            samples.push(k.ceil() as u32 + low);
         }
         samples
     }
@@ -252,7 +246,7 @@ mod tests {
 
         for original in &data {
             let value = reader.read::<DefaultEncodeParams>().unwrap();
-            assert_eq!(value, *original as u8);
+            assert_eq!(value, *original as usize);
         }
     }
 }

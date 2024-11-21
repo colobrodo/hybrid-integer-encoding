@@ -17,10 +17,10 @@ pub struct HuffmanEncoder<EP: EncodeParams = DefaultEncodeParams> {
 
 type Bag = (usize, Vec<u8>);
 
-fn compute_histogram<EP: EncodeParams>(data: &[u64]) -> [usize; NUM_SYMBOLS] {
+fn compute_histogram<EP: EncodeParams>(data: &[u32]) -> [usize; NUM_SYMBOLS] {
     let mut histogram = [0; NUM_SYMBOLS];
     for value in data {
-        let (token, _, _) = encode::<EP>(*value);
+        let (token, _, _) = encode::<EP>((*value).into());
         histogram[token] += 1;
     }
     histogram
@@ -86,7 +86,7 @@ fn compute_symbol_num_bits(histogram: &[usize], infos: &mut [HuffmanSymbolInfo; 
 }
 
 impl<EP: EncodeParams> HuffmanEncoder<EP> {
-    pub fn new(data: &[u64]) -> Self {
+    pub fn new(data: &[u32]) -> Self {
         let histogram = compute_histogram::<EP>(data);
         let mut info = [HuffmanSymbolInfo::default(); NUM_SYMBOLS];
         compute_symbol_num_bits(&histogram, &mut info);
@@ -101,10 +101,10 @@ impl<EP: EncodeParams> HuffmanEncoder<EP> {
     /// number of bits written for the symbol and for the trailing bits.
     pub fn write<E: Endianness>(
         &self,
-        value: u64,
+        value: u32,
         writer: &mut impl BitWrite<E>,
     ) -> Result<(usize, usize)> {
-        let (token, nbits, bits) = encode::<EP>(value);
+        let (token, nbits, bits) = encode::<EP>(value as u64);
         debug_assert!(self.info_[token].present == 1, "Unknown value {value}");
         let nbits_per_token = self.info_[token].nbits as usize;
         writer.write_bits(self.info_[token].bits as u64, nbits_per_token)?;

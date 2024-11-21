@@ -6,11 +6,11 @@ use common_traits::*;
 use anyhow::{anyhow, Result};
 
 pub trait EntropyCoder {
-    fn read_token(&mut self) -> Result<u8>;
+    fn read_token(&mut self) -> Result<usize>;
 
     fn read_bits(&mut self, n: usize) -> Result<u64>;
 
-    fn read<EP: EncodeParams>(&mut self) -> Result<u8> {
+    fn read<EP: EncodeParams>(&mut self) -> Result<usize> {
         let split_token = 1 << EP::LOG2_NUM_EXPLICIT;
         let mut token = self.read_token()?;
         if token < split_token {
@@ -20,7 +20,7 @@ pub trait EntropyCoder {
             + ((token - split_token) as u32 >> (EP::MSB_IN_TOKEN + EP::LSB_IN_TOKEN));
         let low = token & ((1 << EP::LSB_IN_TOKEN) - 1);
         token >>= EP::LSB_IN_TOKEN;
-        let bits = self.read_bits(nbits as usize)? as u8;
+        let bits = self.read_bits(nbits as usize)? as usize;
         let ret = (((((1 << EP::MSB_IN_TOKEN) | (token & ((1 << EP::MSB_IN_TOKEN) - 1)))
             << nbits)
             | bits)
@@ -116,12 +116,12 @@ impl<E: Endianness, R: BitRead<E>> HuffmanReader<E, R> {
 }
 
 impl<E: Endianness, R: BitRead<E>> EntropyCoder for HuffmanReader<E, R> {
-    fn read_token(&mut self) -> Result<u8> {
+    fn read_token(&mut self) -> Result<usize> {
         let bits: u64 = self.reader.peek_bits(MAX_HUFFMAN_BITS)?.cast();
         let info = self.info_[bits as usize];
         self.reader
             .skip_bits_after_table_lookup(info.nbits as usize);
-        Ok(info.symbol)
+        Ok(info.symbol as usize)
     }
 
     fn read_bits(&mut self, n: usize) -> Result<u64> {
