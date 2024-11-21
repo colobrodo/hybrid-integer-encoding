@@ -8,6 +8,7 @@ use std::{
 };
 
 use dsi_bitstream::{
+    codes::{GammaRead, GammaWrite},
     impls::{BufBitReader, BufBitWriter, MemWordReader, MemWordWriterVec, WordAdapter},
     traits::{BitWrite, Endianness, LE},
 };
@@ -46,6 +47,18 @@ enum Command {
 
     /// Measure the time taken to decode an encoded sample of random numbers
     Bench {
+        /// Number of samples to decode
+        #[arg(short = 'r', long, default_value = "10000")]
+        samples: u64,
+        /// The number of time to repeat the tests
+        #[arg(short = 'R', long, default_value = "10")]
+        repeats: usize,
+        /// Seed to reproduce the experiment
+        #[arg(short = 's', long, default_value = "0")]
+        seed: u64,
+    },
+    /// Measure the time taken to decode an encoded sample of random numbers in gamma
+    BenchGamma {
         /// Number of samples to decode
         #[arg(short = 'r', long, default_value = "10000")]
         samples: u64,
@@ -186,6 +199,47 @@ fn bench(repeats: usize, nsamples: u64, seed: u64) {
     )
 }
 
+fn bench_gamma(repeats: usize, nsamples: u64, seed: u64) {
+    let mut rng = SmallRng::seed_from_u64(seed);
+    let data = (0..nsamples).map(|_| rng.gen::<u32>()).collect::<Vec<_>>();
+
+    let overall_start = std::time::Instant::now();
+
+    let word_write = MemWordWriterVec::new(Vec::<u64>::new());
+    let mut writer = BufBitWriter::<LE, _>::new(word_write);
+
+    for value in &data {
+        writer.write_gamma((*value).into()).unwrap();
+    }
+    writer.flush().unwrap();
+
+    let binary_data = writer.into_inner().unwrap().into_inner();
+    let binary_data = mem::ManuallyDrop::new(binary_data);
+    let binary_data = unsafe {
+        let ptr = binary_data.as_ptr() as *mut u32;
+        Vec::from_raw_parts(ptr, binary_data.len() * 2, binary_data.capacity() * 2)
+    };
+
+    for _ in 0..repeats {
+        let mut reader = BufBitReader::<LE, _>::new(MemWordReader::new(&binary_data));
+
+        let start = std::time::Instant::now();
+
+        for _ in &data {
+            let _value = black_box(reader.read_gamma().unwrap());
+        }
+        println!(
+            "Decode:    {:>20} ns/sample",
+            (start.elapsed().as_secs_f64() / nsamples as f64) * 1e9
+        );
+    }
+
+    println!(
+        "Executed bench in {:>20} s",
+        overall_start.elapsed().as_secs_f64()
+    )
+}
+
 fn main() -> Result<()> {
     let args = App::parse();
     match args.command {
@@ -203,6 +257,11 @@ fn main() -> Result<()> {
             repeats,
             seed,
         } => bench(repeats, samples, seed),
+        Command::BenchGamma {
+            samples,
+            repeats,
+            seed,
+        } => bench_gamma(repeats, samples, seed),
     }
 
     Ok(())
