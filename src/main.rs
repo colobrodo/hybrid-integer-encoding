@@ -247,10 +247,8 @@ mod tests {
         writer.flush().unwrap();
 
         let binary_data = writer.into_inner().unwrap().into_inner();
-        let binary_data = mem::ManuallyDrop::new(binary_data);
         let binary_data = unsafe {
-            let ptr = binary_data.as_ptr() as *mut u32;
-            Vec::from_raw_parts(ptr, binary_data.len() * 2, binary_data.capacity() * 2)
+            core::slice::from_raw_parts(binary_data.as_ptr() as *const u32, data.len() * 2)
         };
 
         let reader = BufBitReader::<LE, _>::new(MemWordReader::new(binary_data));
