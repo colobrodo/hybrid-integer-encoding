@@ -18,7 +18,7 @@ use hybrid_integer_encoding::huffman::{
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use rand::{rngs::SmallRng, Rng, SeedableRng};
+use rand::{prelude::Distribution, rngs::SmallRng, SeedableRng};
 
 #[derive(Parser, Debug)]
 #[clap(name = "hybrid-integer-encoding", version)]
@@ -144,7 +144,11 @@ fn decode_file(path: PathBuf, lenght: u64) -> Result<()> {
 
 fn bench(repeats: usize, nsamples: u64, seed: u64) {
     let mut rng = SmallRng::seed_from_u64(seed);
-    let data = (0..nsamples).map(|_| rng.gen::<u32>()).collect::<Vec<_>>();
+    let zipf = zipf::ZipfDistribution::new(10000, 1.5).unwrap();
+
+    let data = (0..nsamples)
+        .map(|_| zipf.sample(&mut rng) as u32)
+        .collect::<Vec<_>>();
 
     let overall_start = std::time::Instant::now();
 
