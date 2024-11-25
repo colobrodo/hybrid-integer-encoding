@@ -214,8 +214,6 @@ fn main() -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use std::mem;
-
     use dsi_bitstream::{
         impls::{BufBitReader, BufBitWriter, MemWordReader, MemWordWriterVec},
         traits::{BitWrite, LE},
