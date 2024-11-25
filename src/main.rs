@@ -3,7 +3,6 @@ use std::{
     hint::black_box,
     io::{BufRead, BufReader},
     marker::PhantomData,
-    mem,
     path::PathBuf,
 };
 
@@ -163,10 +162,8 @@ fn bench(repeats: usize, nsamples: u64, seed: u64) {
     writer.flush().unwrap();
 
     let binary_data = writer.into_inner().unwrap().into_inner();
-    let binary_data = mem::ManuallyDrop::new(binary_data);
     let binary_data = unsafe {
-        let ptr = binary_data.as_ptr() as *mut u32;
-        Vec::from_raw_parts(ptr, binary_data.len() * 2, binary_data.capacity() * 2)
+        core::slice::from_raw_parts(binary_data.as_ptr() as *const u32, data.len() * 2)
     };
 
     for _ in 0..repeats {
