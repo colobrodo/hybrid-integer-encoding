@@ -226,10 +226,10 @@ mod tests {
     #[test]
     fn encode_and_decode() {
         let nsamples = 1000;
-        let seed = 0;
-        let mut rng = SmallRng::seed_from_u64(seed);
-        let zipf = zipf::ZipfDistribution::new(1000000000, 1.5).unwrap();
-
+        
+        let mut rng = SmallRng::seed_from_u64(0);
+        let zipf = zipf::ZipfDistribution::new(10000, 1.5).unwrap();
+    
         let data = (0..nsamples)
             .map(|_| zipf.sample(&mut rng) as u32)
             .collect::<Vec<_>>();

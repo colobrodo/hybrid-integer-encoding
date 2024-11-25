@@ -112,8 +112,8 @@ impl<EP: EncodeParams> HuffmanEncoder<EP> {
         Ok((nbits, nbits_per_token))
     }
 
-    // Very simple encoding: number of symbols (8 bits) followed by, for each
-    // symbol, 1 bit for presence/absence, and 3 bits for symbol length if present.
+    // Very simple encoding: number of symbols (16 bits) followed by, for each
+    // symbol, 1 bit for presence/absence, and 4 bits for symbol length if present.
     // TODO: short encoding for empty ctxs, RLE for missing symbols.
     pub fn write_header<E: Endianness>(&self, writer: &mut impl BitWrite<E>) -> Result<()> {
         let mut ms = 0;
@@ -123,11 +123,11 @@ impl<EP: EncodeParams> HuffmanEncoder<EP> {
             }
         }
 
-        writer.write_bits(ms as u64, 8)?;
+        writer.write_bits(ms as u64, 16)?;
         for info in self.info_.iter().take(ms + 1) {
             if info.present != 0 {
                 writer.write_bits(1, 1)?;
-                writer.write_bits(info.nbits as u64 - 1, 3)?;
+                writer.write_bits(info.nbits as u64 - 1, 4)?;
             } else {
                 writer.write_bits(0, 1)?;
             }
