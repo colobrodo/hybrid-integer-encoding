@@ -46,11 +46,11 @@ fn decode_symbol_num_bits<E: Endianness, R: BitRead<E>>(
     infos: &mut [HuffmanSymbolInfo; NUM_SYMBOLS],
     reader: &mut R,
 ) -> Result<()> {
-    let ms = reader.read_bits(8)? as usize;
+    let ms = reader.read_bits(16)? as usize;
     for info in infos.iter_mut().take(ms + 1) {
         info.present = reader.read_bits(1)? as u8;
         if info.present != 0 {
-            info.nbits = reader.read_bits(3)? as u8 + 1;
+            info.nbits = reader.read_bits(4)? as u8 + 1;
         }
     }
     for info in infos.iter_mut().skip(ms + 1) {
@@ -86,7 +86,7 @@ fn compute_decoder_table(
             if sym_info.present == 0 {
                 continue;
             }
-            if (i & ((1 << sym_info.nbits) - 1)) as u8 == sym_info.bits {
+            if (i & ((1 << sym_info.nbits) - 1)) as u16 == sym_info.bits {
                 s = sym;
                 break;
             }

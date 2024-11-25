@@ -1,11 +1,11 @@
-pub const MAX_HUFFMAN_BITS: usize = 8;
+pub const MAX_HUFFMAN_BITS: usize = 16;
 pub const NUM_SYMBOLS: usize = 1 << MAX_HUFFMAN_BITS;
 
 #[derive(Clone, Copy, Default, Debug)]
 pub(crate) struct HuffmanSymbolInfo {
     pub(crate) present: u8,
     pub(crate) nbits: u8,
-    pub(crate) bits: u8,
+    pub(crate) bits: u16,
 }
 
 pub trait EncodeParams {
@@ -53,14 +53,15 @@ pub(crate) fn compute_symbol_bits(infos: &mut [HuffmanSymbolInfo; NUM_SYMBOLS]) 
         if info.present == 0 {
             continue;
         }
-        syms.push((info.nbits, i as u8));
+        syms.push((info.nbits, i));
     }
     syms.sort();
     let present_symbols = syms.len();
     let mut x: usize = 0;
     for (s, sym) in syms.iter().enumerate() {
-        infos[sym.1 as usize].bits =
-            u8::reverse_bits(x as u8) >> (MAX_HUFFMAN_BITS as u8 - infos[sym.1 as usize].nbits);
+        infos[sym.1].bits = u16::reverse_bits(x as u16)
+            >> (u16::BITS as usize - MAX_HUFFMAN_BITS)
+            >> (MAX_HUFFMAN_BITS as u8 - infos[sym.1].nbits);
         x += 1;
         if s + 1 != present_symbols {
             x <<= syms[s + 1].0 - sym.0;
