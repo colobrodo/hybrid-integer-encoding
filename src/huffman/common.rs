@@ -1,4 +1,4 @@
-pub const MAX_HUFFMAN_BITS: usize = 16;
+pub const MAX_HUFFMAN_BITS: usize = 10;
 pub const NUM_SYMBOLS: usize = 1 << MAX_HUFFMAN_BITS;
 // number of bits needed to represent the length of each symbol in the header
 pub const SYM_LEN_BITS: u32 = usize::BITS - (MAX_HUFFMAN_BITS - 1).leading_zeros();
