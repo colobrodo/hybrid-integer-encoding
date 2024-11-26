@@ -2,7 +2,7 @@ use std::mem;
 
 use dsi_bitstream::traits::{BitWrite, Endianness};
 
-use crate::huffman::compute_symbol_bits;
+use crate::huffman::{compute_symbol_bits, SYM_LEN_BITS};
 
 use super::common::{
     encode, DefaultEncodeParams, EncodeParams, HuffmanSymbolInfo, MAX_HUFFMAN_BITS, NUM_SYMBOLS,
@@ -123,11 +123,11 @@ impl<EP: EncodeParams> HuffmanEncoder<EP> {
             }
         }
 
-        writer.write_bits(ms as u64, 16)?;
+        writer.write_bits(ms as u64, MAX_HUFFMAN_BITS)?;
         for info in self.info_.iter().take(ms + 1) {
             if info.present != 0 {
                 writer.write_bits(1, 1)?;
-                writer.write_bits(info.nbits as u64 - 1, 4)?;
+                writer.write_bits(info.nbits as u64 - 1, SYM_LEN_BITS as usize)?;
             } else {
                 writer.write_bits(0, 1)?;
             }
