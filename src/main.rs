@@ -144,7 +144,7 @@ fn decode_file(path: PathBuf, lenght: u64) -> Result<()> {
 
 fn bench(repeats: usize, nsamples: u64, seed: u64) {
     let mut rng = SmallRng::seed_from_u64(seed);
-    let zipf = zipf::ZipfDistribution::new(10000, 1.5).unwrap();
+    let zipf = zipf::ZipfDistribution::new(1000000000, 1.5).unwrap();
 
     let data = (0..nsamples)
         .map(|_| zipf.sample(&mut rng) as u32)
