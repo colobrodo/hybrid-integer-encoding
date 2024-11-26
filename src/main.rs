@@ -121,6 +121,7 @@ fn encode_file(input_path: PathBuf, output_path: PathBuf) -> Result<()> {
 
     writer.flush()?;
 
+    println!("Written whole file using {} bits", writer.written_bits);
     Ok(())
 }
 
