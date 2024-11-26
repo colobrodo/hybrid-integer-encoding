@@ -1,6 +1,9 @@
 use dsi_bitstream::traits::{BitRead, Endianness};
 
-use super::{compute_symbol_bits, EncodeParams, HuffmanSymbolInfo, MAX_HUFFMAN_BITS, NUM_SYMBOLS};
+use super::{
+    compute_symbol_bits, EncodeParams, HuffmanSymbolInfo, MAX_HUFFMAN_BITS, NUM_SYMBOLS,
+    SYM_LEN_BITS,
+};
 use common_traits::*;
 
 use anyhow::{anyhow, Result};
@@ -46,11 +49,11 @@ fn decode_symbol_num_bits<E: Endianness, R: BitRead<E>>(
     infos: &mut [HuffmanSymbolInfo; NUM_SYMBOLS],
     reader: &mut R,
 ) -> Result<()> {
-    let ms = reader.read_bits(16)? as usize;
+    let ms = reader.read_bits(MAX_HUFFMAN_BITS)? as usize;
     for info in infos.iter_mut().take(ms + 1) {
         info.present = reader.read_bits(1)? as u8;
         if info.present != 0 {
-            info.nbits = reader.read_bits(4)? as u8 + 1;
+            info.nbits = reader.read_bits(SYM_LEN_BITS as usize)? as u8 + 1;
         }
     }
     for info in infos.iter_mut().skip(ms + 1) {
