@@ -1,7 +1,7 @@
 pub const MAX_HUFFMAN_BITS: usize = 16;
 pub const NUM_SYMBOLS: usize = 1 << MAX_HUFFMAN_BITS;
 // number of bits needed to represent the length of each symbol in the header
-pub const SYM_LEN_BITS: u32 = usize::BITS - (12 as usize - 1).leading_zeros();
+pub const SYM_LEN_BITS: u32 = usize::BITS - (MAX_HUFFMAN_BITS - 1).leading_zeros();
 
 #[derive(Clone, Copy, Default, Debug)]
 pub(crate) struct HuffmanSymbolInfo {
@@ -19,7 +19,7 @@ pub trait EncodeParams {
     const LSB_IN_TOKEN: u32;
 }
 
-pub struct DefaultEncodeParams {}
+pub struct DefaultEncodeParams;
 
 impl EncodeParams for DefaultEncodeParams {
     const LOG2_NUM_EXPLICIT: u32 = 4;
