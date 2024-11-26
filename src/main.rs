@@ -221,23 +221,19 @@ mod tests {
     use hybrid_integer_encoding::huffman::{
         DefaultEncodeParams, EntropyCoder, HuffmanEncoder, HuffmanReader,
     };
-    use rand::{rngs::SmallRng, Rng, SeedableRng};
-
-    fn generate_random_data(low: u32, high: u32, nsamples: usize) -> Vec<u32> {
-        let mut rng = SmallRng::seed_from_u64(0);
-        let mut samples = Vec::new();
-        for _ in 0..nsamples {
-            let x1 = rng.gen_range(0.0..1.0);
-            let k = x1 * x1 * (high - low) as f32;
-            samples.push(k.ceil() as u32 + low);
-        }
-        samples
-    }
+    use rand::{prelude::Distribution, rngs::SmallRng, SeedableRng};
 
     #[test]
     fn encode_and_decode() {
         let nsamples = 1000;
-        let data = generate_random_data(0, 100, nsamples);
+        let seed = 0;
+        let mut rng = SmallRng::seed_from_u64(seed);
+        let zipf = zipf::ZipfDistribution::new(1000000000, 1.5).unwrap();
+
+        let data = (0..nsamples)
+            .map(|_| zipf.sample(&mut rng) as u32)
+            .collect::<Vec<_>>();
+
         let encoder = HuffmanEncoder::<DefaultEncodeParams>::new(&data);
         let word_write = MemWordWriterVec::new(Vec::<u64>::new());
         let mut writer = BufBitWriter::<LE, _>::new(word_write);
