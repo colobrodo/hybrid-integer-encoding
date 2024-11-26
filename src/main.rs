@@ -143,7 +143,7 @@ fn decode_file(path: PathBuf, lenght: u64) -> Result<()> {
 
 fn bench(repeats: usize, nsamples: u64, seed: u64) {
     let mut rng = SmallRng::seed_from_u64(seed);
-    let zipf = zipf::ZipfDistribution::new(10000, 1.5).unwrap();
+    let zipf = zipf::ZipfDistribution::new(1000000000, 1.5).unwrap();
 
     let data = (0..nsamples)
         .map(|_| zipf.sample(&mut rng) as u32)
@@ -162,9 +162,8 @@ fn bench(repeats: usize, nsamples: u64, seed: u64) {
     writer.flush().unwrap();
 
     let binary_data = writer.into_inner().unwrap().into_inner();
-    let binary_data = unsafe {
-        core::slice::from_raw_parts(binary_data.as_ptr() as *const u32, data.len() * 2)
-    };
+    let binary_data =
+        unsafe { core::slice::from_raw_parts(binary_data.as_ptr() as *const u32, data.len() * 2) };
 
     for _ in 0..repeats {
         let reader = BufBitReader::<LE, _>::new(MemWordReader::new(&binary_data));
@@ -222,11 +221,11 @@ mod tests {
 
     #[test]
     fn encode_and_decode() {
-        let nsamples = 1000;
-        
+        let nsamples = 100000;
+
         let mut rng = SmallRng::seed_from_u64(0);
-        let zipf = zipf::ZipfDistribution::new(10000, 1.5).unwrap();
-    
+        let zipf = zipf::ZipfDistribution::new(1000000000, 1.5).unwrap();
+
         let data = (0..nsamples)
             .map(|_| zipf.sample(&mut rng) as u32)
             .collect::<Vec<_>>();
