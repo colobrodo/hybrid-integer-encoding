@@ -2,10 +2,11 @@ use std::mem;
 
 use dsi_bitstream::traits::{BitWrite, Endianness};
 
-use crate::huffman::{compute_symbol_bits, SYM_LEN_BITS};
+use crate::huffman::compute_symbol_bits;
 
-use super::common::{
-    encode, DefaultEncodeParams, EncodeParams, HuffmanSymbolInfo, MAX_HUFFMAN_BITS, NUM_SYMBOLS,
+use super::{
+    common::{encode, DefaultEncodeParams, EncodeParams, HuffmanSymbolInfo},
+    MAX_HUFFMAN_BITS, NUM_SYMBOLS, SYM_LEN_BITS,
 };
 
 use anyhow::Result;
