@@ -166,6 +166,8 @@ fn bench(repeats: usize, nsamples: u64, seed: u64) {
     let binary_data =
         unsafe { core::slice::from_raw_parts(binary_data.as_ptr() as *const u32, data.len() * 2) };
 
+    let mut time_per_repeat = Vec::new();
+
     for _ in 0..repeats {
         let reader = BufBitReader::<LE, _>::new(MemWordReader::new(&binary_data));
         let mut reader = HuffmanReader::<LE, _>::new(reader).unwrap();
@@ -175,12 +177,14 @@ fn bench(repeats: usize, nsamples: u64, seed: u64) {
         for _ in &data {
             let _value = black_box(reader.read::<DefaultEncodeParams>().unwrap());
         }
-        println!(
-            "Decode:    {:>20} ns/sample",
-            (start.elapsed().as_secs_f64() / nsamples as f64) * 1e9
-        );
+        let elapsed_time = (start.elapsed().as_secs_f64() / nsamples as f64) * 1e9;
+        println!("Decode:    {:>20} ns/read", elapsed_time);
+        time_per_repeat.push(elapsed_time);
     }
 
+    time_per_repeat.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    let median_time = time_per_repeat[time_per_repeat.len() / 2];
+    println!("Median time of repeats {:>20} ns/read", median_time);
     println!(
         "Executed bench in {:>20} s",
         overall_start.elapsed().as_secs_f64()
