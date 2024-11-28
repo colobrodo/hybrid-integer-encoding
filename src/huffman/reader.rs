@@ -13,6 +13,7 @@ pub trait EntropyCoder {
 
     fn read_bits(&mut self, n: usize) -> Result<u64>;
 
+    #[inline(always)]
     fn read<EP: EncodeParams>(&mut self) -> Result<usize> {
         let split_token = 1 << EP::LOG2_NUM_EXPLICIT;
         let mut token = self.read_token()?;
@@ -50,7 +51,12 @@ pub struct HuffmanReader<
     _marker: core::marker::PhantomData<E>,
 }
 
-fn decode_symbol_num_bits<const MAX_BITS: usize, const NUM_SYMBOLS: usize, E: Endianness, R: BitRead<E>>(
+fn decode_symbol_num_bits<
+    const MAX_BITS: usize,
+    const NUM_SYMBOLS: usize,
+    E: Endianness,
+    R: BitRead<E>,
+>(
     infos: &mut [HuffmanSymbolInfo; NUM_SYMBOLS],
     reader: &mut R,
 ) -> Result<()> {
