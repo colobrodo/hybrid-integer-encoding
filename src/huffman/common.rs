@@ -34,7 +34,7 @@ impl EncodeParams for DefaultEncodeParams {
 // Variable integer encoding scheme that puts bits either in an entropy-coded
 // symbol or as raw bits, depending on the specified configuration.
 #[inline(always)]
-pub(crate) fn encode<EP: EncodeParams>(value: u64) -> (usize, usize, u64) {
+pub fn encode<EP: EncodeParams>(value: u64) -> (usize, usize, u64) {
     let split_token: u32 = 1 << EP::LOG2_NUM_EXPLICIT;
     if value < split_token as u64 {
         (value as usize, 0, 0)

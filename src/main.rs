@@ -12,7 +12,8 @@ use dsi_bitstream::{
 };
 
 use hybrid_integer_encoding::huffman::{
-    DefaultEncodeParams, EntropyCoder, HuffmanEncoder, HuffmanReader, IntegerData,
+    encode, DefaultEncodeParams, EncodeParams, EntropyCoder, HuffmanEncoder, HuffmanReader,
+    IntegerData,
 };
 
 use anyhow::Result;
@@ -159,6 +160,11 @@ fn decode_file(path: PathBuf, lenght: u64) -> Result<()> {
     Ok(())
 }
 
+fn choose_context<EP: EncodeParams>(last_sample: u64, num_context: usize) -> u8 {
+    let (token, _, _) = encode::<EP>(last_sample);
+    (token % num_context) as u8
+}
+
 fn bench<const NUM_CONTEXT: usize, const MAX_BITS: usize, const NUM_SYMBOLS: usize>(
     repeats: usize,
     nsamples: u64,
@@ -169,9 +175,12 @@ fn bench<const NUM_CONTEXT: usize, const MAX_BITS: usize, const NUM_SYMBOLS: usi
     let zipf = zipf::ZipfDistribution::new(1000000000, 1.5).unwrap();
 
     let mut data = IntegerData::new();
-    let default_context = 0;
+    let mut last_sample = 0;
     for _ in 0..nsamples {
-        data.add(default_context, zipf.sample(&mut rng) as u32);
+        let sample = zipf.sample(&mut rng) as u32;
+        let context = choose_context::<DefaultEncodeParams>(last_sample as u64, NUM_CONTEXT);
+        data.add(context as u8, sample);
+        last_sample = sample;
     }
 
     let overall_start = std::time::Instant::now();
@@ -183,17 +192,19 @@ fn bench<const NUM_CONTEXT: usize, const MAX_BITS: usize, const NUM_SYMBOLS: usi
     let mut writer = StatBitWriter::new(writer);
 
     encoder.write_header(&mut writer).unwrap();
+    let header_size = writer.written_bits;
     if verbose {
-        println!("Header took {} bits", writer.written_bits);
+        println!("Header took {} bits", header_size);
     }
 
     for (&ctx, &value) in data.iter() {
         encoder.write(ctx, value, &mut writer).unwrap();
     }
     writer.flush().unwrap();
-
+    let encoded_size = writer.written_bits;
     if verbose {
-        println!("Written whole file using {} bits", writer.written_bits);
+        println!("Written whole file using {} bits", encoded_size);
+        println!("  with payload {} bits", encoded_size - header_size);
     }
 
     let binary_data = writer.into_inner().into_inner().unwrap().into_inner();
@@ -209,12 +220,8 @@ fn bench<const NUM_CONTEXT: usize, const MAX_BITS: usize, const NUM_SYMBOLS: usi
 
         let start = std::time::Instant::now();
 
-        for _ in data.iter() {
-            let _value = black_box(
-                reader
-                    .read::<DefaultEncodeParams>(default_context as usize)
-                    .unwrap(),
-            );
+        for (&ctx, _original) in data.iter() {
+            let _value = black_box(reader.read::<DefaultEncodeParams>(ctx as usize).unwrap());
         }
         let elapsed_time = (start.elapsed().as_secs_f64() / nsamples as f64) * 1e9;
         println!("Decode:    {:>20} ns/read", elapsed_time);
@@ -249,9 +256,9 @@ fn main() -> Result<()> {
             use_context,
         } => {
             if use_context {
-                bench::<1, 10, 1024>(repeats, samples, seed, !args.silent)
-            } else {
                 bench::<4, 8, 256>(repeats, samples, seed, !args.silent)
+            } else {
+                bench::<1, 10, 1024>(repeats, samples, seed, !args.silent)
             }
         }
     }
