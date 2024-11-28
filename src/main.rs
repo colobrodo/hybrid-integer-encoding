@@ -24,6 +24,8 @@ use rand::{prelude::Distribution, rngs::SmallRng, SeedableRng};
 struct App {
     #[clap(subcommand)]
     command: Command,
+    #[arg(short, long, default_value = "false")]
+    silent: bool,
 }
 
 #[derive(Debug, Subcommand)]
@@ -48,6 +50,10 @@ enum Command {
         /// Number of samples to decode
         #[arg(short = 'r', long, default_value = "10000")]
         samples: u64,
+        /// If true, use 4 contexts and max 8 bits per symbol.
+        /// otherwise, use 1 context and max 10 bits per symbol.
+        #[arg(short = 'c', long, default_value = "false")]
+        use_context: bool,
         /// The number of time to repeat the tests
         #[arg(short = 'R', long, default_value = "10")]
         repeats: usize,
@@ -84,6 +90,12 @@ impl<E: Endianness, W: BitWrite<E>> BitWrite<E> for StatBitWriter<E, W> {
 }
 
 impl<E: Endianness, W: BitWrite<E>> StatBitWriter<E, W> {
+    fn into_inner(self) -> W {
+        self.writer
+    }
+}
+
+impl<E: Endianness, W: BitWrite<E>> StatBitWriter<E, W> {
     fn new(writer: W) -> Self {
         Self {
             writer,
@@ -93,7 +105,7 @@ impl<E: Endianness, W: BitWrite<E>> StatBitWriter<E, W> {
     }
 }
 
-fn encode_file(input_path: PathBuf, output_path: PathBuf) -> Result<()> {
+fn encode_file(input_path: PathBuf, output_path: PathBuf, verbose: bool) -> Result<()> {
     let file = File::open(input_path)?;
     let reader = BufReader::new(file);
     let default_context = 0;
@@ -115,14 +127,18 @@ fn encode_file(input_path: PathBuf, output_path: PathBuf) -> Result<()> {
     let encoder = HuffmanEncoder::<DefaultEncodeParams, 1>::new(&integers);
 
     encoder.write_header(&mut writer)?;
-    println!("Header took {} bits", writer.written_bits);
+    if verbose {
+        println!("Header took {} bits", writer.written_bits);
+    }
     for (&ctx, &number) in integers.iter() {
         encoder.write(ctx, number, &mut writer)?;
     }
 
     writer.flush()?;
 
-    println!("Written whole file using {} bits", writer.written_bits);
+    if verbose {
+        println!("Written whole file using {} bits", writer.written_bits);
+    }
     Ok(())
 }
 
@@ -143,7 +159,12 @@ fn decode_file(path: PathBuf, lenght: u64) -> Result<()> {
     Ok(())
 }
 
-fn bench(repeats: usize, nsamples: u64, seed: u64) {
+fn bench<const NUM_CONTEXT: usize, const MAX_BITS: usize, const NUM_SYMBOLS: usize>(
+    repeats: usize,
+    nsamples: u64,
+    seed: u64,
+    verbose: bool,
+) {
     let mut rng = SmallRng::seed_from_u64(seed);
     let zipf = zipf::ZipfDistribution::new(1000000000, 1.5).unwrap();
 
@@ -155,17 +176,27 @@ fn bench(repeats: usize, nsamples: u64, seed: u64) {
 
     let overall_start = std::time::Instant::now();
 
-    let encoder = HuffmanEncoder::<DefaultEncodeParams, 1>::new(&data);
+    let encoder =
+        HuffmanEncoder::<DefaultEncodeParams, NUM_CONTEXT, MAX_BITS, NUM_SYMBOLS>::new(&data);
     let word_write = MemWordWriterVec::new(Vec::<u64>::new());
-    let mut writer = BufBitWriter::<LE, _>::new(word_write);
+    let writer = BufBitWriter::<LE, _>::new(word_write);
+    let mut writer = StatBitWriter::new(writer);
 
     encoder.write_header(&mut writer).unwrap();
+    if verbose {
+        println!("Header took {} bits", writer.written_bits);
+    }
+
     for (&ctx, &value) in data.iter() {
         encoder.write(ctx, value, &mut writer).unwrap();
     }
     writer.flush().unwrap();
 
-    let binary_data = writer.into_inner().unwrap().into_inner();
+    if verbose {
+        println!("Written whole file using {} bits", writer.written_bits);
+    }
+
+    let binary_data = writer.into_inner().into_inner().unwrap().into_inner();
     let binary_data =
         unsafe { core::slice::from_raw_parts(binary_data.as_ptr() as *const u32, data.len() * 2) };
 
@@ -173,7 +204,8 @@ fn bench(repeats: usize, nsamples: u64, seed: u64) {
 
     for _ in 0..repeats {
         let reader = BufBitReader::<LE, _>::new(MemWordReader::new(&binary_data));
-        let mut reader = HuffmanReader::<LE, _, 1>::new(reader).unwrap();
+        let mut reader =
+            HuffmanReader::<LE, _, NUM_CONTEXT, MAX_BITS, NUM_SYMBOLS>::new(reader).unwrap();
 
         let start = std::time::Instant::now();
 
@@ -205,7 +237,7 @@ fn main() -> Result<()> {
             input_path,
             output_path,
         } => {
-            encode_file(input_path, output_path)?;
+            encode_file(input_path, output_path, !args.silent)?;
         }
         Command::Decode { path, lenght } => {
             decode_file(path, lenght)?;
@@ -214,7 +246,14 @@ fn main() -> Result<()> {
             samples,
             repeats,
             seed,
-        } => bench(repeats, samples, seed),
+            use_context,
+        } => {
+            if use_context {
+                bench::<1, 10, 1024>(repeats, samples, seed, !args.silent)
+            } else {
+                bench::<4, 8, 256>(repeats, samples, seed, !args.silent)
+            }
+        }
     }
 
     Ok(())
@@ -232,7 +271,13 @@ mod tests {
     };
     use rand::{prelude::Distribution, rngs::SmallRng, SeedableRng};
 
-    fn encode_and_decode<const MAX_BITS: usize, const NUM_SYMBOLS: usize>(seed: u64) {
+    fn encode_and_decode<
+        const NUM_CONTEXT: usize,
+        const MAX_BITS: usize,
+        const NUM_SYMBOLS: usize,
+    >(
+        seed: u64,
+    ) {
         let nsamples = 1000;
         let mut rng = SmallRng::seed_from_u64(seed);
         let zipf = zipf::ZipfDistribution::new(1000000000, 1.5).unwrap();
@@ -269,17 +314,23 @@ mod tests {
 
     #[test]
     fn encode_and_decode_with_default_params() {
-        encode_and_decode::<DEFAULT_MAX_HUFFMAN_BITS, DEFAULT_NUM_SYMBOLS>(0);
+        encode_and_decode::<1, DEFAULT_MAX_HUFFMAN_BITS, DEFAULT_NUM_SYMBOLS>(0);
     }
 
     #[test]
     fn encode_and_decode2() {
-        encode_and_decode::<DEFAULT_MAX_HUFFMAN_BITS, DEFAULT_NUM_SYMBOLS>(31415);
+        encode_and_decode::<1, DEFAULT_MAX_HUFFMAN_BITS, DEFAULT_NUM_SYMBOLS>(31415);
     }
 
     #[test]
     fn encode_and_decode_with_custom_params() {
         const MAX_BITS: usize = 10;
-        encode_and_decode::<MAX_BITS, { 1 << MAX_BITS }>(0);
+        encode_and_decode::<1, MAX_BITS, { 1 << MAX_BITS }>(0);
+    }
+
+    #[test]
+    fn encode_and_decode_with_multiple_contexts() {
+        const MAX_BITS: usize = 10;
+        encode_and_decode::<4, MAX_BITS, { 1 << MAX_BITS }>(0);
     }
 }
