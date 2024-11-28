@@ -1,9 +1,7 @@
 // maximum number of bits for huffman code
-pub const MAX_HUFFMAN_BITS: usize = 10;
+pub const DEFAULT_MAX_HUFFMAN_BITS: usize = 10;
 // maximum number of codes, directly derived from MAX_HUFFMAN_BITS
-pub const NUM_SYMBOLS: usize = 1 << MAX_HUFFMAN_BITS;
-// number of bits needed to represent the length of each symbol in the header
-pub const SYM_LEN_BITS: u32 = usize::BITS - (MAX_HUFFMAN_BITS - 1).leading_zeros();
+pub const DEFAULT_NUM_SYMBOLS: usize = 1 << DEFAULT_MAX_HUFFMAN_BITS;
 
 #[derive(Clone, Copy, Default, Debug)]
 pub(crate) struct HuffmanSymbolInfo {
@@ -12,6 +10,7 @@ pub(crate) struct HuffmanSymbolInfo {
     pub(crate) bits: u16,
 }
 
+/// Parameters for the variable integer encoding scheme.
 pub trait EncodeParams {
     // log2 of the number of explicit tokens (referred as k in the paper)
     const LOG2_NUM_EXPLICIT: u32;
@@ -51,7 +50,10 @@ pub(crate) fn encode<EP: EncodeParams>(value: u64) -> (usize, usize, u64) {
 // For a given array of HuffmanSymbolInfo, where only the `present` and `nbits`
 // fields are set, fill up the `bits` field by building a Canonical Huffman code
 // (https://en.wikipedia.org/wiki/Canonical_Huffman_code).
-pub(crate) fn compute_symbol_bits(infos: &mut [HuffmanSymbolInfo; NUM_SYMBOLS]) {
+pub(crate) fn compute_symbol_bits<const MAX_BITS: usize, const NUM_SYMBOLS: usize>(
+    infos: &mut [HuffmanSymbolInfo],
+) {
+    assert!(infos.len() == NUM_SYMBOLS);
     let mut syms = Vec::new();
     for (i, info) in infos.iter().enumerate() {
         if info.present == 0 {
@@ -64,11 +66,17 @@ pub(crate) fn compute_symbol_bits(infos: &mut [HuffmanSymbolInfo; NUM_SYMBOLS]) 
     let mut x: usize = 0;
     for (s, sym) in syms.iter().enumerate() {
         infos[sym.1].bits = u16::reverse_bits(x as u16)
-            >> (u16::BITS as usize - MAX_HUFFMAN_BITS)
-            >> (MAX_HUFFMAN_BITS as u8 - infos[sym.1].nbits);
+            >> (u16::BITS as usize - MAX_BITS)
+            >> (MAX_BITS as u8 - infos[sym.1].nbits);
         x += 1;
         if s + 1 != present_symbols {
             x <<= syms[s + 1].0 - sym.0;
         }
     }
+}
+
+/// Returns the number of bits needed to represent the length of each symbol in
+/// the header.
+pub const fn compute_symbol_len_bits(max_bits: u32) -> u32 {
+    usize::BITS - (max_bits - 1).leading_zeros()
 }
