@@ -54,7 +54,7 @@ enum Command {
         /// If true, use 4 contexts and max 8 bits per symbol.
         /// otherwise, use 1 context and max 10 bits per symbol.
         #[arg(short = 'c', long, default_value = "false")]
-        use_context: bool,
+        use_contexts: bool,
         /// The number of time to repeat the tests
         #[arg(short = 'R', long, default_value = "10")]
         repeats: usize,
@@ -253,9 +253,9 @@ fn main() -> Result<()> {
             samples,
             repeats,
             seed,
-            use_context,
+            use_contexts,
         } => {
-            if use_context {
+            if use_contexts {
                 bench::<4, 8, 256>(repeats, samples, seed, !args.silent)
             } else {
                 bench::<1, 10, 1024>(repeats, samples, seed, !args.silent)
