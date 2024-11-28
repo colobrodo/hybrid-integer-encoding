@@ -5,20 +5,28 @@ use dsi_bitstream::traits::{BitWrite, Endianness};
 use crate::huffman::compute_symbol_bits;
 
 use super::{
-    common::{encode, DefaultEncodeParams, EncodeParams, HuffmanSymbolInfo},
-    MAX_HUFFMAN_BITS, NUM_SYMBOLS, SYM_LEN_BITS,
+    common::{
+        compute_symbol_len_bits, encode, DefaultEncodeParams, EncodeParams, HuffmanSymbolInfo,
+    },
+    DEFAULT_MAX_HUFFMAN_BITS, DEFAULT_NUM_SYMBOLS,
 };
 
 use anyhow::Result;
 
-pub struct HuffmanEncoder<EP: EncodeParams = DefaultEncodeParams> {
-    info_: [HuffmanSymbolInfo; 1 << MAX_HUFFMAN_BITS],
+pub struct HuffmanEncoder<
+    EP: EncodeParams = DefaultEncodeParams,
+    const MAX_BITS: usize = DEFAULT_MAX_HUFFMAN_BITS,
+    const NUM_SYMBOLS: usize = DEFAULT_NUM_SYMBOLS,
+> {
     _marker: core::marker::PhantomData<EP>,
+    info_: [HuffmanSymbolInfo; NUM_SYMBOLS],
 }
 
 type Bag = (usize, Vec<u8>);
 
-fn compute_histogram<EP: EncodeParams>(data: &[u32]) -> [usize; NUM_SYMBOLS] {
+fn compute_histogram<EP: EncodeParams, const NUM_SYMBOLS: usize>(
+    data: &[u32],
+) -> [usize; NUM_SYMBOLS] {
     let mut histogram = [0; NUM_SYMBOLS];
     for value in data {
         let (token, _, _) = encode::<EP>((*value).into());
@@ -30,7 +38,11 @@ fn compute_histogram<EP: EncodeParams>(data: &[u32]) -> [usize; NUM_SYMBOLS] {
 // Compute the optimal number of bits for each symbol given the input
 // distribution. Uses a (quadratic version) of the package-merge/coin-collector
 // algorithm.
-fn compute_symbol_num_bits(histogram: &[usize], infos: &mut [HuffmanSymbolInfo; NUM_SYMBOLS]) {
+fn compute_symbol_num_bits<const MAX_BITS: usize, const NUM_SYMBOLS: usize>(
+    histogram: &[usize],
+    infos: &mut [HuffmanSymbolInfo],
+) {
+    assert!(infos.len() == NUM_SYMBOLS);
     // Mark the present/missing symbols.
     let mut nzsym = 0;
     for (i, freq) in histogram.iter().enumerate() {
@@ -50,7 +62,7 @@ fn compute_symbol_num_bits(histogram: &[usize], infos: &mut [HuffmanSymbolInfo; 
     }
 
     // Create a list of symbols for any given cost.
-    let mut bags = vec![Vec::<Bag>::default(); MAX_HUFFMAN_BITS];
+    let mut bags = vec![Vec::<Bag>::default(); MAX_BITS];
     for bag in bags.iter_mut() {
         for s in 0..NUM_SYMBOLS {
             if infos[s].present == 0 {
@@ -64,7 +76,7 @@ fn compute_symbol_num_bits(histogram: &[usize], infos: &mut [HuffmanSymbolInfo; 
     // Pair up symbols (or groups of symbols) of a given bit-length to create
     // symbols of the following bit-length, creating pairs by merging (groups of)
     // symbols consecutively in increasing order of cost.
-    for i in 0..(MAX_HUFFMAN_BITS - 1) {
+    for i in 0..(MAX_BITS - 1) {
         bags[i].sort();
         for j in (0..bags[i].len() - 1).step_by(2) {
             let nf = bags[i][j].0 + bags[i][j + 1].0;
@@ -73,25 +85,31 @@ fn compute_symbol_num_bits(histogram: &[usize], infos: &mut [HuffmanSymbolInfo; 
             bags[i + 1].push((nf, nsym));
         }
     }
-    bags[MAX_HUFFMAN_BITS - 1].sort();
+    bags[MAX_BITS - 1].sort();
 
     // In the groups of symbols for the highest bit length we need to select the
     // last 2*num_symbols-2 groups, and assign to each symbol one bit of cost for
     // each of its occurrences in these groups.
     for i in 0..2 * nzsym - 2 {
-        let b = &bags[MAX_HUFFMAN_BITS - 1][i];
+        let b = &bags[MAX_BITS - 1][i];
         for &x in b.1.iter() {
             infos[x as usize].nbits += 1;
         }
     }
 }
 
-impl<EP: EncodeParams> HuffmanEncoder<EP> {
+impl<EP: EncodeParams, const MAX_BITS: usize, const NUM_SYMBOLS: usize>
+    HuffmanEncoder<EP, MAX_BITS, NUM_SYMBOLS>
+{
     pub fn new(data: &[u32]) -> Self {
-        let histogram = compute_histogram::<EP>(data);
+        assert!(
+            NUM_SYMBOLS <= 1 << MAX_BITS,
+            "NUM_SYMBOLS must be less than or equal to 2^MAX_BITS"
+        );
+        let histogram = compute_histogram::<EP, NUM_SYMBOLS>(data);
         let mut info = [HuffmanSymbolInfo::default(); NUM_SYMBOLS];
-        compute_symbol_num_bits(&histogram, &mut info);
-        compute_symbol_bits(&mut info);
+        compute_symbol_num_bits::<MAX_BITS, NUM_SYMBOLS>(&histogram, &mut info);
+        compute_symbol_bits::<MAX_BITS, NUM_SYMBOLS>(&mut info);
         Self {
             info_: info,
             _marker: core::marker::PhantomData,
@@ -117,6 +135,8 @@ impl<EP: EncodeParams> HuffmanEncoder<EP> {
     // symbol, 1 bit for presence/absence, and 4 bits for symbol length if present.
     // TODO: short encoding for empty ctxs, RLE for missing symbols.
     pub fn write_header<E: Endianness>(&self, writer: &mut impl BitWrite<E>) -> Result<()> {
+        // number of bits needed to represent the length of each symbol in the header
+        let symbol_len_bits = compute_symbol_len_bits(MAX_BITS as u32);
         let mut ms = 0;
         for (i, info) in self.info_.iter().enumerate() {
             if info.present != 0 {
@@ -124,11 +144,11 @@ impl<EP: EncodeParams> HuffmanEncoder<EP> {
             }
         }
 
-        writer.write_bits(ms as u64, MAX_HUFFMAN_BITS)?;
+        writer.write_bits(ms as u64, MAX_BITS)?;
         for info in self.info_.iter().take(ms + 1) {
             if info.present != 0 {
                 writer.write_bits(1, 1)?;
-                writer.write_bits(info.nbits as u64 - 1, SYM_LEN_BITS as usize)?;
+                writer.write_bits(info.nbits as u64 - 1, symbol_len_bits as usize)?;
             } else {
                 writer.write_bits(0, 1)?;
             }
