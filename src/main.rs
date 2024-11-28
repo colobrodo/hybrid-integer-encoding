@@ -162,7 +162,7 @@ fn decode_file(path: PathBuf, lenght: u64) -> Result<()> {
 
 fn choose_context<EP: EncodeParams>(last_sample: u64, num_context: usize) -> u8 {
     let (token, _, _) = encode::<EP>(last_sample);
-    (token % num_context) as u8
+    (token.min(num_context - 1)) as u8
 }
 
 fn bench<const NUM_CONTEXT: usize, const MAX_BITS: usize, const NUM_SYMBOLS: usize>(
