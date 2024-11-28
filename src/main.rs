@@ -129,7 +129,7 @@ fn encode_file(input_path: PathBuf, output_path: PathBuf) -> Result<()> {
 fn decode_file(path: PathBuf, lenght: u64) -> Result<()> {
     let file = File::open(path)?;
     let reader = BufBitReader::<LE, _>::new(WordAdapter::<u32, _>::new(BufReader::new(file)));
-    let mut reader = HuffmanReader::<LE, _, 1>::new(reader)?;
+    let mut reader = HuffmanReader::<LE, _>::new(reader)?;
     let mut i = 0;
     while let Ok(value) = reader.read::<DefaultEncodeParams>(0) {
         // TODO: HACK: reading from mem word, read a 0 at the end of the bitstream but the lenght of the encoded file is not know
