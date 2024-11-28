@@ -1,7 +1,10 @@
 // maximum number of bits for huffman code
-pub const DEFAULT_MAX_HUFFMAN_BITS: usize = 10;
+pub const DEFAULT_MAX_HUFFMAN_BITS: usize = 8;
 // maximum number of codes, directly derived from MAX_HUFFMAN_BITS
 pub const DEFAULT_NUM_SYMBOLS: usize = 1 << DEFAULT_MAX_HUFFMAN_BITS;
+// maximum number of contexts
+// NOTE: the number of context are indexed by u8, so the maximum number of context is 256
+pub const DEFAULT_NUM_CONTEXT: usize = 256;
 
 #[derive(Clone, Copy, Default, Debug)]
 pub(crate) struct HuffmanSymbolInfo {

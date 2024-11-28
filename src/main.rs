@@ -12,7 +12,7 @@ use dsi_bitstream::{
 };
 
 use hybrid_integer_encoding::huffman::{
-    DefaultEncodeParams, EntropyCoder, HuffmanEncoder, HuffmanReader,
+    DefaultEncodeParams, EntropyCoder, HuffmanEncoder, HuffmanReader, IntegerData,
 };
 
 use anyhow::Result;
@@ -74,7 +74,7 @@ impl<E: Endianness, W: BitWrite<E>> BitWrite<E> for StatBitWriter<E, W> {
 
     fn write_unary(&mut self, value: u64) -> Result<usize, Self::Error> {
         let written = self.writer.write_unary(value)?;
-        self.written_bits += value as usize;
+        self.written_bits += value as usize + 1;
         Ok(written)
     }
 
@@ -96,13 +96,14 @@ impl<E: Endianness, W: BitWrite<E>> StatBitWriter<E, W> {
 fn encode_file(input_path: PathBuf, output_path: PathBuf) -> Result<()> {
     let file = File::open(input_path)?;
     let reader = BufReader::new(file);
+    let default_context = 0;
 
-    let mut numbers = Vec::new();
+    let mut integers = IntegerData::new();
     for line in reader.lines().map_while(Result::ok) {
         // Split the line by whitespace and parse each number as u8
         for num in line.split_whitespace() {
             match num.parse::<u32>() {
-                Ok(n) => numbers.push(n),
+                Ok(n) => integers.add(default_context, n),
                 Err(_) => println!("Skipping invalid number: {}", num),
             }
         }
@@ -111,12 +112,12 @@ fn encode_file(input_path: PathBuf, output_path: PathBuf) -> Result<()> {
     let outfile = File::create(output_path)?;
     let writer = BufBitWriter::<LE, _>::new(WordAdapter::<u32, _>::new(outfile));
     let mut writer = StatBitWriter::new(writer);
-    let encoder = HuffmanEncoder::<DefaultEncodeParams>::new(&numbers);
+    let encoder = HuffmanEncoder::<DefaultEncodeParams, 1>::new(&integers);
 
     encoder.write_header(&mut writer)?;
     println!("Header took {} bits", writer.written_bits);
-    for number in numbers {
-        encoder.write(number, &mut writer)?;
+    for (&ctx, &number) in integers.iter() {
+        encoder.write(ctx, number, &mut writer)?;
     }
 
     writer.flush()?;
@@ -128,9 +129,9 @@ fn encode_file(input_path: PathBuf, output_path: PathBuf) -> Result<()> {
 fn decode_file(path: PathBuf, lenght: u64) -> Result<()> {
     let file = File::open(path)?;
     let reader = BufBitReader::<LE, _>::new(WordAdapter::<u32, _>::new(BufReader::new(file)));
-    let mut reader = HuffmanReader::<LE, _>::new(reader)?;
+    let mut reader = HuffmanReader::<LE, _, 1>::new(reader)?;
     let mut i = 0;
-    while let Ok(value) = reader.read::<DefaultEncodeParams>() {
+    while let Ok(value) = reader.read::<DefaultEncodeParams>(0) {
         // TODO: HACK: reading from mem word, read a 0 at the end of the bitstream but the lenght of the encoded file is not know
         if i == lenght {
             break;
@@ -146,19 +147,21 @@ fn bench(repeats: usize, nsamples: u64, seed: u64) {
     let mut rng = SmallRng::seed_from_u64(seed);
     let zipf = zipf::ZipfDistribution::new(1000000000, 1.5).unwrap();
 
-    let data = (0..nsamples)
-        .map(|_| zipf.sample(&mut rng) as u32)
-        .collect::<Vec<_>>();
+    let mut data = IntegerData::new();
+    let default_context = 0;
+    for _ in 0..nsamples {
+        data.add(default_context, zipf.sample(&mut rng) as u32);
+    }
 
     let overall_start = std::time::Instant::now();
 
-    let encoder = HuffmanEncoder::<DefaultEncodeParams>::new(&data);
+    let encoder = HuffmanEncoder::<DefaultEncodeParams, 1>::new(&data);
     let word_write = MemWordWriterVec::new(Vec::<u64>::new());
     let mut writer = BufBitWriter::<LE, _>::new(word_write);
 
     encoder.write_header(&mut writer).unwrap();
-    for value in &data {
-        encoder.write(*value, &mut writer).unwrap();
+    for (&ctx, &value) in data.iter() {
+        encoder.write(ctx, value, &mut writer).unwrap();
     }
     writer.flush().unwrap();
 
@@ -170,12 +173,16 @@ fn bench(repeats: usize, nsamples: u64, seed: u64) {
 
     for _ in 0..repeats {
         let reader = BufBitReader::<LE, _>::new(MemWordReader::new(&binary_data));
-        let mut reader = HuffmanReader::<LE, _>::new(reader).unwrap();
+        let mut reader = HuffmanReader::<LE, _, 1>::new(reader).unwrap();
 
         let start = std::time::Instant::now();
 
-        for _ in &data {
-            let _value = black_box(reader.read::<DefaultEncodeParams>().unwrap());
+        for _ in data.iter() {
+            let _value = black_box(
+                reader
+                    .read::<DefaultEncodeParams>(default_context as usize)
+                    .unwrap(),
+            );
         }
         let elapsed_time = (start.elapsed().as_secs_f64() / nsamples as f64) * 1e9;
         println!("Decode:    {:>20} ns/read", elapsed_time);
@@ -220,8 +227,8 @@ mod tests {
         traits::{BitWrite, LE},
     };
     use hybrid_integer_encoding::huffman::{
-        DefaultEncodeParams, EntropyCoder, HuffmanEncoder, HuffmanReader, DEFAULT_MAX_HUFFMAN_BITS,
-        DEFAULT_NUM_SYMBOLS,
+        DefaultEncodeParams, EntropyCoder, HuffmanEncoder, HuffmanReader, IntegerData,
+        DEFAULT_MAX_HUFFMAN_BITS, DEFAULT_NUM_SYMBOLS,
     };
     use rand::{prelude::Distribution, rngs::SmallRng, SeedableRng};
 
@@ -230,17 +237,19 @@ mod tests {
         let mut rng = SmallRng::seed_from_u64(seed);
         let zipf = zipf::ZipfDistribution::new(1000000000, 1.5).unwrap();
 
-        let data = (0..nsamples)
-            .map(|_| zipf.sample(&mut rng) as u32)
-            .collect::<Vec<_>>();
+        let mut data = IntegerData::new();
+        let default_context = 0;
+        for _ in 0..nsamples {
+            data.add(default_context, zipf.sample(&mut rng) as u32);
+        }
 
-        let encoder = HuffmanEncoder::<DefaultEncodeParams, MAX_BITS, NUM_SYMBOLS>::new(&data);
+        let encoder = HuffmanEncoder::<DefaultEncodeParams, 1, MAX_BITS, NUM_SYMBOLS>::new(&data);
         let word_write = MemWordWriterVec::new(Vec::<u64>::new());
         let mut writer = BufBitWriter::<LE, _>::new(word_write);
 
         encoder.write_header(&mut writer).unwrap();
-        for value in &data {
-            encoder.write(*value, &mut writer).unwrap();
+        for (&ctx, &value) in data.iter() {
+            encoder.write(ctx, value, &mut writer).unwrap();
         }
         writer.flush().unwrap();
 
@@ -250,11 +259,11 @@ mod tests {
         };
 
         let reader = BufBitReader::<LE, _>::new(MemWordReader::new(binary_data));
-        let mut reader = HuffmanReader::<LE, _, MAX_BITS, NUM_SYMBOLS>::new(reader).unwrap();
+        let mut reader = HuffmanReader::<LE, _, 1, MAX_BITS, NUM_SYMBOLS>::new(reader).unwrap();
 
-        for original in &data {
-            let value = reader.read::<DefaultEncodeParams>().unwrap();
-            assert_eq!(value, *original as usize);
+        for (&ctx, &original) in data.iter() {
+            let value = reader.read::<DefaultEncodeParams>(ctx as usize).unwrap();
+            assert_eq!(value, original as usize);
         }
     }
 
@@ -270,7 +279,7 @@ mod tests {
 
     #[test]
     fn encode_and_decode_with_custom_params() {
-        const MAX_BITS: usize = 8;
+        const MAX_BITS: usize = 10;
         encode_and_decode::<MAX_BITS, { 1 << MAX_BITS }>(0);
     }
 }

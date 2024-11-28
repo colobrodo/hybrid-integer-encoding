@@ -8,32 +8,73 @@ use super::{
     common::{
         compute_symbol_len_bits, encode, DefaultEncodeParams, EncodeParams, HuffmanSymbolInfo,
     },
-    DEFAULT_MAX_HUFFMAN_BITS, DEFAULT_NUM_SYMBOLS,
+    DEFAULT_MAX_HUFFMAN_BITS, DEFAULT_NUM_CONTEXT, DEFAULT_NUM_SYMBOLS,
 };
 
 use anyhow::Result;
 
 pub struct HuffmanEncoder<
     EP: EncodeParams = DefaultEncodeParams,
+    const NUM_CONTEXT: usize = DEFAULT_NUM_CONTEXT,
     const MAX_BITS: usize = DEFAULT_MAX_HUFFMAN_BITS,
     const NUM_SYMBOLS: usize = DEFAULT_NUM_SYMBOLS,
 > {
     _marker: core::marker::PhantomData<EP>,
-    info_: [HuffmanSymbolInfo; NUM_SYMBOLS],
+    info_: [[HuffmanSymbolInfo; NUM_SYMBOLS]; NUM_CONTEXT],
+}
+
+/// Data structure to hold the integer values and their contexts.
+pub struct IntegerData {
+    values: Vec<u32>,
+    contexts: Vec<u8>,
+}
+
+impl IntegerData {
+    pub fn new() -> Self {
+        Self {
+            values: Vec::new(),
+            contexts: Vec::new(),
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.values.len()
+    }
+
+    pub fn add(&mut self, context: u8,value: u32) {
+        self.values.push(value);
+        self.contexts.push(context);
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&u8, &u32)> + '_ {
+        self.contexts.iter().zip(self.values.iter())
+    }
+
+    /// Compute the histogram of the each token frequency for each context.
+    fn compute_histograms<EP: EncodeParams, const NUM_SYMBOLS: usize>(
+        &self,
+    ) -> Vec<[usize; NUM_SYMBOLS]> {
+        let mut histograms = Vec::new();
+        for (&value, &ctx) in self.values.iter().zip(self.contexts.iter()) {
+            let (token, _, _) = encode::<EP>(value.into());
+            if histograms.len() <= ctx as usize {
+                histograms.resize(ctx as usize + 1, [0; NUM_SYMBOLS]);
+            }
+            histograms[ctx as usize][token] += 1;
+        }
+        histograms
+    }
+
+    pub fn context(&self, i: usize) -> u8 {
+        self.contexts[i]
+    }
+
+    pub fn value(&self, i: usize) -> u32 {
+        self.values[i]
+    }
 }
 
 type Bag = (usize, Vec<u8>);
-
-fn compute_histogram<EP: EncodeParams, const NUM_SYMBOLS: usize>(
-    data: &[u32],
-) -> [usize; NUM_SYMBOLS] {
-    let mut histogram = [0; NUM_SYMBOLS];
-    for value in data {
-        let (token, _, _) = encode::<EP>((*value).into());
-        histogram[token] += 1;
-    }
-    histogram
-}
 
 // Compute the optimal number of bits for each symbol given the input
 // distribution. Uses a (quadratic version) of the package-merge/coin-collector
@@ -98,18 +139,24 @@ fn compute_symbol_num_bits<const MAX_BITS: usize, const NUM_SYMBOLS: usize>(
     }
 }
 
-impl<EP: EncodeParams, const MAX_BITS: usize, const NUM_SYMBOLS: usize>
-    HuffmanEncoder<EP, MAX_BITS, NUM_SYMBOLS>
+impl<
+        EP: EncodeParams,
+        const NUM_CONTEXT: usize,
+        const MAX_BITS: usize,
+        const NUM_SYMBOLS: usize,
+    > HuffmanEncoder<EP, NUM_CONTEXT, MAX_BITS, NUM_SYMBOLS>
 {
-    pub fn new(data: &[u32]) -> Self {
+    pub fn new(data: &IntegerData) -> Self {
         assert!(
             NUM_SYMBOLS <= 1 << MAX_BITS,
             "NUM_SYMBOLS must be less than or equal to 2^MAX_BITS"
         );
-        let histogram = compute_histogram::<EP, NUM_SYMBOLS>(data);
-        let mut info = [HuffmanSymbolInfo::default(); NUM_SYMBOLS];
-        compute_symbol_num_bits::<MAX_BITS, NUM_SYMBOLS>(&histogram, &mut info);
-        compute_symbol_bits::<MAX_BITS, NUM_SYMBOLS>(&mut info);
+        let histograms = data.compute_histograms::<EP, NUM_SYMBOLS>();
+        let mut info = [[HuffmanSymbolInfo::default(); NUM_SYMBOLS]; NUM_CONTEXT];
+        for (ctx, histogram) in histograms.iter().enumerate() {
+            compute_symbol_num_bits::<MAX_BITS, NUM_SYMBOLS>(histogram, &mut info[ctx]);
+            compute_symbol_bits::<MAX_BITS, NUM_SYMBOLS>(&mut info[ctx]);
+        }
         Self {
             info_: info,
             _marker: core::marker::PhantomData,
@@ -120,37 +167,43 @@ impl<EP: EncodeParams, const MAX_BITS: usize, const NUM_SYMBOLS: usize>
     /// number of bits written for the symbol and for the trailing bits.
     pub fn write<E: Endianness>(
         &self,
+        ctx: u8,
         value: u32,
         writer: &mut impl BitWrite<E>,
     ) -> Result<(usize, usize)> {
         let (token, nbits, bits) = encode::<EP>(value as u64);
-        debug_assert!(self.info_[token].present == 1, "Unknown value {value}");
-        let nbits_per_token = self.info_[token].nbits as usize;
-        writer.write_bits(self.info_[token].bits as u64, nbits_per_token)?;
+        debug_assert!(
+            self.info_[ctx as usize][token].present == 1,
+            "Unknown value {value}"
+        );
+        let nbits_per_token = self.info_[ctx as usize][token].nbits as usize;
+        writer.write_bits(self.info_[ctx as usize][token].bits as u64, nbits_per_token)?;
         writer.write_bits(bits, nbits)?;
         Ok((nbits, nbits_per_token))
     }
 
     // Very simple encoding: number of symbols (16 bits) followed by, for each
     // symbol, 1 bit for presence/absence, and 4 bits for symbol length if present.
-    // TODO: short encoding for empty ctxs, RLE for missing symbols.
+    // TODO: short  encoding for empty ctxs, RLE for missing symbols.
     pub fn write_header<E: Endianness>(&self, writer: &mut impl BitWrite<E>) -> Result<()> {
         // number of bits needed to represent the length of each symbol in the header
         let symbol_len_bits = compute_symbol_len_bits(MAX_BITS as u32);
-        let mut ms = 0;
-        for (i, info) in self.info_.iter().enumerate() {
-            if info.present != 0 {
-                ms = i;
+        for info in self.info_.iter() {
+            let mut ms = 0;
+            for (i, sym_info) in info.iter().enumerate() {
+                if sym_info.present != 0 {
+                    ms = i;
+                }
             }
-        }
 
-        writer.write_bits(ms as u64, MAX_BITS)?;
-        for info in self.info_.iter().take(ms + 1) {
-            if info.present != 0 {
-                writer.write_bits(1, 1)?;
-                writer.write_bits(info.nbits as u64 - 1, symbol_len_bits as usize)?;
-            } else {
-                writer.write_bits(0, 1)?;
+            writer.write_bits(ms as u64, MAX_BITS)?;
+            for sym_info in info.iter().take(ms + 1) {
+                if sym_info.present != 0 {
+                    writer.write_bits(1, 1)?;
+                    writer.write_bits(sym_info.nbits as u64 - 1, symbol_len_bits as usize)?;
+                } else {
+                    writer.write_bits(0, 1)?;
+                }
             }
         }
         Ok(())
