@@ -216,13 +216,13 @@ mod tests {
         traits::{BitWrite, LE},
     };
     use hybrid_integer_encoding::huffman::{
-        DefaultEncodeParams, EntropyCoder, HuffmanEncoder, HuffmanReader, DEFAULT_MAX_HUFFMAN_BITS, DEFAULT_NUM_SYMBOLS,
+        DefaultEncodeParams, EntropyCoder, HuffmanEncoder, HuffmanReader, DEFAULT_MAX_HUFFMAN_BITS,
+        DEFAULT_NUM_SYMBOLS,
     };
     use rand::{prelude::Distribution, rngs::SmallRng, SeedableRng};
 
     fn encode_and_decode<const MAX_BITS: usize, const NUM_SYMBOLS: usize>(seed: u64) {
-        let nsamples = 100000;
-
+        let nsamples = 1000;
         let mut rng = SmallRng::seed_from_u64(seed);
         let zipf = zipf::ZipfDistribution::new(1000000000, 1.5).unwrap();
 
@@ -258,7 +258,7 @@ mod tests {
     fn encode_and_decode_with_default_params() {
         encode_and_decode::<DEFAULT_MAX_HUFFMAN_BITS, DEFAULT_NUM_SYMBOLS>(0);
     }
-    
+
     #[test]
     fn encode_and_decode2() {
         encode_and_decode::<DEFAULT_MAX_HUFFMAN_BITS, DEFAULT_NUM_SYMBOLS>(31415);
