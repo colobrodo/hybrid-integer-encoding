@@ -129,11 +129,11 @@ impl<
     pub fn new(reader: R) -> Result<Self> {
         let mut reader = reader;
         let mut info = [[HuffmanDecoderInfo::default(); NUM_SYMBOLS]; NUM_CONTEXT];
-        for ctx in 0..NUM_CONTEXT {
+        for ctx_info in info.iter_mut() {
             let mut symbol_info = [HuffmanSymbolInfo::default(); NUM_SYMBOLS];
             decode_symbol_num_bits::<MAX_BITS, NUM_SYMBOLS, _, _>(&mut symbol_info, &mut reader)?;
             compute_symbol_bits::<MAX_BITS, NUM_SYMBOLS>(&mut symbol_info);
-            compute_decoder_table::<MAX_BITS, NUM_SYMBOLS>(&symbol_info, &mut info[ctx])?;
+            compute_decoder_table::<MAX_BITS, NUM_SYMBOLS>(&symbol_info, ctx_info)?;
         }
         Ok(Self {
             reader,

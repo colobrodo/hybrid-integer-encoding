@@ -29,6 +29,12 @@ pub struct IntegerData {
     contexts: Vec<u8>,
 }
 
+impl Default for IntegerData {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl IntegerData {
     pub fn new() -> Self {
         Self {
@@ -39,6 +45,10 @@ impl IntegerData {
 
     pub fn len(&self) -> usize {
         self.values.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.values.is_empty()
     }
 
     pub fn add(&mut self, context: u8, value: u32) {

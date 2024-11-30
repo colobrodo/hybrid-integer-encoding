@@ -129,6 +129,7 @@ impl<E: Endianness, W: BitWrite<E>> StatBitWriter<E, W> {
     }
 }
 
+// TODO: add the ability to read both from ascii and from epserde serialized file
 fn encode_file(input_path: PathBuf, output_path: PathBuf, verbose: bool) -> Result<()> {
     let file = File::open(input_path)?;
     let file_size = file.metadata()?.len() * 8;
@@ -153,7 +154,6 @@ fn encode_file(input_path: PathBuf, output_path: PathBuf, verbose: bool) -> Resu
 
     encoder.write_header(&mut writer)?;
     let header_size = writer.written_bits;
-    if verbose {}
     for (&ctx, &number) in integers.iter() {
         encoder.write(ctx, number, &mut writer)?;
     }
@@ -205,8 +205,8 @@ fn bench_file<const NUM_CONTEXT: usize, const MAX_BITS: usize, const NUM_SYMBOLS
     let mut data = IntegerData::new();
     let mut last_integer = 0;
     for &n in integers {
-        let context = choose_context::<DefaultEncodeParams>(last_integer as u64, NUM_CONTEXT);
-        data.add(context as u8, n as u32);
+        let context = choose_context::<DefaultEncodeParams>(last_integer, NUM_CONTEXT);
+        data.add(context, n as u32);
         last_integer = n;
     }
 
@@ -228,7 +228,7 @@ fn bench_random<const NUM_CONTEXT: usize, const MAX_BITS: usize, const NUM_SYMBO
     for _ in 0..nsamples {
         let sample = zipf.sample(&mut rng) as u32;
         let context = choose_context::<DefaultEncodeParams>(last_sample as u64, NUM_CONTEXT);
-        data.add(context as u8, sample);
+        data.add(context, sample);
         last_sample = sample;
     }
 
