@@ -131,6 +131,7 @@ impl<E: Endianness, W: BitWrite<E>> StatBitWriter<E, W> {
 
 fn encode_file(input_path: PathBuf, output_path: PathBuf, verbose: bool) -> Result<()> {
     let file = File::open(input_path)?;
+    let file_size = file.metadata()?.len() * 8;
     let reader = BufReader::new(file);
     let default_context = 0;
 
@@ -151,9 +152,8 @@ fn encode_file(input_path: PathBuf, output_path: PathBuf, verbose: bool) -> Resu
     let encoder = HuffmanEncoder::<DefaultEncodeParams, 1>::new(&integers);
 
     encoder.write_header(&mut writer)?;
-    if verbose {
-        println!("Header took {} bits", writer.written_bits);
-    }
+    let header_size = writer.written_bits;
+    if verbose {}
     for (&ctx, &number) in integers.iter() {
         encoder.write(ctx, number, &mut writer)?;
     }
@@ -162,6 +162,11 @@ fn encode_file(input_path: PathBuf, output_path: PathBuf, verbose: bool) -> Resu
 
     if verbose {
         println!("Written whole file using {} bits", writer.written_bits);
+        println!("Header took {} bits", header_size);
+        println!(
+            "Compression ration: {:.3}",
+            writer.written_bits as f64 / file_size as f64
+        );
     }
     Ok(())
 }
