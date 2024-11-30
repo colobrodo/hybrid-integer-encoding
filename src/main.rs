@@ -11,6 +11,7 @@ use dsi_bitstream::{
     traits::{BitWrite, Endianness, LE},
 };
 
+use epserde::prelude::*;
 use hybrid_integer_encoding::huffman::{
     encode, DefaultEncodeParams, EncodeParams, EntropyCoder, HuffmanEncoder, HuffmanReader,
     IntegerData,
@@ -46,22 +47,44 @@ enum Command {
         path: PathBuf,
     },
 
-    /// Measure the time taken to decode an encoded sample of random numbers
+    /// Measure the time taken to decode an encoded sample of numbers either from a file or sampled from a Zipf distribution.
     Bench {
+        #[clap(subcommand)]
+        command: BenchCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum BenchCommand {
+    /// Measure the time taken to decode an encoded sample of random numbers
+    Random {
+        #[clap(flatten)]
+        bench_arguments: BenchArguments,
         /// Number of samples to decode
         #[arg(short = 'r', long, default_value = "10000")]
         samples: u64,
-        /// If true, use 4 contexts and max 8 bits per symbol.
-        /// otherwise, use 1 context and max 10 bits per symbol.
-        #[arg(short = 'c', long, default_value = "false")]
-        use_contexts: bool,
-        /// The number of time to repeat the tests
-        #[arg(short = 'R', long, default_value = "10")]
-        repeats: usize,
         /// Seed to reproduce the experiment
         #[arg(short = 's', long, default_value = "0")]
         seed: u64,
     },
+    /// Measure the time taken to read an encoded sample of numbers from a epserde serialized file.
+    File {
+        #[clap(flatten)]
+        bench_arguments: BenchArguments,
+        /// The path of the encoded file
+        path: PathBuf,
+    },
+}
+
+#[derive(Debug, clap::Args)]
+struct BenchArguments {
+    /// If true, use 4 contexts and max 8 bits per symbol.
+    /// otherwise, use 1 context and max 10 bits per symbol.
+    #[arg(short = 'c', long, default_value = "false")]
+    use_contexts: bool,
+    /// The number of time to repeat the tests
+    #[arg(short = 'R', long, default_value = "10")]
+    repeats: usize,
 }
 
 struct StatBitWriter<E: Endianness, W: BitWrite<E>> {
@@ -160,12 +183,33 @@ fn decode_file(path: PathBuf, lenght: u64) -> Result<()> {
     Ok(())
 }
 
+#[inline]
 fn choose_context<EP: EncodeParams>(last_sample: u64, num_context: usize) -> u8 {
     let (token, _, _) = encode::<EP>(last_sample);
     (token.min(num_context - 1)) as u8
 }
 
-fn bench<const NUM_CONTEXT: usize, const MAX_BITS: usize, const NUM_SYMBOLS: usize>(
+fn bench_file<const NUM_CONTEXT: usize, const MAX_BITS: usize, const NUM_SYMBOLS: usize>(
+    path: PathBuf,
+    repeats: usize,
+    verbose: bool,
+) -> Result<()> {
+    // Load the serialized form in a buffer
+    let buffer = std::fs::read(&path)?;
+    let integers = <Vec<u64>>::deserialize_eps(buffer.as_ref())?;
+    let mut data = IntegerData::new();
+    let mut last_integer = 0;
+    for &n in integers {
+        let context = choose_context::<DefaultEncodeParams>(last_integer as u64, NUM_CONTEXT);
+        data.add(context as u8, n as u32);
+        last_integer = n;
+    }
+
+    bench::<NUM_CONTEXT, MAX_BITS, NUM_SYMBOLS>(data, repeats, verbose);
+    Ok(())
+}
+
+fn bench_random<const NUM_CONTEXT: usize, const MAX_BITS: usize, const NUM_SYMBOLS: usize>(
     repeats: usize,
     nsamples: u64,
     seed: u64,
@@ -183,6 +227,14 @@ fn bench<const NUM_CONTEXT: usize, const MAX_BITS: usize, const NUM_SYMBOLS: usi
         last_sample = sample;
     }
 
+    bench::<NUM_CONTEXT, MAX_BITS, NUM_SYMBOLS>(data, repeats, verbose);
+}
+
+fn bench<const NUM_CONTEXT: usize, const MAX_BITS: usize, const NUM_SYMBOLS: usize>(
+    data: IntegerData,
+    repeats: usize,
+    verbose: bool,
+) {
     let overall_start = std::time::Instant::now();
 
     let encoder =
@@ -223,7 +275,7 @@ fn bench<const NUM_CONTEXT: usize, const MAX_BITS: usize, const NUM_SYMBOLS: usi
         for (&ctx, _original) in data.iter() {
             let _value = black_box(reader.read::<DefaultEncodeParams>(ctx as usize).unwrap());
         }
-        let elapsed_time = (start.elapsed().as_secs_f64() / nsamples as f64) * 1e9;
+        let elapsed_time = (start.elapsed().as_secs_f64() / data.len() as f64) * 1e9;
         println!("Decode:    {:>20} ns/read", elapsed_time);
         time_per_repeat.push(elapsed_time);
     }
@@ -249,18 +301,34 @@ fn main() -> Result<()> {
         Command::Decode { path, lenght } => {
             decode_file(path, lenght)?;
         }
-        Command::Bench {
-            samples,
-            repeats,
-            seed,
-            use_contexts,
-        } => {
-            if use_contexts {
-                bench::<4, 8, 256>(repeats, samples, seed, !args.silent)
-            } else {
-                bench::<1, 10, 1024>(repeats, samples, seed, !args.silent)
+        Command::Bench { command } => match command {
+            BenchCommand::Random {
+                bench_arguments,
+                samples,
+                seed,
+            } => {
+                if bench_arguments.use_contexts {
+                    bench_random::<4, 8, 256>(bench_arguments.repeats, samples, seed, !args.silent)
+                } else {
+                    bench_random::<1, 10, 1024>(
+                        bench_arguments.repeats,
+                        samples,
+                        seed,
+                        !args.silent,
+                    )
+                }
             }
-        }
+            BenchCommand::File {
+                bench_arguments,
+                path,
+            } => {
+                if bench_arguments.use_contexts {
+                    bench_file::<4, 8, 256>(path, bench_arguments.repeats, !args.silent)?;
+                } else {
+                    bench_file::<1, 10, 1024>(path, bench_arguments.repeats, !args.silent)?;
+                }
+            }
+        },
     }
 
     Ok(())

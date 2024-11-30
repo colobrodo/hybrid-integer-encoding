@@ -41,7 +41,7 @@ impl IntegerData {
         self.values.len()
     }
 
-    pub fn add(&mut self, context: u8,value: u32) {
+    pub fn add(&mut self, context: u8, value: u32) {
         self.values.push(value);
         self.contexts.push(context);
     }
