@@ -78,8 +78,8 @@ enum BenchCommand {
 
 #[derive(Debug, clap::Args)]
 struct BenchArguments {
-    /// If true, use 4 contexts and max 8 bits per symbol.
-    /// otherwise, use 1 context and max 10 bits per symbol.
+    /// If true, use 16 contexts and max 11 bits per symbol.
+    /// otherwise, use 8 contexts and max 12 bits per symbol.
     #[arg(short = 'c', long, default_value = "false")]
     use_contexts: bool,
     /// The number of time to repeat the tests
@@ -313,9 +313,14 @@ fn main() -> Result<()> {
                 seed,
             } => {
                 if bench_arguments.use_contexts {
-                    bench_random::<4, 8, 256>(bench_arguments.repeats, samples, seed, !args.silent)
+                    bench_random::<16, 11, { 1 << 11 }>(
+                        bench_arguments.repeats,
+                        samples,
+                        seed,
+                        !args.silent,
+                    )
                 } else {
-                    bench_random::<1, 10, 1024>(
+                    bench_random::<8, 12, { 1 << 12 }>(
                         bench_arguments.repeats,
                         samples,
                         seed,
@@ -328,9 +333,9 @@ fn main() -> Result<()> {
                 path,
             } => {
                 if bench_arguments.use_contexts {
-                    bench_file::<4, 8, 256>(path, bench_arguments.repeats, !args.silent)?;
+                    bench_file::<16, 11, { 1 << 11 }>(path, bench_arguments.repeats, !args.silent)?;
                 } else {
-                    bench_file::<1, 10, 1024>(path, bench_arguments.repeats, !args.silent)?;
+                    bench_file::<8, 12, { 1 << 12 }>(path, bench_arguments.repeats, !args.silent)?;
                 }
             }
         },
