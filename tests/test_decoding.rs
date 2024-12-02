@@ -72,4 +72,15 @@ mod tests {
         const MAX_BITS: usize = 10;
         encode_and_decode::<4, MAX_BITS, { 1 << MAX_BITS }>(0);
     }
+
+    #[test]
+    fn encode_and_decode_with_11_max_bits_and_16_contexts() {
+        const MAX_BITS: usize = 11;
+        encode_and_decode::<16, MAX_BITS, { 1 << MAX_BITS }>(0);
+    }
+    #[test]
+    fn encode_and_decode_with_12_max_bits_and_8_contexts() {
+        const MAX_BITS: usize = 12;
+        encode_and_decode::<8, MAX_BITS, { 1 << MAX_BITS }>(0);
+    }
 }
