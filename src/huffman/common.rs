@@ -54,10 +54,8 @@ pub fn encode<EP: EncodeParams>(value: u64) -> (usize, usize, u64) {
 // For a given array of HuffmanSymbolInfo, where only the `present` and `nbits`
 // fields are set, fill up the `bits` field by building a Canonical Huffman code
 // (https://en.wikipedia.org/wiki/Canonical_Huffman_code).
-pub(crate) fn compute_symbol_bits<const MAX_BITS: usize, const NUM_SYMBOLS: usize>(
-    infos: &mut [HuffmanSymbolInfo],
-) {
-    assert!(infos.len() == NUM_SYMBOLS);
+pub(crate) fn compute_symbol_bits(max_bits: usize, infos: &mut [HuffmanSymbolInfo]) {
+    debug_assert!(infos.len() == 1 << max_bits);
     let mut syms = Vec::new();
     for (i, info) in infos.iter().enumerate() {
         if info.present == 0 {
@@ -70,8 +68,8 @@ pub(crate) fn compute_symbol_bits<const MAX_BITS: usize, const NUM_SYMBOLS: usiz
     let mut x: usize = 0;
     for (s, sym) in syms.iter().enumerate() {
         infos[sym.1].bits = u16::reverse_bits(x as u16)
-            >> (u16::BITS as usize - MAX_BITS)
-            >> (MAX_BITS as u8 - infos[sym.1].nbits);
+            >> (u16::BITS as usize - max_bits)
+            >> (max_bits as u8 - infos[sym.1].nbits);
         x += 1;
         if s + 1 != present_symbols {
             x <<= syms[s + 1].0 - sym.0;

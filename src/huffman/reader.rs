@@ -1,9 +1,6 @@
 use dsi_bitstream::traits::{BitRead, Endianness};
 
-use super::{
-    compute_symbol_bits, compute_symbol_len_bits, EncodeParams, HuffmanSymbolInfo,
-    DEFAULT_MAX_HUFFMAN_BITS, DEFAULT_NUM_CONTEXT, DEFAULT_NUM_SYMBOLS,
-};
+use super::{compute_symbol_bits, compute_symbol_len_bits, EncodeParams, HuffmanSymbolInfo};
 use common_traits::*;
 
 use anyhow::{anyhow, Result};
@@ -40,30 +37,22 @@ struct HuffmanDecoderInfo {
     symbol: u8,
 }
 
-pub struct HuffmanReader<
-    E: Endianness,
-    R: BitRead<E>,
-    const NUM_CONTEXT: usize = DEFAULT_NUM_CONTEXT,
-    const MAX_BITS: usize = DEFAULT_MAX_HUFFMAN_BITS,
-    const NUM_SYMBOLS: usize = DEFAULT_NUM_SYMBOLS,
-> {
+pub struct HuffmanReader<E: Endianness, R: BitRead<E>> {
     reader: R,
-    info_: [[HuffmanDecoderInfo; NUM_SYMBOLS]; NUM_CONTEXT],
+    max_bits: usize,
+    info_: Vec<Vec<HuffmanDecoderInfo>>,
     _marker: core::marker::PhantomData<E>,
 }
 
-fn decode_symbol_num_bits<
-    const MAX_BITS: usize,
-    const NUM_SYMBOLS: usize,
-    E: Endianness,
-    R: BitRead<E>,
->(
-    infos: &mut [HuffmanSymbolInfo; NUM_SYMBOLS],
+fn decode_symbol_num_bits<E: Endianness, R: BitRead<E>>(
+    max_bits: usize,
+    infos: &mut [HuffmanSymbolInfo],
     reader: &mut R,
 ) -> Result<()> {
+    assert!(infos.len() == 1 << max_bits);
     // number of bits needed to represent the length of each symbol in the header
-    let symbol_len_bits: u32 = compute_symbol_len_bits(MAX_BITS as u32);
-    let ms = reader.read_bits(MAX_BITS)? as usize;
+    let symbol_len_bits: u32 = compute_symbol_len_bits(max_bits as u32);
+    let ms = reader.read_bits(max_bits)? as usize;
     for info in infos.iter_mut().take(ms + 1) {
         info.present = reader.read_bits(1)? as u8;
         if info.present != 0 {
@@ -79,10 +68,12 @@ fn decode_symbol_num_bits<
 /// Computes the lookup table from bitstream bits to decoded symbol for the
 /// decoder.
 /// The computed table is stored in the `infos` array.
-fn compute_decoder_table<const MAX_BITS: usize, const NUM_SYMBOLS: usize>(
-    sym_infos: &[HuffmanSymbolInfo; NUM_SYMBOLS],
-    infos: &mut [HuffmanDecoderInfo; NUM_SYMBOLS],
+fn compute_decoder_table(
+    max_bits: usize,
+    sym_infos: &[HuffmanSymbolInfo],
+    infos: &mut [HuffmanDecoderInfo],
 ) -> Result<()> {
+    let num_symbols = 1 << max_bits;
     let cnt = sym_infos.iter().filter(|sym| sym.present != 0).count();
     let s = sym_infos
         .iter()
@@ -98,8 +89,8 @@ fn compute_decoder_table<const MAX_BITS: usize, const NUM_SYMBOLS: usize>(
         return Ok(());
     }
 
-    for i in 0..1 << MAX_BITS {
-        let mut s = NUM_SYMBOLS;
+    for (i, info) in infos.iter_mut().enumerate() {
+        let mut s = num_symbols;
         for (sym, sym_info) in sym_infos.iter().enumerate() {
             if sym_info.present == 0 {
                 continue;
@@ -109,50 +100,40 @@ fn compute_decoder_table<const MAX_BITS: usize, const NUM_SYMBOLS: usize>(
                 break;
             }
         }
-        if s == NUM_SYMBOLS {
+        if s == num_symbols {
             return Err(anyhow!("Invalid table"));
         }
-        infos[i as usize].nbits = sym_infos[s].nbits;
-        infos[i as usize].symbol = s as u8;
+        info.nbits = sym_infos[s].nbits;
+        info.symbol = s as u8;
     }
     Ok(())
 }
 
-impl<
-        E: Endianness,
-        R: BitRead<E>,
-        const NUM_CONTEXT: usize,
-        const MAX_BITS: usize,
-        const NUM_SYMBOLS: usize,
-    > HuffmanReader<E, R, NUM_CONTEXT, MAX_BITS, NUM_SYMBOLS>
-{
-    pub fn new(reader: R) -> Result<Self> {
+impl<E: Endianness, R: BitRead<E>> HuffmanReader<E, R> {
+    pub fn new(reader: R, max_bits: usize, num_contexts: usize) -> Result<Self> {
+        let num_symbols = 1 << max_bits;
         let mut reader = reader;
-        let mut info = [[HuffmanDecoderInfo::default(); NUM_SYMBOLS]; NUM_CONTEXT];
-        for ctx_info in info.iter_mut() {
-            let mut symbol_info = [HuffmanSymbolInfo::default(); NUM_SYMBOLS];
-            decode_symbol_num_bits::<MAX_BITS, NUM_SYMBOLS, _, _>(&mut symbol_info, &mut reader)?;
-            compute_symbol_bits::<MAX_BITS, NUM_SYMBOLS>(&mut symbol_info);
-            compute_decoder_table::<MAX_BITS, NUM_SYMBOLS>(&symbol_info, ctx_info)?;
+        let mut info = Vec::with_capacity(num_contexts);
+        for _ in 0..num_contexts {
+            let mut symbol_info = vec![HuffmanSymbolInfo::default(); num_symbols];
+            decode_symbol_num_bits(max_bits, &mut symbol_info, &mut reader)?;
+            compute_symbol_bits(max_bits, &mut symbol_info);
+            let mut ctx_info = vec![HuffmanDecoderInfo::default(); num_symbols];
+            compute_decoder_table(max_bits, &symbol_info, &mut ctx_info)?;
+            info.push(ctx_info);
         }
         Ok(Self {
             reader,
+            max_bits,
             info_: info,
             _marker: std::marker::PhantomData,
         })
     }
 }
 
-impl<
-        E: Endianness,
-        R: BitRead<E>,
-        const NUM_CONTEXT: usize,
-        const MAX_BITS: usize,
-        const NUM_SYMBOLS: usize,
-    > EntropyCoder for HuffmanReader<E, R, NUM_CONTEXT, MAX_BITS, NUM_SYMBOLS>
-{
+impl<E: Endianness, R: BitRead<E>> EntropyCoder for HuffmanReader<E, R> {
     fn read_token(&mut self, context: usize) -> Result<usize> {
-        let bits: u64 = self.reader.peek_bits(MAX_BITS)?.cast();
+        let bits: u64 = self.reader.peek_bits(self.max_bits)?.cast();
         let info = self.info_[context][bits as usize];
         self.reader
             .skip_bits_after_table_lookup(info.nbits as usize);

@@ -21,13 +21,13 @@ mod tests {
         let mut rng = SmallRng::seed_from_u64(seed);
         let zipf = zipf::ZipfDistribution::new(1000000000, 1.5).unwrap();
 
-        let mut data = IntegerData::new();
+        let mut data = IntegerData::new(NUM_CONTEXT);
         let default_context = 0;
         for _ in 0..nsamples {
             data.add(default_context, zipf.sample(&mut rng) as u32);
         }
 
-        let encoder = HuffmanEncoder::<DefaultEncodeParams, 1, MAX_BITS, NUM_SYMBOLS>::new(&data);
+        let encoder = HuffmanEncoder::<DefaultEncodeParams>::new(&data, MAX_BITS);
         let word_write = MemWordWriterVec::new(Vec::<u64>::new());
         let mut writer = BufBitWriter::<LE, _>::new(word_write);
 
@@ -43,7 +43,7 @@ mod tests {
         };
 
         let reader = BufBitReader::<LE, _>::new(MemWordReader::new(binary_data));
-        let mut reader = HuffmanReader::<LE, _, 1, MAX_BITS, NUM_SYMBOLS>::new(reader).unwrap();
+        let mut reader = HuffmanReader::<LE, _>::new(reader, MAX_BITS, 1).unwrap();
 
         for (&ctx, &original) in data.iter() {
             let value = reader.read::<DefaultEncodeParams>(ctx as usize).unwrap();

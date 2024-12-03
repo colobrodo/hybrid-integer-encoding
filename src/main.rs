@@ -34,6 +34,8 @@ struct App {
 enum Command {
     /// Encode a file in ASCII format containing a set of integers.
     Encode {
+        #[clap(flatten)]
+        huffman_arguments: HuffmanArguments,
         /// the input path to encode
         input_path: PathBuf,
         output_path: PathBuf,
@@ -41,6 +43,8 @@ enum Command {
 
     /// Reads a compressed file and outputs the content to stdout.
     Decode {
+        #[clap(flatten)]
+        huffman_arguments: HuffmanArguments,
         /// The number of integer inside the file (HACK)
         lenght: u64,
         /// The path of the compressed file
@@ -59,6 +63,8 @@ enum BenchCommand {
     /// Measure the time taken to decode an encoded sample of random numbers
     Random {
         #[clap(flatten)]
+        huffman_arguments: HuffmanArguments,
+        #[clap(flatten)]
         bench_arguments: BenchArguments,
         /// Number of samples to decode
         #[arg(short = 'r', long, default_value = "10000")]
@@ -70,6 +76,8 @@ enum BenchCommand {
     /// Measure the time taken to read an encoded sample of numbers from a epserde serialized file.
     File {
         #[clap(flatten)]
+        huffman_arguments: HuffmanArguments,
+        #[clap(flatten)]
         bench_arguments: BenchArguments,
         /// The path of the encoded file
         path: PathBuf,
@@ -78,13 +86,19 @@ enum BenchCommand {
 
 #[derive(Debug, clap::Args)]
 struct BenchArguments {
-    /// If true, use 16 contexts and max 11 bits per symbol.
-    /// otherwise, use 8 contexts and max 12 bits per symbol.
-    #[arg(short = 'c', long, default_value = "false")]
-    use_contexts: bool,
     /// The number of time to repeat the tests
     #[arg(short = 'R', long, default_value = "10")]
     repeats: usize,
+}
+
+#[derive(Debug, clap::Args)]
+struct HuffmanArguments {
+    /// The number of contexts used, choosen based on the previous encoded symbol
+    #[arg(short = 'c', long, default_value = "1")]
+    contexts: usize,
+    /// The maximum number of bits used for each code
+    #[arg(short = 'b', long, default_value = "8")]
+    max_bits: usize,
 }
 
 struct StatBitWriter<E: Endianness, W: BitWrite<E>> {
@@ -130,18 +144,28 @@ impl<E: Endianness, W: BitWrite<E>> StatBitWriter<E, W> {
 }
 
 // TODO: add the ability to read both from ascii and from epserde serialized file
-fn encode_file(input_path: PathBuf, output_path: PathBuf, verbose: bool) -> Result<()> {
+fn encode_file(
+    input_path: PathBuf,
+    output_path: PathBuf,
+    max_bits: usize,
+    num_context: usize,
+    verbose: bool,
+) -> Result<()> {
     let file = File::open(input_path)?;
     let file_size = file.metadata()?.len() * 8;
     let reader = BufReader::new(file);
-    let default_context = 0;
 
-    let mut integers = IntegerData::new();
+    let mut integers = IntegerData::new(1);
+    let mut last_sample = 0;
     for line in reader.lines().map_while(Result::ok) {
         // Split the line by whitespace and parse each number as u8
         for num in line.split_whitespace() {
             match num.parse::<u32>() {
-                Ok(n) => integers.add(default_context, n),
+                Ok(n) => {
+                    let context = choose_context::<DefaultEncodeParams>(last_sample, num_context);
+                    integers.add(context, n);
+                    last_sample = n as u64;
+                }
                 Err(_) => println!("Skipping invalid number: {}", num),
             }
         }
@@ -150,7 +174,8 @@ fn encode_file(input_path: PathBuf, output_path: PathBuf, verbose: bool) -> Resu
     let outfile = File::create(output_path)?;
     let writer = BufBitWriter::<LE, _>::new(WordAdapter::<u32, _>::new(outfile));
     let mut writer = StatBitWriter::new(writer);
-    let encoder = HuffmanEncoder::<DefaultEncodeParams, 1>::new(&integers);
+    // TODO: accept from cli arguments for max bits and for number of contexts
+    let encoder = HuffmanEncoder::<DefaultEncodeParams>::new(&integers, max_bits);
 
     encoder.write_header(&mut writer)?;
     let header_size = writer.written_bits;
@@ -171,10 +196,10 @@ fn encode_file(input_path: PathBuf, output_path: PathBuf, verbose: bool) -> Resu
     Ok(())
 }
 
-fn decode_file(path: PathBuf, lenght: u64) -> Result<()> {
+fn decode_file(path: PathBuf, lenght: u64, max_bits: usize, num_context: usize) -> Result<()> {
     let file = File::open(path)?;
     let reader = BufBitReader::<LE, _>::new(WordAdapter::<u32, _>::new(BufReader::new(file)));
-    let mut reader = HuffmanReader::<LE, _>::new(reader)?;
+    let mut reader = HuffmanReader::<LE, _>::new(reader, max_bits, num_context)?;
     let mut i = 0;
     while let Ok(value) = reader.read::<DefaultEncodeParams>(0) {
         // TODO: HACK: reading from mem word, read a 0 at the end of the bitstream but the lenght of the encoded file is not know
@@ -194,56 +219,55 @@ fn choose_context<EP: EncodeParams>(last_sample: u64, num_context: usize) -> u8 
     (token.min(num_context - 1)) as u8
 }
 
-fn bench_file<const NUM_CONTEXT: usize, const MAX_BITS: usize, const NUM_SYMBOLS: usize>(
+fn bench_file(
     path: PathBuf,
     repeats: usize,
+    max_bits: usize,
+    num_contexts: usize,
     verbose: bool,
 ) -> Result<()> {
     // Load the serialized form in a buffer
     let buffer = std::fs::read(&path)?;
     let integers = <Vec<u64>>::deserialize_eps(buffer.as_ref())?;
-    let mut data = IntegerData::new();
+    let mut data = IntegerData::new(num_contexts);
     let mut last_integer = 0;
     for &n in integers {
-        let context = choose_context::<DefaultEncodeParams>(last_integer, NUM_CONTEXT);
+        let context = choose_context::<DefaultEncodeParams>(last_integer, num_contexts);
         data.add(context, n as u32);
         last_integer = n;
     }
 
-    bench::<NUM_CONTEXT, MAX_BITS, NUM_SYMBOLS>(data, repeats, verbose);
+    bench(data, max_bits, repeats, verbose);
     Ok(())
 }
 
-fn bench_random<const NUM_CONTEXT: usize, const MAX_BITS: usize, const NUM_SYMBOLS: usize>(
+fn bench_random(
     repeats: usize,
     nsamples: u64,
+    max_bits: usize,
+    num_contexts: usize,
     seed: u64,
     verbose: bool,
 ) {
     let mut rng = SmallRng::seed_from_u64(seed);
     let zipf = zipf::ZipfDistribution::new(1000000000, 1.5).unwrap();
 
-    let mut data = IntegerData::new();
+    let mut data = IntegerData::new(num_contexts);
     let mut last_sample = 0;
     for _ in 0..nsamples {
         let sample = zipf.sample(&mut rng) as u32;
-        let context = choose_context::<DefaultEncodeParams>(last_sample as u64, NUM_CONTEXT);
+        let context = choose_context::<DefaultEncodeParams>(last_sample as u64, num_contexts);
         data.add(context, sample);
         last_sample = sample;
     }
 
-    bench::<NUM_CONTEXT, MAX_BITS, NUM_SYMBOLS>(data, repeats, verbose);
+    bench(data, max_bits, repeats, verbose);
 }
 
-fn bench<const NUM_CONTEXT: usize, const MAX_BITS: usize, const NUM_SYMBOLS: usize>(
-    data: IntegerData,
-    repeats: usize,
-    verbose: bool,
-) {
+fn bench(data: IntegerData, max_bits: usize, repeats: usize, verbose: bool) {
     let overall_start = std::time::Instant::now();
 
-    let encoder =
-        HuffmanEncoder::<DefaultEncodeParams, NUM_CONTEXT, MAX_BITS, NUM_SYMBOLS>::new(&data);
+    let encoder = HuffmanEncoder::<DefaultEncodeParams>::new(&data, max_bits);
     let word_write = MemWordWriterVec::new(Vec::<u64>::new());
     let writer = BufBitWriter::<LE, _>::new(word_write);
     let mut writer = StatBitWriter::new(writer);
@@ -273,7 +297,7 @@ fn bench<const NUM_CONTEXT: usize, const MAX_BITS: usize, const NUM_SYMBOLS: usi
     for _ in 0..repeats {
         let reader = BufBitReader::<LE, _>::new(MemWordReader::new(&binary_data));
         let mut reader =
-            HuffmanReader::<LE, _, NUM_CONTEXT, MAX_BITS, NUM_SYMBOLS>::new(reader).unwrap();
+            HuffmanReader::<LE, _>::new(reader, max_bits, data.number_of_contexts()).unwrap();
 
         let start = std::time::Instant::now();
 
@@ -300,44 +324,53 @@ fn main() -> Result<()> {
         Command::Encode {
             input_path,
             output_path,
+            huffman_arguments,
         } => {
-            encode_file(input_path, output_path, !args.silent)?;
+            encode_file(
+                input_path,
+                output_path,
+                huffman_arguments.max_bits,
+                huffman_arguments.contexts,
+                !args.silent,
+            )?;
         }
-        Command::Decode { path, lenght } => {
-            decode_file(path, lenght)?;
+        Command::Decode {
+            path,
+            lenght,
+            huffman_arguments,
+        } => {
+            decode_file(
+                path,
+                lenght,
+                huffman_arguments.max_bits,
+                huffman_arguments.contexts,
+            )?;
         }
         Command::Bench { command } => match command {
             BenchCommand::Random {
                 bench_arguments,
                 samples,
                 seed,
-            } => {
-                if bench_arguments.use_contexts {
-                    bench_random::<16, 11, { 1 << 11 }>(
-                        bench_arguments.repeats,
-                        samples,
-                        seed,
-                        !args.silent,
-                    )
-                } else {
-                    bench_random::<8, 12, { 1 << 12 }>(
-                        bench_arguments.repeats,
-                        samples,
-                        seed,
-                        !args.silent,
-                    )
-                }
-            }
+                huffman_arguments,
+            } => bench_random(
+                bench_arguments.repeats,
+                samples,
+                huffman_arguments.max_bits,
+                huffman_arguments.contexts,
+                seed,
+                !args.silent,
+            ),
             BenchCommand::File {
                 bench_arguments,
                 path,
-            } => {
-                if bench_arguments.use_contexts {
-                    bench_file::<16, 11, { 1 << 11 }>(path, bench_arguments.repeats, !args.silent)?;
-                } else {
-                    bench_file::<8, 12, { 1 << 12 }>(path, bench_arguments.repeats, !args.silent)?;
-                }
-            }
+                huffman_arguments,
+            } => bench_file(
+                path,
+                bench_arguments.repeats,
+                huffman_arguments.max_bits,
+                huffman_arguments.contexts,
+                !args.silent,
+            )?,
         },
     }
 
