@@ -40,7 +40,7 @@ struct HuffmanDecoderInfo {
 pub struct HuffmanReader<E: Endianness, R: BitRead<E>> {
     reader: R,
     max_bits: usize,
-    info_: Vec<Vec<HuffmanDecoderInfo>>,
+    info_: Vec<Box<[HuffmanDecoderInfo]>>,
     _marker: core::marker::PhantomData<E>,
 }
 
@@ -120,7 +120,7 @@ impl<E: Endianness, R: BitRead<E>> HuffmanReader<E, R> {
             compute_symbol_bits(max_bits, &mut symbol_info);
             let mut ctx_info = vec![HuffmanDecoderInfo::default(); num_symbols];
             compute_decoder_table(max_bits, &symbol_info, &mut ctx_info)?;
-            info.push(ctx_info);
+            info.push(ctx_info.into_boxed_slice());
         }
         Ok(Self {
             reader,
