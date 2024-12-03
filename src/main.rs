@@ -148,21 +148,21 @@ fn encode_file(
     input_path: PathBuf,
     output_path: PathBuf,
     max_bits: usize,
-    num_context: usize,
+    num_contexts: usize,
     verbose: bool,
 ) -> Result<()> {
     let file = File::open(input_path)?;
     let file_size = file.metadata()?.len() * 8;
     let reader = BufReader::new(file);
 
-    let mut integers = IntegerData::new(1);
+    let mut integers = IntegerData::new(num_contexts);
     let mut last_sample = 0;
     for line in reader.lines().map_while(Result::ok) {
         // Split the line by whitespace and parse each number as u8
         for num in line.split_whitespace() {
             match num.parse::<u32>() {
                 Ok(n) => {
-                    let context = choose_context::<DefaultEncodeParams>(last_sample, num_context);
+                    let context = choose_context::<DefaultEncodeParams>(last_sample, num_contexts);
                     integers.add(context, n);
                     last_sample = n as u64;
                 }
@@ -214,9 +214,9 @@ fn decode_file(path: PathBuf, lenght: u64, max_bits: usize, num_context: usize) 
 }
 
 #[inline]
-fn choose_context<EP: EncodeParams>(last_sample: u64, num_context: usize) -> u8 {
+fn choose_context<EP: EncodeParams>(last_sample: u64, num_contexts: usize) -> u8 {
     let (token, _, _) = encode::<EP>(last_sample);
-    (token.min(num_context - 1)) as u8
+    (token.min(num_contexts - 1)) as u8
 }
 
 fn bench_file(
