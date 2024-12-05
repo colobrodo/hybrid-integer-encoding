@@ -10,7 +10,7 @@ use dsi_bitstream::{
     traits::{BitWrite, BE, LE},
 };
 
-use dsi_progress_logger::{ProgressLog, ProgressLogger};
+use dsi_progress_logger::prelude::*;
 use epserde::prelude::*;
 
 use anyhow::Result;
@@ -222,7 +222,6 @@ fn graph(
     }];
     pl.done();
 
-    bvcomp.flush()?;
     pl.start("Building the model with Log2Estimator...");
     // get the ANSModel4Encoder obtained from the first iteration
     let mut stat_writer = StatBitWriter::empty();
@@ -400,6 +399,8 @@ fn bench(data: IntegerData, max_bits: usize, repeats: usize, verbose: bool) {
 }
 
 fn main() -> Result<()> {
+    stderrlog::new().verbosity(2).init()?;
+
     let args = App::parse();
     match args.command {
         Command::Encode {

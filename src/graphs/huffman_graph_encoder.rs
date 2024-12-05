@@ -38,7 +38,7 @@ impl<'a, EP: EncodeParams, E: Endianness, W: BitWrite<E>> Encode
         let (token_bits, trailing_bits) = self.encoder.write(0, node as u32, self.writer).unwrap();
         Ok(token_bits + trailing_bits)
     }
-
+    
     fn write_outdegree(&mut self, value: u64) -> Result<usize, Self::Error> {
         let result = self.write(value).unwrap();
         Ok(result)
