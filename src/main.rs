@@ -213,17 +213,17 @@ fn graph(
 
     pl.item_name("node")
         .expected_updates(Some(seq_graph.num_nodes()));
-    pl.start("Pushing symbols into model builder with Log2Estimator...");
+    pl.start("Pushing symbols into encoder builder with Log2Estimator...");
 
-    // first iteration: build a model with Log2Estimator
+    // first iteration: build a encoder with Log2Estimator
     for_![ (_, succ) in seq_graph {
         bvcomp.push(succ)?;
         pl.update();
     }];
+    bvcomp.flush()?;
     pl.done();
 
-    pl.start("Building the model with Log2Estimator...");
-    // get the ANSModel4Encoder obtained from the first iteration
+    pl.start("Building the encoder with Log2Estimator...");
     let mut stat_writer = StatBitWriter::empty();
     let huffman_estimator =
         huffman_graph_encoder_builder.build::<DefaultEncodeParams, LE, _>(&mut stat_writer);
@@ -241,8 +241,8 @@ fn graph(
 
     pl.item_name("node")
         .expected_updates(Some(seq_graph.num_nodes()));
-    pl.start("Pushing symbols into model builder with Huffman estimator...");
-    // second iteration: build a model with the entropy mock writer
+    pl.start("Pushing symbols into encoder builder with Huffman estimator...");
+    // second iteration: build a encoder with the entropy mock writer
     for_![ (_, succ) in seq_graph {
         bvcomp.push(succ)?;
         pl.update();
@@ -274,16 +274,13 @@ fn graph(
 
     pl.item_name("node")
         .expected_updates(Some(seq_graph.num_nodes()));
-    pl.start("Pushing symbols into model builder with Huffman estimator...");
+    pl.start("Building the encoder after second round with Huffman estimator...");
     // second iteration: build a model with the entropy mock writer
     for_![ (_, succ) in seq_graph {
         bvcomp.push(succ)?;
         pl.update();
     }];
     pl.done();
-
-    pl.start("Building the encoder after second round with Huffman estimator...");
-    bvcomp.flush()?;
 
     println!(
         "After second round with Huffman estimator: Recompressed graph using {} bits",
