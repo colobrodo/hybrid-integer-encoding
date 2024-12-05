@@ -259,11 +259,6 @@ fn graph(
         huffman_graph_encoder_builder.build::<DefaultEncodeParams, LE, _>(&mut writer, 8);
     pl.done();
 
-    println!(
-        "After first round with Log2Estimator: Recompressed graph using {} bits",
-        stat_writer.written_bits
-    );
-
     let mut bvcomp = BvComp::new(
         &mut huffman_graph_encoder,
         compression_window,
@@ -281,6 +276,11 @@ fn graph(
         pl.update();
     }];
     pl.done();
+
+    println!(
+        "After first round with Log2Estimator: Recompressed graph using {} bits",
+        stat_writer.written_bits
+    );
 
     println!(
         "After second round with Huffman estimator: Recompressed graph using {} bits",

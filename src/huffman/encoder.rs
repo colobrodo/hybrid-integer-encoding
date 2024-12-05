@@ -175,7 +175,7 @@ impl<EP: EncodeParams> HuffmanEncoder<EP> {
         let (token, nbits, bits) = encode::<EP>(value as u64);
         debug_assert!(
             self.info_[ctx as usize][token].present == 1,
-            "Unknown value {value}"
+            "Unknown value {value} in context {ctx}"
         );
         let nbits_per_token = self.info_[ctx as usize][token].nbits as usize;
         writer.write_bits(self.info_[ctx as usize][token].bits as u64, nbits_per_token)?;
