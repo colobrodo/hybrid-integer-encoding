@@ -25,8 +25,9 @@ impl<EE: Encode> HuffmanGraphEncoderBuilder<EE> {
     pub fn build<EP: EncodeParams, E: Endianness, W: BitWrite<E>>(
         self,
         writer: &'_ mut W,
+        max_bits: usize,
     ) -> HuffmanGraphEncoder<'_, EP, E, W> {
-        let encoder = HuffmanEncoder::<EP>::new(&self.data, 8);
+        let encoder = HuffmanEncoder::<EP>::new(&self.data, max_bits);
         HuffmanGraphEncoder::new(encoder, writer)
     }
 }
@@ -34,10 +35,8 @@ impl<EE: Encode> HuffmanGraphEncoderBuilder<EE> {
 impl<EE: Encode> Encode for HuffmanGraphEncoderBuilder<EE> {
     type Error = EE::Error;
 
-    fn start_node(&mut self, node: usize) -> Result<usize, Self::Error> {
-        let result = self.estimator.start_node(node)?;
-        self.data.add(0, node as u32);
-        Ok(result)
+    fn start_node(&mut self, _node: usize) -> Result<usize, Self::Error> {
+        Ok(0)
     }
 
     fn write_outdegree(&mut self, value: u64) -> Result<usize, Self::Error> {

@@ -226,7 +226,7 @@ fn graph(
     pl.start("Building the encoder with Log2Estimator...");
     let mut stat_writer = StatBitWriter::empty();
     let huffman_estimator =
-        huffman_graph_encoder_builder.build::<DefaultEncodeParams, LE, _>(&mut stat_writer);
+        huffman_graph_encoder_builder.build::<DefaultEncodeParams, LE, _>(&mut stat_writer, 8);
     pl.done();
 
     // setup for the second iteration with huffman estimator
@@ -256,7 +256,7 @@ fn graph(
     let writer = BufBitWriter::<LE, _>::new(word_write);
     let mut writer = StatBitWriter::new(writer);
     let mut huffman_graph_encoder =
-        huffman_graph_encoder_builder.build::<DefaultEncodeParams, LE, _>(&mut writer);
+        huffman_graph_encoder_builder.build::<DefaultEncodeParams, LE, _>(&mut writer, 8);
     pl.done();
 
     println!(
