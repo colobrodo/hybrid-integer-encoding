@@ -34,11 +34,10 @@ impl<'a, EP: EncodeParams, E: Endianness, W: BitWrite<E>> Encode
 {
     type Error = Infallible;
 
-    fn start_node(&mut self, node: usize) -> Result<usize, Self::Error> {
-        let (token_bits, trailing_bits) = self.encoder.write(0, node as u32, self.writer).unwrap();
-        Ok(token_bits + trailing_bits)
+    fn start_node(&mut self, _node: usize) -> Result<usize, Self::Error> {
+        Ok(0)
     }
-    
+
     fn write_outdegree(&mut self, value: u64) -> Result<usize, Self::Error> {
         let result = self.write(value).unwrap();
         Ok(result)
