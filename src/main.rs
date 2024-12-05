@@ -2,30 +2,36 @@ use std::{
     fs::File,
     hint::black_box,
     io::{BufRead, BufReader},
-    marker::PhantomData,
     path::PathBuf,
 };
 
 use dsi_bitstream::{
     impls::{BufBitReader, BufBitWriter, MemWordReader, MemWordWriterVec, WordAdapter},
-    traits::{BitWrite, Endianness, LE},
+    traits::{BitWrite, BE, LE},
 };
 
+use dsi_progress_logger::{ProgressLog, ProgressLogger};
 use epserde::prelude::*;
+
+use anyhow::Result;
+use clap::{Parser, Subcommand};
+use lender::for_;
+use rand::{prelude::Distribution, rngs::SmallRng, SeedableRng};
+
+use hybrid_integer_encoding::graphs::{HuffmanGraphEncoderBuilder, Log2Estimator};
 use hybrid_integer_encoding::huffman::{
     encode, DefaultEncodeParams, EncodeParams, EntropyCoder, HuffmanEncoder, HuffmanReader,
     IntegerData,
 };
-
-use anyhow::Result;
-use clap::{Parser, Subcommand};
-use rand::{prelude::Distribution, rngs::SmallRng, SeedableRng};
+use hybrid_integer_encoding::utils::StatBitWriter;
+use webgraph::prelude::{SequentialLabeling, *};
 
 #[derive(Parser, Debug)]
 #[clap(name = "hybrid-integer-encoding", version)]
 struct App {
     #[clap(subcommand)]
     command: Command,
+    /// If true avoid printing information about the overall space used by the encoder
     #[arg(short, long, default_value = "false")]
     silent: bool,
 }
@@ -55,6 +61,18 @@ enum Command {
     Bench {
         #[clap(subcommand)]
         command: BenchCommand,
+    },
+
+    /// Recompress a graph using the Huffman encoder
+    Graph {
+        /// The basename of the graph to compress
+        basename: PathBuf,
+        #[arg(short = 'w', long, default_value = "7")]
+        compression_window: usize,
+        #[arg(short = 'r', long, default_value = "3")]
+        max_ref_count: usize,
+        #[arg(short = 'l', long, default_value = "4")]
+        min_interval_length: usize,
     },
 }
 
@@ -99,48 +117,6 @@ struct HuffmanArguments {
     /// The maximum number of bits used for each code
     #[arg(short = 'b', long, default_value = "8")]
     max_bits: usize,
-}
-
-struct StatBitWriter<E: Endianness, W: BitWrite<E>> {
-    writer: W,
-    written_bits: usize,
-    _marker: PhantomData<E>,
-}
-
-impl<E: Endianness, W: BitWrite<E>> BitWrite<E> for StatBitWriter<E, W> {
-    type Error = W::Error;
-
-    fn write_bits(&mut self, value: u64, n: usize) -> Result<usize, Self::Error> {
-        let written = self.writer.write_bits(value, n)?;
-        self.written_bits += n;
-        Ok(written)
-    }
-
-    fn write_unary(&mut self, value: u64) -> Result<usize, Self::Error> {
-        let written = self.writer.write_unary(value)?;
-        self.written_bits += value as usize + 1;
-        Ok(written)
-    }
-
-    fn flush(&mut self) -> Result<usize, Self::Error> {
-        self.writer.flush()
-    }
-}
-
-impl<E: Endianness, W: BitWrite<E>> StatBitWriter<E, W> {
-    fn into_inner(self) -> W {
-        self.writer
-    }
-}
-
-impl<E: Endianness, W: BitWrite<E>> StatBitWriter<E, W> {
-    fn new(writer: W) -> Self {
-        Self {
-            writer,
-            written_bits: 0,
-            _marker: core::marker::PhantomData::<E>,
-        }
-    }
 }
 
 // TODO: add the ability to read both from ascii and from epserde serialized file
@@ -209,6 +185,111 @@ fn decode_file(path: PathBuf, lenght: u64, max_bits: usize, num_context: usize) 
         println!("{}", value);
         i += 1;
     }
+
+    Ok(())
+}
+
+fn graph(
+    basename: PathBuf,
+    compression_window: usize,
+    max_ref_count: usize,
+    min_interval_length: usize,
+) -> Result<()> {
+    let mut pl = ProgressLogger::default();
+
+    let seq_graph = BvGraphSeq::with_basename(&basename)
+        .endianness::<BE>()
+        .load()?;
+
+    // setup for the first iteration with Log2Estimator
+    let mut huffman_graph_encoder_builder = HuffmanGraphEncoderBuilder::new(Log2Estimator);
+    let mut bvcomp = BvComp::new(
+        &mut huffman_graph_encoder_builder,
+        compression_window,
+        max_ref_count,
+        min_interval_length,
+        0,
+    );
+
+    pl.item_name("node")
+        .expected_updates(Some(seq_graph.num_nodes()));
+    pl.start("Pushing symbols into model builder with Log2Estimator...");
+
+    // first iteration: build a model with Log2Estimator
+    for_![ (_, succ) in seq_graph {
+        bvcomp.push(succ)?;
+        pl.update();
+    }];
+    pl.done();
+
+    bvcomp.flush()?;
+    pl.start("Building the model with Log2Estimator...");
+    // get the ANSModel4Encoder obtained from the first iteration
+    let mut stat_writer = StatBitWriter::empty();
+    let huffman_estimator =
+        huffman_graph_encoder_builder.build::<DefaultEncodeParams, LE, _>(&mut stat_writer);
+    pl.done();
+
+    // setup for the second iteration with huffman estimator
+    let mut huffman_graph_encoder_builder = HuffmanGraphEncoderBuilder::new(huffman_estimator);
+    let mut bvcomp = BvComp::new(
+        &mut huffman_graph_encoder_builder,
+        compression_window,
+        max_ref_count,
+        min_interval_length,
+        0,
+    );
+
+    pl.item_name("node")
+        .expected_updates(Some(seq_graph.num_nodes()));
+    pl.start("Pushing symbols into model builder with Huffman estimator...");
+    // second iteration: build a model with the entropy mock writer
+    for_![ (_, succ) in seq_graph {
+        bvcomp.push(succ)?;
+        pl.update();
+    }];
+    bvcomp.flush()?;
+    pl.done();
+
+    pl.start("Building the encoder after second round with Huffman estimator...");
+
+    let word_write = MemWordWriterVec::new(Vec::<u64>::new());
+    let writer = BufBitWriter::<LE, _>::new(word_write);
+    let mut writer = StatBitWriter::new(writer);
+    let mut huffman_graph_encoder =
+        huffman_graph_encoder_builder.build::<DefaultEncodeParams, LE, _>(&mut writer);
+    pl.done();
+
+    println!(
+        "After first round with Log2Estimator: Recompressed graph using {} bits",
+        stat_writer.written_bits
+    );
+
+    let mut bvcomp = BvComp::new(
+        &mut huffman_graph_encoder,
+        compression_window,
+        max_ref_count,
+        min_interval_length,
+        0,
+    );
+
+    pl.item_name("node")
+        .expected_updates(Some(seq_graph.num_nodes()));
+    pl.start("Pushing symbols into model builder with Huffman estimator...");
+    // second iteration: build a model with the entropy mock writer
+    for_![ (_, succ) in seq_graph {
+        bvcomp.push(succ)?;
+        pl.update();
+    }];
+    pl.done();
+
+    pl.start("Building the encoder after second round with Huffman estimator...");
+    bvcomp.flush()?;
+
+    println!(
+        "After second round with Huffman estimator: Recompressed graph using {} bits",
+        writer.written_bits
+    );
 
     Ok(())
 }
@@ -372,6 +453,17 @@ fn main() -> Result<()> {
                 !args.silent,
             )?,
         },
+        Command::Graph {
+            basename,
+            compression_window,
+            max_ref_count,
+            min_interval_length,
+        } => graph(
+            basename,
+            compression_window,
+            max_ref_count,
+            min_interval_length,
+        )?,
     }
 
     Ok(())

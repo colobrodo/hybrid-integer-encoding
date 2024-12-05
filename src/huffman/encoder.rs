@@ -180,7 +180,7 @@ impl<EP: EncodeParams> HuffmanEncoder<EP> {
         let nbits_per_token = self.info_[ctx as usize][token].nbits as usize;
         writer.write_bits(self.info_[ctx as usize][token].bits as u64, nbits_per_token)?;
         writer.write_bits(bits, nbits)?;
-        Ok((nbits, nbits_per_token))
+        Ok((nbits_per_token, nbits))
     }
 
     // Very simple encoding: number of symbols (16 bits) followed by, for each
