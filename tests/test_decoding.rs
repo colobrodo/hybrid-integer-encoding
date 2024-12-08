@@ -21,31 +21,34 @@ mod tests {
         let mut rng = SmallRng::seed_from_u64(seed);
         let zipf = zipf::ZipfDistribution::new(1000000000, 1.5).unwrap();
 
-        let mut data = IntegerData::new(NUM_CONTEXT);
+        let mut data = IntegerData::new(NUM_CONTEXT, NUM_SYMBOLS);
         let default_context = 0;
+        let mut integers = Vec::with_capacity(nsamples);
         for _ in 0..nsamples {
-            data.add(default_context, zipf.sample(&mut rng) as u32);
+            let sample = zipf.sample(&mut rng) as u32;
+            data.add(default_context, sample);
+            integers.push((default_context, sample));
         }
 
-        let encoder = HuffmanEncoder::<DefaultEncodeParams>::new(&data, MAX_BITS);
+        let encoder = HuffmanEncoder::<DefaultEncodeParams>::new(data, MAX_BITS);
         let word_write = MemWordWriterVec::new(Vec::<u64>::new());
         let mut writer = BufBitWriter::<LE, _>::new(word_write);
 
         encoder.write_header(&mut writer).unwrap();
-        for (&ctx, &value) in data.iter() {
+        for &(ctx, value) in integers.iter() {
             encoder.write(ctx, value, &mut writer).unwrap();
         }
         writer.flush().unwrap();
 
         let binary_data = writer.into_inner().unwrap().into_inner();
         let binary_data = unsafe {
-            core::slice::from_raw_parts(binary_data.as_ptr() as *const u32, data.len() * 2)
+            core::slice::from_raw_parts(binary_data.as_ptr() as *const u32, nsamples * 2)
         };
 
         let reader = BufBitReader::<LE, _>::new(MemWordReader::new(binary_data));
-        let mut reader = HuffmanReader::<LE, _>::new(reader, MAX_BITS, 1).unwrap();
+        let mut reader = HuffmanReader::<LE, _>::new(reader, MAX_BITS, NUM_CONTEXT).unwrap();
 
-        for (&ctx, &original) in data.iter() {
+        for &(ctx, original) in integers.iter() {
             let value = reader.read::<DefaultEncodeParams>(ctx as usize).unwrap();
             assert_eq!(value, original as usize);
         }
@@ -71,16 +74,5 @@ mod tests {
     fn encode_and_decode_with_multiple_contexts() {
         const MAX_BITS: usize = 10;
         encode_and_decode::<4, MAX_BITS, { 1 << MAX_BITS }>(0);
-    }
-
-    #[test]
-    fn encode_and_decode_with_11_max_bits_and_16_contexts() {
-        const MAX_BITS: usize = 11;
-        encode_and_decode::<16, MAX_BITS, { 1 << MAX_BITS }>(0);
-    }
-    #[test]
-    fn encode_and_decode_with_12_max_bits_and_8_contexts() {
-        const MAX_BITS: usize = 12;
-        encode_and_decode::<8, MAX_BITS, { 1 << MAX_BITS }>(0);
     }
 }

@@ -18,28 +18,35 @@ pub struct HuffmanEncoder<EP: EncodeParams = DefaultEncodeParams> {
     _marker: core::marker::PhantomData<EP>,
 }
 
-/// Data structure to hold the integer values and their contexts.
-pub struct IntegerData {
-    values: Vec<u32>,
-    contexts: Vec<u8>,
+/// Compute the histogram of the each token frequency for each context.
+/// An histogram is a vector of length `num_symbols` where each index represents a symbol,
+/// and the value at each index represents the frequency of the symbol.
+pub struct IntegerData<EP: EncodeParams> {
+    ctx_histograms: Vec<Vec<usize>>,
+    /// Total number of symbols for each context.
+    totals: Vec<usize>,
     num_contexts: usize,
+    marker_: core::marker::PhantomData<EP>,
 }
 
-impl IntegerData {
-    pub fn new(num_contexts: usize) -> Self {
+impl<EP: EncodeParams> IntegerData<EP> {
+    pub fn new(num_contexts: usize, num_symbols: usize) -> Self {
+        let mut histograms = Vec::with_capacity(num_contexts);
+        histograms.resize(num_contexts, vec![0; num_symbols]);
         Self {
-            values: Vec::new(),
-            contexts: Vec::new(),
+            ctx_histograms: histograms,
+            totals: vec![0; num_contexts],
             num_contexts,
+            marker_: core::marker::PhantomData,
         }
     }
 
-    pub fn len(&self) -> usize {
-        self.values.len()
+    pub fn count(&self) -> usize {
+        self.totals.iter().sum()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.values.is_empty()
+        self.count() == 0
     }
 
     pub fn add(&mut self, context: u8, value: u32) {
@@ -48,35 +55,21 @@ impl IntegerData {
             "Context out of bounds trying to add symbol {} on context {}, but only {} contexts are availables",
             value, context, self.num_contexts
         );
-        self.values.push(value);
-        self.contexts.push(context);
+        let (token, _, _) = encode::<EP>(value.into());
+        self.ctx_histograms[context as usize][token] += 1;
+        self.totals[context as usize] += 1;
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (&u8, &u32)> + '_ {
-        self.contexts.iter().zip(self.values.iter())
+    pub fn histograms(self) -> Vec<Vec<usize>> {
+        self.ctx_histograms
     }
 
-    /// Compute the histogram of the each token frequency for each context.
-    /// An histogram is a vector of length `num_symbols` where each index represents a symbol,
-    /// and the value at each index represents the frequency of the symbol.
-    fn compute_histograms<EP: EncodeParams>(&self, num_symbols: usize) -> Vec<Vec<usize>> {
-        let mut histograms = Vec::with_capacity(self.num_contexts);
-        for (&value, &ctx) in self.values.iter().zip(self.contexts.iter()) {
-            let (token, _, _) = encode::<EP>(value.into());
-            if histograms.len() <= ctx as usize {
-                histograms.resize(ctx as usize + 1, vec![0; num_symbols]);
-            }
-            histograms[ctx as usize][token] += 1;
-        }
-        histograms
-    }
-
-    pub fn context(&self, i: usize) -> u8 {
-        self.contexts[i]
-    }
-
-    pub fn value(&self, i: usize) -> u32 {
-        self.values[i]
+    pub fn cost(&self, context: u8, value: u64) -> usize {
+        let total_symbols = self.totals[context as usize];
+        let (token, _, _) = encode::<EP>(value);
+        let freq = self.ctx_histograms[context as usize][token];
+        let cnt = f64::max(freq as f64, 0.1);
+        (total_symbols as f64 / cnt).log2() as usize
     }
 
     pub fn number_of_contexts(&self) -> usize {
@@ -147,9 +140,9 @@ fn compute_symbol_num_bits(histogram: &[usize], max_bits: usize, infos: &mut [Hu
 }
 
 impl<EP: EncodeParams> HuffmanEncoder<EP> {
-    pub fn new(data: &IntegerData, max_bits: usize) -> Self {
+    pub fn new(data: IntegerData<EP>, max_bits: usize) -> Self {
         let num_symbols = 1 << max_bits;
-        let histograms = data.compute_histograms::<EP>(num_symbols);
+        let histograms = data.histograms();
         let mut info = Vec::new();
         for histogram in &histograms {
             let mut ctx_info = vec![HuffmanSymbolInfo::default(); num_symbols];

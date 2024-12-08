@@ -131,7 +131,8 @@ fn encode_file(
     let file_size = file.metadata()?.len() * 8;
     let reader = BufReader::new(file);
 
-    let mut integers = IntegerData::new(num_contexts);
+    let mut integers = Vec::new();
+    let mut integer_data = IntegerData::new(num_contexts, 0);
     let mut last_sample = 0;
     for line in reader.lines().map_while(Result::ok) {
         // Split the line by whitespace and parse each number as u8
@@ -139,7 +140,8 @@ fn encode_file(
             match num.parse::<u32>() {
                 Ok(n) => {
                     let context = choose_context::<DefaultEncodeParams>(last_sample, num_contexts);
-                    integers.add(context, n);
+                    integers.push((context, n));
+                    integer_data.add(context, n);
                     last_sample = n as u64;
                 }
                 Err(_) => println!("Skipping invalid number: {}", num),
@@ -151,11 +153,11 @@ fn encode_file(
     let writer = BufBitWriter::<LE, _>::new(WordAdapter::<u32, _>::new(outfile));
     let mut writer = StatBitWriter::new(writer);
     // TODO: accept from cli arguments for max bits and for number of contexts
-    let encoder = HuffmanEncoder::<DefaultEncodeParams>::new(&integers, max_bits);
+    let encoder = HuffmanEncoder::<DefaultEncodeParams>::new(integer_data, max_bits);
 
     encoder.write_header(&mut writer)?;
     let header_size = writer.written_bits;
-    for (&ctx, &number) in integers.iter() {
+    for (ctx, number) in integers {
         encoder.write(ctx, number, &mut writer)?;
     }
 
@@ -196,13 +198,16 @@ fn graph(
     min_interval_length: usize,
 ) -> Result<()> {
     let mut pl = ProgressLogger::default();
+    let max_bits = 8;
+    let num_symbols = 1 << max_bits;
 
     let seq_graph = BvGraphSeq::with_basename(&basename)
         .endianness::<BE>()
         .load()?;
 
     // setup for the first iteration with Log2Estimator
-    let mut huffman_graph_encoder_builder = HuffmanGraphEncoderBuilder::new(Log2Estimator);
+    let mut huffman_graph_encoder_builder =
+        HuffmanGraphEncoderBuilder::<DefaultEncodeParams, _>::new(num_symbols, Log2Estimator);
     let mut bvcomp = BvComp::new(
         &mut huffman_graph_encoder_builder,
         compression_window,
@@ -224,13 +229,12 @@ fn graph(
     pl.done();
 
     pl.start("Building the encoder with Log2Estimator...");
-    let mut stat_writer = StatBitWriter::empty();
-    let huffman_estimator =
-        huffman_graph_encoder_builder.build::<DefaultEncodeParams, LE, _>(&mut stat_writer, 8);
+    let huffman_estimator = huffman_graph_encoder_builder.build_estimator();
     pl.done();
 
     // setup for the second iteration with huffman estimator
-    let mut huffman_graph_encoder_builder = HuffmanGraphEncoderBuilder::new(huffman_estimator);
+    let mut huffman_graph_encoder_builder =
+        HuffmanGraphEncoderBuilder::<DefaultEncodeParams, _>::new(num_symbols, huffman_estimator);
     let mut bvcomp = BvComp::new(
         &mut huffman_graph_encoder_builder,
         compression_window,
@@ -255,8 +259,7 @@ fn graph(
     let word_write = MemWordWriterVec::new(Vec::<u64>::new());
     let writer = BufBitWriter::<LE, _>::new(word_write);
     let mut writer = StatBitWriter::new(writer);
-    let mut huffman_graph_encoder =
-        huffman_graph_encoder_builder.build::<DefaultEncodeParams, LE, _>(&mut writer, 8);
+    let mut huffman_graph_encoder = huffman_graph_encoder_builder.build(&mut writer, 8);
     pl.done();
 
     let mut bvcomp = BvComp::new(
@@ -278,11 +281,6 @@ fn graph(
     pl.done();
 
     println!(
-        "After first round with Log2Estimator: Recompressed graph using {} bits",
-        stat_writer.written_bits
-    );
-
-    println!(
         "After second round with Huffman estimator: Recompressed graph using {} bits",
         writer.written_bits
     );
@@ -296,29 +294,32 @@ fn choose_context<EP: EncodeParams>(last_sample: u64, num_contexts: usize) -> u8
     (token.min(num_contexts - 1)) as u8
 }
 
-fn bench_file(
+fn bench_file<EP: EncodeParams>(
     path: PathBuf,
     repeats: usize,
     max_bits: usize,
     num_contexts: usize,
     verbose: bool,
 ) -> Result<()> {
+    let num_symbols = 1 << max_bits;
     // Load the serialized form in a buffer
     let buffer = std::fs::read(&path)?;
-    let integers = <Vec<u64>>::deserialize_eps(buffer.as_ref())?;
-    let mut data = IntegerData::new(num_contexts);
+    let items = <Vec<u64>>::deserialize_eps(buffer.as_ref())?;
+    let mut data = IntegerData::<EP>::new(num_contexts, num_symbols);
     let mut last_integer = 0;
-    for &n in integers {
-        let context = choose_context::<DefaultEncodeParams>(last_integer, num_contexts);
+    let mut integers = Vec::with_capacity(items.len());
+    for &n in items {
+        let context = choose_context::<EP>(last_integer, num_contexts);
+        integers.push((context, n));
         data.add(context, n as u32);
         last_integer = n;
     }
 
-    bench(data, max_bits, repeats, verbose);
+    bench(integers, data, max_bits, repeats, verbose);
     Ok(())
 }
 
-fn bench_random(
+fn bench_random<EP: EncodeParams>(
     repeats: usize,
     nsamples: u64,
     max_bits: usize,
@@ -326,25 +327,36 @@ fn bench_random(
     seed: u64,
     verbose: bool,
 ) {
+    let num_symbols = 1 << max_bits;
     let mut rng = SmallRng::seed_from_u64(seed);
     let zipf = zipf::ZipfDistribution::new(1000000000, 1.5).unwrap();
 
-    let mut data = IntegerData::new(num_contexts);
+    let mut data = IntegerData::<EP>::new(num_contexts, num_symbols);
     let mut last_sample = 0;
+    let mut integers = Vec::with_capacity(nsamples as usize);
     for _ in 0..nsamples {
         let sample = zipf.sample(&mut rng) as u32;
-        let context = choose_context::<DefaultEncodeParams>(last_sample as u64, num_contexts);
+        let context = choose_context::<EP>(last_sample as u64, num_contexts);
         data.add(context, sample);
+        integers.push((context, sample as u64));
         last_sample = sample;
     }
 
-    bench(data, max_bits, repeats, verbose);
+    bench(integers, data, max_bits, repeats, verbose);
 }
 
-fn bench(data: IntegerData, max_bits: usize, repeats: usize, verbose: bool) {
+fn bench<EP: EncodeParams>(
+    integers: Vec<(u8, u64)>,
+    data: IntegerData<EP>,
+    max_bits: usize,
+    repeats: usize,
+    verbose: bool,
+) {
+    let num_contexts = data.number_of_contexts();
+
     let overall_start = std::time::Instant::now();
 
-    let encoder = HuffmanEncoder::<DefaultEncodeParams>::new(&data, max_bits);
+    let encoder = HuffmanEncoder::<EP>::new(data, max_bits);
     let word_write = MemWordWriterVec::new(Vec::<u64>::new());
     let writer = BufBitWriter::<LE, _>::new(word_write);
     let mut writer = StatBitWriter::new(writer);
@@ -355,8 +367,8 @@ fn bench(data: IntegerData, max_bits: usize, repeats: usize, verbose: bool) {
         println!("Header took {} bits", header_size);
     }
 
-    for (&ctx, &value) in data.iter() {
-        encoder.write(ctx, value, &mut writer).unwrap();
+    for &(ctx, value) in integers.iter() {
+        encoder.write(ctx, value as u32, &mut writer).unwrap();
     }
     writer.flush().unwrap();
     let encoded_size = writer.written_bits;
@@ -366,22 +378,22 @@ fn bench(data: IntegerData, max_bits: usize, repeats: usize, verbose: bool) {
     }
 
     let binary_data = writer.into_inner().into_inner().unwrap().into_inner();
-    let binary_data =
-        unsafe { core::slice::from_raw_parts(binary_data.as_ptr() as *const u32, data.len() * 2) };
+    let binary_data = unsafe {
+        core::slice::from_raw_parts(binary_data.as_ptr() as *const u32, integers.len() * 2)
+    };
 
     let mut time_per_repeat = Vec::new();
 
     for _ in 0..repeats {
         let reader = BufBitReader::<LE, _>::new(MemWordReader::new(&binary_data));
-        let mut reader =
-            HuffmanReader::<LE, _>::new(reader, max_bits, data.number_of_contexts()).unwrap();
+        let mut reader = HuffmanReader::<LE, _>::new(reader, max_bits, num_contexts).unwrap();
 
         let start = std::time::Instant::now();
 
-        for (&ctx, _original) in data.iter() {
+        for &(ctx, _original) in integers.iter() {
             let _value = black_box(reader.read::<DefaultEncodeParams>(ctx as usize).unwrap());
         }
-        let elapsed_time = (start.elapsed().as_secs_f64() / data.len() as f64) * 1e9;
+        let elapsed_time = (start.elapsed().as_secs_f64() / integers.len() as f64) * 1e9;
         println!("Decode:    {:>20} ns/read", elapsed_time);
         time_per_repeat.push(elapsed_time);
     }
@@ -431,7 +443,7 @@ fn main() -> Result<()> {
                 samples,
                 seed,
                 huffman_arguments,
-            } => bench_random(
+            } => bench_random::<DefaultEncodeParams>(
                 bench_arguments.repeats,
                 samples,
                 huffman_arguments.max_bits,
@@ -443,7 +455,7 @@ fn main() -> Result<()> {
                 bench_arguments,
                 path,
                 huffman_arguments,
-            } => bench_file(
+            } => bench_file::<DefaultEncodeParams>(
                 path,
                 bench_arguments.repeats,
                 huffman_arguments.max_bits,
