@@ -3,36 +3,40 @@ use webgraph::prelude::*;
 
 use crate::huffman::{EncodeParams, HuffmanEncoder, IntegerData};
 
-use crate::graphs::{BvGraphComponent, HuffmanGraphEncoder};
+use crate::graphs::{estimator::HuffmanEstimator, BvGraphComponent, HuffmanGraphEncoder};
 
 /// Builder to construct a HuffmanGraphEncoder, it requires an estimator that implements the Encode
-/// trait and is used for estimating the adjacnecy list size of each node during the process of
+/// trait and is used for estimating the adjacency list size of each node during the process of
 /// reference selection.
-pub struct HuffmanGraphEncoderBuilder<EE: Encode> {
+pub struct HuffmanGraphEncoderBuilder<EP: EncodeParams, EE: Encode> {
     estimator: EE,
-    data: IntegerData,
+    data: IntegerData<EP>,
 }
 
-impl<EE: Encode> HuffmanGraphEncoderBuilder<EE> {
+impl<EP: EncodeParams, EE: Encode> HuffmanGraphEncoderBuilder<EP, EE> {
     // TODO: for now num_contexts is only 1
-    pub fn new(estimator: EE) -> Self {
+    pub fn new(num_symbols: usize, estimator: EE) -> Self {
         Self {
             estimator,
-            data: IntegerData::new(BvGraphComponent::COMPONENTS),
+            data: IntegerData::new(BvGraphComponent::COMPONENTS, num_symbols),
         }
     }
 
-    pub fn build<EP: EncodeParams, E: Endianness, W: BitWrite<E>>(
+    pub fn build<E: Endianness, W: BitWrite<E>>(
         self,
         writer: &'_ mut W,
         max_bits: usize,
     ) -> HuffmanGraphEncoder<'_, EP, E, EE, W> {
-        let encoder = HuffmanEncoder::<EP>::new(&self.data, max_bits);
+        let encoder = HuffmanEncoder::<EP>::new(self.data, max_bits);
         HuffmanGraphEncoder::new(encoder, self.estimator, writer)
+    }
+
+    pub fn build_estimator(self) -> HuffmanEstimator<EP> {
+        HuffmanEstimator::new(self.data)
     }
 }
 
-impl<EE: Encode> Encode for HuffmanGraphEncoderBuilder<EE> {
+impl<EP: EncodeParams, EE: Encode> Encode for HuffmanGraphEncoderBuilder<EP, EE> {
     type Error = EE::Error;
 
     fn start_node(&mut self, _node: usize) -> Result<usize, Self::Error> {
@@ -110,7 +114,7 @@ impl<EE: Encode> Encode for HuffmanGraphEncoderBuilder<EE> {
     }
 }
 
-impl<EE: Encode> EncodeAndEstimate for HuffmanGraphEncoderBuilder<EE> {
+impl<EP: EncodeParams, EE: Encode> EncodeAndEstimate for HuffmanGraphEncoderBuilder<EP, EE> {
     type Estimator<'a> = &'a mut EE where Self:'a;
 
     fn estimator(&mut self) -> Self::Estimator<'_> {

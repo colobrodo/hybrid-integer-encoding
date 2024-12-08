@@ -1,5 +1,5 @@
 /// An enumeration of the components composing the BVGraph format.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum BvGraphComponent {
     Outdegree = 0,
     ReferenceOffset = 1,
