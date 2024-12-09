@@ -66,10 +66,10 @@ impl<EP: EncodeParams> IntegerData<EP> {
 
     pub fn cost(&self, context: u8, value: u64) -> usize {
         let total_symbols = self.totals[context as usize];
-        let (token, _, _) = encode::<EP>(value);
+        let (token, nbits, _) = encode::<EP>(value);
         let freq = self.ctx_histograms[context as usize][token];
         let cnt = f64::max(freq as f64, 0.1);
-        (total_symbols as f64 / cnt).log2() as usize
+        (total_symbols as f64 / cnt).log2() as usize + nbits
     }
 
     pub fn number_of_contexts(&self) -> usize {
