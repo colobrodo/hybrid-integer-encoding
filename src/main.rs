@@ -316,7 +316,7 @@ fn bench_file<EP: EncodeParams>(
         last_integer = n;
     }
 
-    bench(integer_data, max_bits, repeats, verbose);
+    bench(integer_data, max_bits, repeats, verbose)?;
     Ok(())
 }
 
@@ -327,7 +327,7 @@ fn bench_random<EP: EncodeParams>(
     num_contexts: usize,
     seed: u64,
     verbose: bool,
-) {
+) -> Result<()> {
     let num_symbols = 1 << max_bits;
     let mut rng = SmallRng::seed_from_u64(seed);
     let zipf = zipf::ZipfDistribution::new(1000000000, 1.5).unwrap();
@@ -341,7 +341,8 @@ fn bench_random<EP: EncodeParams>(
         last_sample = sample;
     }
 
-    bench(integer_data, max_bits, repeats, verbose);
+    bench(integer_data, max_bits, repeats, verbose)?;
+    Ok(())
 }
 
 fn bench<EP: EncodeParams>(
@@ -349,7 +350,7 @@ fn bench<EP: EncodeParams>(
     max_bits: usize,
     repeats: usize,
     verbose: bool,
-) {
+) -> Result<()> {
     let overall_start = std::time::Instant::now();
     let integers = integer_data.iter().collect::<Vec<_>>();
     let num_values = integers.len();
@@ -368,16 +369,16 @@ fn bench<EP: EncodeParams>(
     }
 
     for &(ctx, value) in integers.iter() {
-        encoder.write(ctx, value, &mut writer).unwrap();
+        encoder.write(ctx, value, &mut writer)?;
     }
-    writer.flush().unwrap();
+    writer.flush()?;
     let encoded_size = writer.written_bits;
     if verbose {
         println!("Written whole file using {} bits", encoded_size);
         println!("  with payload {} bits", encoded_size - header_size);
     }
 
-    let binary_data = writer.into_inner().into_inner().unwrap().into_inner();
+    let binary_data = writer.into_inner().into_inner()?.into_inner();
     let binary_data =
         unsafe { core::slice::from_raw_parts(binary_data.as_ptr() as *const u32, num_values * 2) };
 
@@ -385,12 +386,12 @@ fn bench<EP: EncodeParams>(
 
     for _ in 0..repeats {
         let reader = BufBitReader::<LE, _>::new(MemWordReader::new(&binary_data));
-        let mut reader = HuffmanReader::<LE, _>::new(reader, max_bits, num_contexts).unwrap();
+        let mut reader = HuffmanReader::<LE, _>::new(reader, max_bits, num_contexts)?;
 
         let start = std::time::Instant::now();
 
         for (ctx, _original) in integers.iter() {
-            let _value = black_box(reader.read::<DefaultEncodeParams>(*ctx as usize).unwrap());
+            let _value = black_box(reader.read::<DefaultEncodeParams>(*ctx as usize)?);
         }
         let elapsed_time = (start.elapsed().as_secs_f64() / num_values as f64) * 1e9;
         println!("Decode:    {:>20} ns/read", elapsed_time);
@@ -403,7 +404,8 @@ fn bench<EP: EncodeParams>(
     println!(
         "Executed bench in {:>20} s",
         overall_start.elapsed().as_secs_f64()
-    )
+    );
+    Ok(())
 }
 
 fn main() -> Result<()> {
@@ -442,25 +444,29 @@ fn main() -> Result<()> {
                 samples,
                 seed,
                 huffman_arguments,
-            } => bench_random::<DefaultEncodeParams>(
-                bench_arguments.repeats,
-                samples,
-                huffman_arguments.max_bits,
-                huffman_arguments.contexts,
-                seed,
-                !args.silent,
-            ),
+            } => {
+                bench_random::<DefaultEncodeParams>(
+                    bench_arguments.repeats,
+                    samples,
+                    huffman_arguments.max_bits,
+                    huffman_arguments.contexts,
+                    seed,
+                    !args.silent,
+                )?;
+            }
             BenchCommand::File {
                 bench_arguments,
                 path,
                 huffman_arguments,
-            } => bench_file::<DefaultEncodeParams>(
-                path,
-                bench_arguments.repeats,
-                huffman_arguments.max_bits,
-                huffman_arguments.contexts,
-                !args.silent,
-            )?,
+            } => {
+                bench_file::<DefaultEncodeParams>(
+                    path,
+                    bench_arguments.repeats,
+                    huffman_arguments.max_bits,
+                    huffman_arguments.contexts,
+                    !args.silent,
+                )?;
+            }
         },
         Command::Graph {
             basename,
