@@ -5,15 +5,15 @@ use anyhow::Result;
 use webgraph::prelude::Encode;
 
 use crate::graphs::BvGraphComponent;
-use crate::huffman::{EncodeParams, IntegerData};
+use crate::huffman::{EncodeParams, IntegerHistogram};
 
 pub struct HuffmanEstimator<EP: EncodeParams> {
-    data: IntegerData<EP>,
+    data: IntegerHistogram<EP>,
     marker_: core::marker::PhantomData<EP>,
 }
 
 impl<EP: EncodeParams> HuffmanEstimator<EP> {
-    pub fn new(data: IntegerData<EP>) -> Self {
+    pub fn new(data: IntegerHistogram<EP>) -> Self {
         Self {
             data,
             marker_: core::marker::PhantomData,

@@ -1,7 +1,7 @@
 use dsi_bitstream::traits::{BitWrite, Endianness};
 use webgraph::prelude::*;
 
-use crate::huffman::{EncodeParams, HuffmanEncoder, IntegerData};
+use crate::huffman::{EncodeParams, HuffmanEncoder, IntegerHistogram};
 
 use crate::graphs::{estimator::HuffmanEstimator, BvGraphComponent, HuffmanGraphEncoder};
 
@@ -10,7 +10,7 @@ use crate::graphs::{estimator::HuffmanEstimator, BvGraphComponent, HuffmanGraphE
 /// reference selection.
 pub struct HuffmanGraphEncoderBuilder<EP: EncodeParams, EE: Encode> {
     estimator: EE,
-    data: IntegerData<EP>,
+    data: IntegerHistogram<EP>,
 }
 
 impl<EP: EncodeParams, EE: Encode> HuffmanGraphEncoderBuilder<EP, EE> {
@@ -18,7 +18,7 @@ impl<EP: EncodeParams, EE: Encode> HuffmanGraphEncoderBuilder<EP, EE> {
     pub fn new(num_symbols: usize, estimator: EE) -> Self {
         Self {
             estimator,
-            data: IntegerData::new(BvGraphComponent::COMPONENTS, num_symbols),
+            data: IntegerHistogram::new(BvGraphComponent::COMPONENTS, num_symbols),
         }
     }
 

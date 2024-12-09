@@ -21,7 +21,7 @@ use rand::{prelude::Distribution, rngs::SmallRng, SeedableRng};
 use hybrid_integer_encoding::graphs::{HuffmanGraphEncoderBuilder, Log2Estimator};
 use hybrid_integer_encoding::huffman::{
     encode, DefaultEncodeParams, EncodeParams, EntropyCoder, HuffmanEncoder, HuffmanReader,
-    IntegerData,
+    IntegerHistogram,
 };
 use hybrid_integer_encoding::utils::StatBitWriter;
 use webgraph::prelude::{SequentialLabeling, *};
@@ -132,7 +132,7 @@ fn encode_file(
     let reader = BufReader::new(file);
 
     let mut integers = Vec::new();
-    let mut integer_data = IntegerData::new(num_contexts, 0);
+    let mut integer_data = IntegerHistogram::new(num_contexts, 0);
     let mut last_sample = 0;
     for line in reader.lines().map_while(Result::ok) {
         // Split the line by whitespace and parse each number as u8
@@ -305,7 +305,7 @@ fn bench_file<EP: EncodeParams>(
     // Load the serialized form in a buffer
     let buffer = std::fs::read(&path)?;
     let items = <Vec<u64>>::deserialize_eps(buffer.as_ref())?;
-    let mut data = IntegerData::<EP>::new(num_contexts, num_symbols);
+    let mut data = IntegerHistogram::<EP>::new(num_contexts, num_symbols);
     let mut last_integer = 0;
     let mut integers = Vec::with_capacity(items.len());
     for &n in items {
@@ -331,7 +331,7 @@ fn bench_random<EP: EncodeParams>(
     let mut rng = SmallRng::seed_from_u64(seed);
     let zipf = zipf::ZipfDistribution::new(1000000000, 1.5).unwrap();
 
-    let mut data = IntegerData::<EP>::new(num_contexts, num_symbols);
+    let mut data = IntegerHistogram::<EP>::new(num_contexts, num_symbols);
     let mut last_sample = 0;
     let mut integers = Vec::with_capacity(nsamples as usize);
     for _ in 0..nsamples {
@@ -347,7 +347,7 @@ fn bench_random<EP: EncodeParams>(
 
 fn bench<EP: EncodeParams>(
     integers: Vec<(u8, u64)>,
-    data: IntegerData<EP>,
+    data: IntegerHistogram<EP>,
     max_bits: usize,
     repeats: usize,
     verbose: bool,

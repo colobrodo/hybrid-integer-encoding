@@ -21,7 +21,7 @@ pub struct HuffmanEncoder<EP: EncodeParams = DefaultEncodeParams> {
 /// Compute the histogram of the each token frequency for each context.
 /// An histogram is a vector of length `num_symbols` where each index represents a symbol,
 /// and the value at each index represents the frequency of the symbol.
-pub struct IntegerData<EP: EncodeParams> {
+pub struct IntegerHistogram<EP: EncodeParams> {
     ctx_histograms: Vec<Vec<usize>>,
     /// Total number of symbols for each context.
     totals: Vec<usize>,
@@ -29,7 +29,7 @@ pub struct IntegerData<EP: EncodeParams> {
     marker_: core::marker::PhantomData<EP>,
 }
 
-impl<EP: EncodeParams> IntegerData<EP> {
+impl<EP: EncodeParams> IntegerHistogram<EP> {
     pub fn new(num_contexts: usize, num_symbols: usize) -> Self {
         let mut histograms = Vec::with_capacity(num_contexts);
         histograms.resize(num_contexts, vec![0; num_symbols]);
@@ -39,6 +39,10 @@ impl<EP: EncodeParams> IntegerData<EP> {
             num_contexts,
             marker_: core::marker::PhantomData,
         }
+    }
+
+    pub fn context_count(&self, context: u8) -> usize {
+        self.totals[context as usize]
     }
 
     pub fn count(&self) -> usize {
@@ -60,10 +64,12 @@ impl<EP: EncodeParams> IntegerData<EP> {
         self.totals[context as usize] += 1;
     }
 
-    pub fn histograms(self) -> Vec<Vec<usize>> {
+    /// Returns the histogram as his underlying vector.
+    pub fn as_vec(self) -> Vec<Vec<usize>> {
         self.ctx_histograms
     }
 
+    /// Returns the estimated cost of encoding the value in the given context.
     pub fn cost(&self, context: u8, value: u64) -> usize {
         let total_symbols = self.totals[context as usize];
         let (token, nbits, _) = encode::<EP>(value);
@@ -140,9 +146,9 @@ fn compute_symbol_num_bits(histogram: &[usize], max_bits: usize, infos: &mut [Hu
 }
 
 impl<EP: EncodeParams> HuffmanEncoder<EP> {
-    pub fn new(data: IntegerData<EP>, max_bits: usize) -> Self {
+    pub fn new(data: IntegerHistogram<EP>, max_bits: usize) -> Self {
         let num_symbols = 1 << max_bits;
-        let histograms = data.histograms();
+        let histograms = data.as_vec();
         let mut info = Vec::new();
         for histogram in &histograms {
             let mut ctx_info = vec![HuffmanSymbolInfo::default(); num_symbols];

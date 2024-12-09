@@ -5,7 +5,7 @@ mod tests {
         traits::{BitWrite, LE},
     };
     use hybrid_integer_encoding::huffman::{
-        DefaultEncodeParams, EntropyCoder, HuffmanEncoder, HuffmanReader, IntegerData,
+        DefaultEncodeParams, EntropyCoder, HuffmanEncoder, HuffmanReader, IntegerHistogram,
         DEFAULT_MAX_HUFFMAN_BITS, DEFAULT_NUM_SYMBOLS,
     };
     use rand::{prelude::Distribution, rngs::SmallRng, SeedableRng};
@@ -21,7 +21,7 @@ mod tests {
         let mut rng = SmallRng::seed_from_u64(seed);
         let zipf = zipf::ZipfDistribution::new(1000000000, 1.5).unwrap();
 
-        let mut data = IntegerData::new(NUM_CONTEXT, NUM_SYMBOLS);
+        let mut data = IntegerHistogram::new(NUM_CONTEXT, NUM_SYMBOLS);
         let default_context = 0;
         let mut integers = Vec::with_capacity(nsamples);
         for _ in 0..nsamples {
