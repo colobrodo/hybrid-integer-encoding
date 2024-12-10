@@ -211,6 +211,7 @@ fn referece_selection_round<F: SequentialDecoderFactory, EP: EncodeParams, E: En
     compression_window: usize,
     max_ref_count: usize,
     min_interval_length: usize,
+    msg: &str,
     pl: &mut ProgressLogger,
 ) -> Result<HuffmanGraphEncoderBuilder<EP, HuffmanEstimator<EP>>> {
     let num_symbols = 1 << max_bits;
@@ -228,7 +229,7 @@ fn referece_selection_round<F: SequentialDecoderFactory, EP: EncodeParams, E: En
 
     pl.item_name("node")
         .expected_updates(Some(graph.num_nodes()));
-    pl.start("Pushing symbols into encoder builder with Huffman estimator...");
+    pl.start(msg);
     for_![ (_, succ) in graph {
         bvcomp.push(succ)?;
         pl.update();
@@ -277,9 +278,6 @@ fn graph(
     bvcomp.flush()?;
     pl.done();
 
-    pl.start("Building the encoder with Log2Estimator...");
-    pl.done();
-
     let mut huffman_graph_encoder_builder = referece_selection_round(
         &seq_graph,
         huffman_graph_encoder_builder,
@@ -287,9 +285,10 @@ fn graph(
         compression_window,
         max_ref_count,
         min_interval_length,
+        "Pushing symbols into encoder builder on first round...",
         &mut pl,
     )?;
-    for _ in 1..num_rounds {
+    for round in 1..num_rounds {
         huffman_graph_encoder_builder = referece_selection_round(
             &seq_graph,
             huffman_graph_encoder_builder,
@@ -297,6 +296,11 @@ fn graph(
             compression_window,
             max_ref_count,
             min_interval_length,
+            format!(
+                "Pushing symbols into encoder builder with Huffman estimator for round {}...",
+                round + 1
+            )
+            .as_str(),
             &mut pl,
         )?;
     }
