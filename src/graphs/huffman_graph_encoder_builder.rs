@@ -14,7 +14,7 @@ pub struct HuffmanGraphEncoderBuilder<EP: EncodeParams, EE: Encode> {
 }
 
 impl<EP: EncodeParams, EE: Encode> HuffmanGraphEncoderBuilder<EP, EE> {
-    // TODO: for now num_contexts is only 1
+    // TODO: for now num_contexts is the number of components
     pub fn new(num_symbols: usize, estimator: EE) -> Self {
         Self {
             estimator,
