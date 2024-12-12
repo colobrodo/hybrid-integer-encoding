@@ -24,3 +24,18 @@ impl ContextChoiceStrategy for SimpleChoiceStrategy {
 
     fn update(&mut self, _component: BvGraphComponent, _value: u64) {}
 }
+
+/// A strategy with only one context
+pub struct SingleContextStrategy;
+
+impl ContextChoiceStrategy for SingleContextStrategy {
+    fn num_contexts(&self) -> usize {
+        1
+    }
+
+    fn choose_context(&mut self, _component: BvGraphComponent) -> u8 {
+        0
+    }
+
+    fn update(&mut self, _component: BvGraphComponent, _value: u64) {}
+}
