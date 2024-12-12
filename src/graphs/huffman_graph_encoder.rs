@@ -29,6 +29,10 @@ impl<'a, EP: EncodeParams, E: Endianness, EE: Encode, W: BitWrite<E>>
         }
     }
 
+    pub fn write_header(&mut self) -> Result<()> {
+        self.encoder.write_header(self.writer)
+    }
+
     fn write(&mut self, component: BvGraphComponent, value: u64) -> Result<usize> {
         let (token_bits, trailing_bits) =
             self.encoder

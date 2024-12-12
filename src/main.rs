@@ -67,6 +67,8 @@ enum Command {
     Graph {
         /// The basename of the graph to compress
         basename: PathBuf,
+        /// The output path where the huffman compressed representation of the graph is saved
+        output: PathBuf,
         /// Compression window size
         #[arg(short = 'w', long, default_value = "7")]
         compression_window: usize,
@@ -377,6 +379,7 @@ fn main() -> Result<()> {
         },
         Command::Graph {
             basename,
+            output,
             compression_window,
             max_ref_count,
             min_interval_length,
@@ -384,6 +387,7 @@ fn main() -> Result<()> {
             num_rounds,
         } => convert_graph(
             basename,
+            output,
             max_bits,
             compression_window,
             max_ref_count,

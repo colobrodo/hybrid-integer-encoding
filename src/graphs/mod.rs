@@ -4,11 +4,12 @@ mod huffman_graph_encoder;
 mod huffman_graph_encoder_builder;
 
 use anyhow::Result;
-use dsi_bitstream::prelude::{BufBitWriter, MemWordWriterVec};
+use dsi_bitstream::impls::WordAdapter;
+use dsi_bitstream::prelude::BufBitWriter;
 use dsi_bitstream::traits::{BE, LE};
 use dsi_progress_logger::prelude::*;
 use lender::for_;
-use std::path::PathBuf;
+use std::{fs::File, path::PathBuf};
 use webgraph::prelude::{SequentialLabeling, *};
 
 use component::*;
@@ -57,6 +58,7 @@ fn referece_selection_round<F: SequentialDecoderFactory, EP: EncodeParams, E: En
 
 pub fn convert_graph(
     basename: PathBuf,
+    output_path: PathBuf,
     max_bits: usize,
     compression_window: usize,
     max_ref_count: usize,
@@ -123,11 +125,15 @@ pub fn convert_graph(
 
     pl.start("Building the encoder after estimation rounds...");
 
-    let word_write = MemWordWriterVec::new(Vec::<u64>::new());
-    let writer = BufBitWriter::<LE, _>::new(word_write);
+    let outfile = File::create(output_path)?;
+    let writer = BufBitWriter::<LE, _>::new(WordAdapter::<u32, _>::new(outfile));
     let mut writer = StatBitWriter::new(writer);
     let mut huffman_graph_encoder = huffman_graph_encoder_builder.build(&mut writer, max_bits);
+
     pl.done();
+
+    pl.info(format_args!("Writing header for the graph..."));
+    huffman_graph_encoder.write_header()?;
 
     let mut bvcomp = BvComp::new(
         &mut huffman_graph_encoder,
