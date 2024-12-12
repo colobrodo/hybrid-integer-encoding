@@ -7,30 +7,24 @@ use std::{
 
 use dsi_bitstream::{
     impls::{BufBitReader, BufBitWriter, MemWordReader, MemWordWriterVec, WordAdapter},
-    traits::{BitWrite, BE, LE},
+    traits::{BitWrite, LE},
 };
 
-use dsi_progress_logger::prelude::*;
 use epserde::prelude::*;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use lender::for_;
 use rand::{prelude::Distribution, rngs::SmallRng, SeedableRng};
 
+use hybrid_integer_encoding::utils::IntegerData;
 use hybrid_integer_encoding::utils::StatBitWriter;
 use hybrid_integer_encoding::{
-    graphs::HuffmanEstimator,
+    graphs::convert_graph,
     huffman::{
         encode, DefaultEncodeParams, EncodeParams, EntropyCoder, HuffmanEncoder, HuffmanReader,
         IntegerHistogram,
     },
 };
-use hybrid_integer_encoding::{
-    graphs::{HuffmanGraphEncoderBuilder, Log2Estimator},
-    utils::IntegerData,
-};
-use webgraph::prelude::{SequentialLabeling, *};
 
 #[derive(Parser, Debug)]
 #[clap(name = "hybrid-integer-encoding", version)]
@@ -200,141 +194,6 @@ fn decode_file(path: PathBuf, lenght: u64, max_bits: usize, num_context: usize) 
         println!("{}", value);
         i += 1;
     }
-
-    Ok(())
-}
-
-fn referece_selection_round<F: SequentialDecoderFactory, EP: EncodeParams, E: Encode>(
-    graph: &BvGraphSeq<F>,
-    huffman_graph_encoder_builder: HuffmanGraphEncoderBuilder<EP, E>,
-    max_bits: usize,
-    compression_window: usize,
-    max_ref_count: usize,
-    min_interval_length: usize,
-    msg: &str,
-    pl: &mut ProgressLogger,
-) -> Result<HuffmanGraphEncoderBuilder<EP, HuffmanEstimator<EP>>> {
-    let num_symbols = 1 << max_bits;
-    let huffman_estimator = huffman_graph_encoder_builder.build_estimator();
-    // setup for the new iteration with huffman estimator
-    let mut huffman_graph_encoder_builder =
-        HuffmanGraphEncoderBuilder::<EP, _>::new(num_symbols, huffman_estimator);
-    let mut bvcomp = BvComp::new(
-        &mut huffman_graph_encoder_builder,
-        compression_window,
-        max_ref_count,
-        min_interval_length,
-        0,
-    );
-
-    pl.item_name("node")
-        .expected_updates(Some(graph.num_nodes()));
-    pl.start(msg);
-    for_![ (_, succ) in graph {
-        bvcomp.push(succ)?;
-        pl.update();
-    }];
-    bvcomp.flush()?;
-    pl.done();
-    Ok(huffman_graph_encoder_builder)
-}
-
-fn graph(
-    basename: PathBuf,
-    max_bits: usize,
-    compression_window: usize,
-    max_ref_count: usize,
-    min_interval_length: usize,
-    num_rounds: usize,
-) -> Result<()> {
-    assert!(num_rounds >= 1, "num_rounds must be at least 1");
-    let mut pl = ProgressLogger::default();
-    let num_symbols = 1 << max_bits;
-
-    let seq_graph = BvGraphSeq::with_basename(&basename)
-        .endianness::<BE>()
-        .load()?;
-
-    // setup for the first iteration with Log2Estimator
-    let mut huffman_graph_encoder_builder =
-        HuffmanGraphEncoderBuilder::<DefaultEncodeParams, _>::new(num_symbols, Log2Estimator);
-    let mut bvcomp = BvComp::new(
-        &mut huffman_graph_encoder_builder,
-        compression_window,
-        max_ref_count,
-        min_interval_length,
-        0,
-    );
-
-    pl.item_name("node")
-        .expected_updates(Some(seq_graph.num_nodes()));
-    pl.start("Pushing symbols into encoder builder with Log2Estimator...");
-
-    // first iteration: build a encoder with Log2Estimator
-    for_![ (_, succ) in seq_graph {
-        bvcomp.push(succ)?;
-        pl.update();
-    }];
-    bvcomp.flush()?;
-    pl.done();
-
-    let mut huffman_graph_encoder_builder = referece_selection_round(
-        &seq_graph,
-        huffman_graph_encoder_builder,
-        max_bits,
-        compression_window,
-        max_ref_count,
-        min_interval_length,
-        "Pushing symbols into encoder builder on first round...",
-        &mut pl,
-    )?;
-    for round in 1..num_rounds {
-        huffman_graph_encoder_builder = referece_selection_round(
-            &seq_graph,
-            huffman_graph_encoder_builder,
-            max_bits,
-            compression_window,
-            max_ref_count,
-            min_interval_length,
-            format!(
-                "Pushing symbols into encoder builder with Huffman estimator for round {}...",
-                round + 1
-            )
-            .as_str(),
-            &mut pl,
-        )?;
-    }
-
-    pl.start("Building the encoder after estimation rounds...");
-
-    let word_write = MemWordWriterVec::new(Vec::<u64>::new());
-    let writer = BufBitWriter::<LE, _>::new(word_write);
-    let mut writer = StatBitWriter::new(writer);
-    let mut huffman_graph_encoder = huffman_graph_encoder_builder.build(&mut writer, max_bits);
-    pl.done();
-
-    let mut bvcomp = BvComp::new(
-        &mut huffman_graph_encoder,
-        compression_window,
-        max_ref_count,
-        min_interval_length,
-        0,
-    );
-
-    pl.item_name("node")
-        .expected_updates(Some(seq_graph.num_nodes()));
-    pl.start("Compressing the graph...");
-    // second iteration: build a model with the entropy mock writer
-    for_![ (_, succ) in seq_graph {
-        bvcomp.push(succ)?;
-        pl.update();
-    }];
-    pl.done();
-
-    println!(
-        "After second round with Huffman estimator: Recompressed graph using {} bits",
-        writer.written_bits
-    );
 
     Ok(())
 }
@@ -523,7 +382,7 @@ fn main() -> Result<()> {
             min_interval_length,
             max_bits,
             num_rounds,
-        } => graph(
+        } => convert_graph(
             basename,
             max_bits,
             compression_window,
