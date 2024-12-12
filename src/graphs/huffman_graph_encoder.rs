@@ -48,8 +48,9 @@ impl<'a, EP: EncodeParams, E: Endianness, EE: Encode, W: BitWrite<E>, S: Context
     }
 
     fn write(&mut self, component: BvGraphComponent, value: u64) -> Result<usize> {
-        let ctx = self.context_strategy.choose_context(component, value);
+        let ctx = self.context_strategy.choose_context(component);
         let (token_bits, trailing_bits) = self.encoder.write(ctx, value as u32, self.writer)?;
+        self.context_strategy.update(component, value);
         Ok(token_bits + trailing_bits)
     }
 }

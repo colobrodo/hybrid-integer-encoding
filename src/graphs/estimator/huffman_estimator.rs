@@ -23,7 +23,8 @@ impl<EP: EncodeParams, S: ContextChoiceStrategy> HuffmanEstimator<EP, S> {
     }
 
     pub fn estimate(&mut self, component: BvGraphComponent, value: u64) -> usize {
-        let ctx = self.context_strategy.choose_context(component, value);
+        let ctx = self.context_strategy.choose_context(component);
+        self.context_strategy.update(component, value);
         self.data.cost(ctx, value)
     }
 }
