@@ -1,6 +1,6 @@
 use super::BvGraphComponent;
 
-/// A strategy that defines how the context of each encoded or estimated value is chosen during graph compression.
+/// A strategy defines how the context of each encoded or estimated value is chosen during graph compression.
 pub trait ContextChoiceStrategy {
     /// Returns the number of contexts available.
     fn num_contexts(&self) -> usize;
@@ -10,7 +10,7 @@ pub trait ContextChoiceStrategy {
     fn update(&mut self, component: BvGraphComponent, value: u64);
 }
 
-/// Simple context strategy that uses a different context for each graph component, and it's not based on previous values
+/// Simple context strategy that uses a different context for each graph component, and it's not based on previous values.
 pub struct SimpleChoiceStrategy;
 
 impl ContextChoiceStrategy for SimpleChoiceStrategy {
@@ -25,7 +25,7 @@ impl ContextChoiceStrategy for SimpleChoiceStrategy {
     fn update(&mut self, _component: BvGraphComponent, _value: u64) {}
 }
 
-/// A strategy with only one context
+/// A strategy with only one context.
 pub struct SingleContextStrategy;
 
 impl ContextChoiceStrategy for SingleContextStrategy {
