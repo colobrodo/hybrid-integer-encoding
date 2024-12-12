@@ -5,20 +5,25 @@ use crate::huffman::{EncodeParams, HuffmanEncoder, IntegerHistogram};
 
 use crate::graphs::{estimator::HuffmanEstimator, BvGraphComponent, HuffmanGraphEncoder};
 
+use super::ContextChoiceStrategy;
+
 /// Builder to construct a HuffmanGraphEncoder, it requires an estimator that implements the Encode
 /// trait and is used for estimating the adjacency list size of each node during the process of
 /// reference selection.
-pub struct HuffmanGraphEncoderBuilder<EP: EncodeParams, EE: Encode> {
+pub struct HuffmanGraphEncoderBuilder<EP: EncodeParams, EE: Encode, S: ContextChoiceStrategy> {
     estimator: EE,
+    context_strategy: S,
     data: IntegerHistogram<EP>,
 }
 
-impl<EP: EncodeParams, EE: Encode> HuffmanGraphEncoderBuilder<EP, EE> {
+impl<EP: EncodeParams, EE: Encode, S: ContextChoiceStrategy> HuffmanGraphEncoderBuilder<EP, EE, S> {
     // TODO: for now num_contexts is the number of components
-    pub fn new(num_symbols: usize, estimator: EE) -> Self {
+    pub fn new(num_symbols: usize, estimator: EE, context_choice_strategy: S) -> Self {
+        let contexts = context_choice_strategy.num_contexts();
         Self {
             estimator,
-            data: IntegerHistogram::new(BvGraphComponent::COMPONENTS, num_symbols),
+            context_strategy: context_choice_strategy,
+            data: IntegerHistogram::new(contexts, num_symbols),
         }
     }
 
@@ -26,17 +31,19 @@ impl<EP: EncodeParams, EE: Encode> HuffmanGraphEncoderBuilder<EP, EE> {
         self,
         writer: &'_ mut W,
         max_bits: usize,
-    ) -> HuffmanGraphEncoder<'_, EP, E, EE, W> {
+    ) -> HuffmanGraphEncoder<'_, EP, E, EE, W, S> {
         let encoder = HuffmanEncoder::<EP>::new(self.data, max_bits);
-        HuffmanGraphEncoder::new(encoder, self.estimator, writer)
+        HuffmanGraphEncoder::new(encoder, self.estimator, self.context_strategy, writer)
     }
 
-    pub fn build_estimator(self) -> HuffmanEstimator<EP> {
-        HuffmanEstimator::new(self.data)
+    pub fn build_estimator(self) -> HuffmanEstimator<EP, S> {
+        HuffmanEstimator::new(self.data, self.context_strategy)
     }
 }
 
-impl<EP: EncodeParams, EE: Encode> Encode for HuffmanGraphEncoderBuilder<EP, EE> {
+impl<EP: EncodeParams, EE: Encode, S: ContextChoiceStrategy> Encode
+    for HuffmanGraphEncoderBuilder<EP, EE, S>
+{
     type Error = EE::Error;
 
     fn start_node(&mut self, _node: usize) -> Result<usize, Self::Error> {
@@ -114,7 +121,9 @@ impl<EP: EncodeParams, EE: Encode> Encode for HuffmanGraphEncoderBuilder<EP, EE>
     }
 }
 
-impl<EP: EncodeParams, EE: Encode> EncodeAndEstimate for HuffmanGraphEncoderBuilder<EP, EE> {
+impl<EP: EncodeParams, EE: Encode, S: ContextChoiceStrategy> EncodeAndEstimate
+    for HuffmanGraphEncoderBuilder<EP, EE, S>
+{
     type Estimator<'a> = &'a mut EE where Self:'a;
 
     fn estimator(&mut self) -> Self::Estimator<'_> {

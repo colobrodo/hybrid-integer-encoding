@@ -1,4 +1,5 @@
 mod component;
+mod context_choice_strategy;
 pub mod estimator;
 mod huffman_graph_encoder;
 mod huffman_graph_encoder_builder;
@@ -13,6 +14,7 @@ use std::{fs::File, path::PathBuf};
 use webgraph::prelude::{SequentialLabeling, *};
 
 use component::*;
+pub use context_choice_strategy::*;
 pub use estimator::*;
 use huffman_graph_encoder::*;
 pub use huffman_graph_encoder_builder::*;
@@ -21,21 +23,29 @@ use crate::huffman::{DefaultEncodeParams, EncodeParams};
 use crate::utils::StatBitWriter;
 
 #[allow(clippy::too_many_arguments)]
-fn referece_selection_round<F: SequentialDecoderFactory, EP: EncodeParams, E: Encode>(
+fn referece_selection_round<
+    F: SequentialDecoderFactory,
+    EP: EncodeParams,
+    E: Encode,
+    S: ContextChoiceStrategy,
+>(
     graph: &BvGraphSeq<F>,
-    huffman_graph_encoder_builder: HuffmanGraphEncoderBuilder<EP, E>,
+    huffman_graph_encoder_builder: HuffmanGraphEncoderBuilder<EP, E, S>,
     max_bits: usize,
     compression_window: usize,
     max_ref_count: usize,
     min_interval_length: usize,
     msg: &str,
     pl: &mut ProgressLogger,
-) -> Result<HuffmanGraphEncoderBuilder<EP, HuffmanEstimator<EP>>> {
+) -> Result<HuffmanGraphEncoderBuilder<EP, HuffmanEstimator<EP, S>, SimpleChoiceStrategy>> {
     let num_symbols = 1 << max_bits;
     let huffman_estimator = huffman_graph_encoder_builder.build_estimator();
     // setup for the new iteration with huffman estimator
-    let mut huffman_graph_encoder_builder =
-        HuffmanGraphEncoderBuilder::<EP, _>::new(num_symbols, huffman_estimator);
+    let mut huffman_graph_encoder_builder = HuffmanGraphEncoderBuilder::<EP, _, _>::new(
+        num_symbols,
+        huffman_estimator,
+        SimpleChoiceStrategy,
+    );
     let mut bvcomp = BvComp::new(
         &mut huffman_graph_encoder_builder,
         compression_window,
@@ -75,7 +85,11 @@ pub fn convert_graph(
 
     // setup for the first iteration with Log2Estimator
     let mut huffman_graph_encoder_builder =
-        HuffmanGraphEncoderBuilder::<DefaultEncodeParams, _>::new(num_symbols, Log2Estimator);
+        HuffmanGraphEncoderBuilder::<DefaultEncodeParams, _, _>::new(
+            num_symbols,
+            Log2Estimator,
+            SimpleChoiceStrategy,
+        );
     let mut bvcomp = BvComp::new(
         &mut huffman_graph_encoder_builder,
         compression_window,
