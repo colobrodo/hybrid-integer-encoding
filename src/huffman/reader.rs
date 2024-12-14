@@ -40,8 +40,14 @@ struct HuffmanDecoderInfo {
 pub struct HuffmanReader<E: Endianness, R: BitRead<E>> {
     reader: R,
     max_bits: usize,
+    /// The Huffman decoder table
     info_: Vec<Box<[HuffmanDecoderInfo]>>,
     _marker: core::marker::PhantomData<E>,
+}
+
+pub struct HuffmanTable {
+    max_bits: usize,
+    info_: Vec<Box<[HuffmanDecoderInfo]>>,
 }
 
 fn decode_symbol_num_bits<E: Endianness, R: BitRead<E>>(
@@ -109,25 +115,55 @@ fn compute_decoder_table(
     Ok(())
 }
 
-impl<E: Endianness, R: BitRead<E>> HuffmanReader<E, R> {
-    pub fn new(reader: R, max_bits: usize, num_contexts: usize) -> Result<Self> {
+impl HuffmanTable {
+    fn new<R: BitRead<E>, E: Endianness>(
+        reader: &mut R,
+        max_bits: usize,
+        num_contexts: usize,
+    ) -> Result<Self> {
         let num_symbols = 1 << max_bits;
-        let mut reader = reader;
         let mut info = Vec::with_capacity(num_contexts);
         for _ in 0..num_contexts {
             let mut symbol_info = vec![HuffmanSymbolInfo::default(); num_symbols];
-            decode_symbol_num_bits(max_bits, &mut symbol_info, &mut reader)?;
+            decode_symbol_num_bits(max_bits, &mut symbol_info, reader)?;
             compute_symbol_bits(max_bits, &mut symbol_info);
             let mut ctx_info = vec![HuffmanDecoderInfo::default(); num_symbols];
             compute_decoder_table(max_bits, &symbol_info, &mut ctx_info)?;
             info.push(ctx_info.into_boxed_slice());
         }
         Ok(Self {
-            reader,
             max_bits,
             info_: info,
-            _marker: std::marker::PhantomData,
         })
+    }
+}
+
+impl<E: Endianness, R: BitRead<E>> HuffmanReader<E, R> {
+    /// Constructs a `HuffmanReader` by consuming the provided `BitRead` implementation.
+    /// Reads the Huffman table from the start and fully owns the bitstream.
+    pub fn from_bitreader(reader: R, max_bits: usize, num_contexts: usize) -> Result<Self> {
+        let mut reader = reader;
+        let table_decoder = HuffmanTable::new(&mut reader, max_bits, num_contexts)?;
+        Ok(HuffmanReader::new(table_decoder, reader))
+    }
+
+    /// Decodes the Huffman table from the provided BitReader without consuming it.
+    /// Returns a HuffmanReaderLoader for further operations while allowing reuse of the BitReader.
+    pub fn decode_table(
+        reader: &mut R,
+        max_bits: usize,
+        num_contexts: usize,
+    ) -> Result<HuffmanTable> {
+        HuffmanTable::new(reader, max_bits, num_contexts)
+    }
+
+    pub fn new(table: HuffmanTable, reader: R) -> Self {
+        Self {
+            reader,
+            max_bits: table.max_bits,
+            info_: table.info_,
+            _marker: std::marker::PhantomData,
+        }
     }
 }
 

@@ -14,7 +14,18 @@ pub struct HuffmanGraphDecoderFactory<
     _marker: core::marker::PhantomData<(EP, E, F, S)>,
     factory: F,
     max_bits: usize,
-    num_contexts: usize,
+}
+
+impl<EP: EncodeParams, E: Endianness, F: BitReaderFactory<E>>
+    HuffmanGraphDecoderFactory<EP, E, F, SimpleChoiceStrategy>
+{
+    pub fn new(factory: F, max_bits: usize) -> Self {
+        HuffmanGraphDecoderFactory {
+            factory,
+            max_bits,
+            _marker: std::marker::PhantomData,
+        }
+    }
 }
 
 // TODO: make this work for any context choice strategy: maybe pass a ContextChoiceStrategyFactory and implement this trait for lambdas that return
@@ -29,7 +40,9 @@ where
 
     fn new_decoder(&self) -> anyhow::Result<Self::Decoder<'_>> {
         let reader = self.factory.new_reader();
-        let huffman_reader = HuffmanReader::new(reader, self.max_bits, self.num_contexts)?;
+        let strategy = SimpleChoiceStrategy;
+        let huffman_reader =
+            HuffmanReader::from_bitreader(reader, self.max_bits, strategy.num_contexts())?;
         Ok(HuffmanGraphDecoder::new(
             huffman_reader,
             SimpleChoiceStrategy,

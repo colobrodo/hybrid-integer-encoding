@@ -178,3 +178,24 @@ pub fn convert_graph(
 
     Ok(())
 }
+
+/*
+pub fn load_graph(
+    filepath: PathBuf,
+    max_bits: usize,
+    compression_window: usize,
+    max_ref_count: usize,
+    min_interval_length: usize,
+) -> Result<()> {
+    let file_factory = FileFactory::<LE>::new(filepath)?;
+    let factory = HuffmanGraphDecoderFactory::new(file_factory, max_bits);
+    let graph = BvGraphSeq::<_>::new(
+        factory,
+        num_nodes,
+        num_arcs,
+        compression_window,
+        min_interval_length,
+    );
+    Ok(())
+}
+*/
