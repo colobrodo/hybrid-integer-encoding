@@ -185,8 +185,8 @@ fn encode_file(
 
 fn decode_file(path: PathBuf, lenght: u64, max_bits: usize, num_context: usize) -> Result<()> {
     let file = File::open(path)?;
-    let reader = BufBitReader::<LE, _>::new(WordAdapter::<u32, _>::new(BufReader::new(file)));
-    let mut reader = HuffmanReader::<LE, _>::new(reader, max_bits, num_context)?;
+    let mut reader = BufBitReader::<LE, _>::new(WordAdapter::<u32, _>::new(BufReader::new(file)));
+    let mut reader = HuffmanReader::<LE, _>::new(&mut reader, max_bits, num_context)?;
     let mut i = 0;
     while let Ok(value) = reader.read::<DefaultEncodeParams>(0) {
         // TODO: HACK: reading from mem word, read a 0 at the end of the bitstream but the lenght of the encoded file is not know
@@ -294,8 +294,8 @@ fn bench<EP: EncodeParams>(
     let mut time_per_repeat = Vec::new();
 
     for _ in 0..repeats {
-        let reader = BufBitReader::<LE, _>::new(MemWordReader::new(&binary_data));
-        let mut reader = HuffmanReader::<LE, _>::new(reader, max_bits, num_contexts)?;
+        let mut reader = BufBitReader::<LE, _>::new(MemWordReader::new(&binary_data));
+        let mut reader = HuffmanReader::<LE, _>::new(&mut reader, max_bits, num_contexts)?;
 
         let start = std::time::Instant::now();
 

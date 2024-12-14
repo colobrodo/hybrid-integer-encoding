@@ -45,8 +45,8 @@ mod tests {
             core::slice::from_raw_parts(binary_data.as_ptr() as *const u32, nsamples * 2)
         };
 
-        let reader = BufBitReader::<LE, _>::new(MemWordReader::new(binary_data));
-        let mut reader = HuffmanReader::<LE, _>::new(reader, MAX_BITS, NUM_CONTEXT).unwrap();
+        let mut reader = BufBitReader::<LE, _>::new(MemWordReader::new(binary_data));
+        let mut reader = HuffmanReader::<LE, _>::new(&mut reader, MAX_BITS, NUM_CONTEXT).unwrap();
 
         for &(ctx, original) in integers.iter() {
             let value = reader.read::<DefaultEncodeParams>(ctx as usize).unwrap();
