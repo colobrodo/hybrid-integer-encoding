@@ -14,28 +14,35 @@ pub trait ContextChoiceStrategy {
 pub struct SimpleChoiceStrategy;
 
 impl ContextChoiceStrategy for SimpleChoiceStrategy {
+    #[inline(always)]
     fn num_contexts(&self) -> usize {
         BvGraphComponent::COMPONENTS
     }
 
+    #[inline(always)]
     fn choose_context(&mut self, component: BvGraphComponent) -> u8 {
         component as u8
     }
 
+    #[inline(always)]
     fn update(&mut self, _component: BvGraphComponent, _value: u64) {}
 }
 
 /// A strategy with only one context.
+#[derive(Default)]
 pub struct SingleContextStrategy;
 
 impl ContextChoiceStrategy for SingleContextStrategy {
+    #[inline(always)]
     fn num_contexts(&self) -> usize {
         1
     }
 
+    #[inline(always)]
     fn choose_context(&mut self, _component: BvGraphComponent) -> u8 {
         0
     }
 
+    #[inline(always)]
     fn update(&mut self, _component: BvGraphComponent, _value: u64) {}
 }
