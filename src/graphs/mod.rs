@@ -1,5 +1,6 @@
 mod component;
 mod context_choice_strategy;
+pub mod decoder_factories;
 pub mod estimator;
 mod huffman_graph_decoder;
 mod huffman_graph_encoder;
@@ -16,6 +17,7 @@ use webgraph::prelude::{SequentialLabeling, *};
 
 use component::*;
 use context_choice_strategy::*;
+pub use decoder_factories::*;
 use estimator::*;
 pub use huffman_graph_decoder::*;
 use huffman_graph_encoder::*;
