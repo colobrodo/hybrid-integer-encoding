@@ -6,20 +6,27 @@ use crate::huffman::{EncodeParams, EntropyCoder, HuffmanReader};
 use super::{BvGraphComponent, ContextChoiceStrategy};
 
 pub struct HuffmanGraphDecoder<
-    'a,
     EP: EncodeParams,
     E: Endianness,
     R: BitRead<E>,
     S: ContextChoiceStrategy,
 > {
-    reader: HuffmanReader<'a, E, R>,
+    reader: HuffmanReader<E, R>,
     context_strategy: S,
     _marker: core::marker::PhantomData<EP>,
 }
 
-impl<'a, EP: EncodeParams, E: Endianness, R: BitRead<E>, S: ContextChoiceStrategy>
-    HuffmanGraphDecoder<'a, EP, E, R, S>
+impl<EP: EncodeParams, E: Endianness, R: BitRead<E>, S: ContextChoiceStrategy>
+    HuffmanGraphDecoder<EP, E, R, S>
 {
+    pub fn new(reader: HuffmanReader<E, R>, strategy: S) -> Self {
+        HuffmanGraphDecoder {
+            reader,
+            context_strategy: strategy,
+            _marker: std::marker::PhantomData,
+        }
+    }
+
     fn read(&mut self, component: BvGraphComponent) -> u64 {
         let context = self.context_strategy.choose_context(component);
         let symbol = self
@@ -32,8 +39,8 @@ impl<'a, EP: EncodeParams, E: Endianness, R: BitRead<E>, S: ContextChoiceStrateg
     }
 }
 
-impl<'a, EP: EncodeParams, E: Endianness, R: BitRead<E>, S: ContextChoiceStrategy> Decode
-    for HuffmanGraphDecoder<'a, EP, E, R, S>
+impl<EP: EncodeParams, E: Endianness, R: BitRead<E>, S: ContextChoiceStrategy> Decode
+    for HuffmanGraphDecoder<EP, E, R, S>
 {
     fn read_outdegree(&mut self) -> u64 {
         self.read(BvGraphComponent::Outdegree)

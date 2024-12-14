@@ -37,8 +37,8 @@ struct HuffmanDecoderInfo {
     symbol: u8,
 }
 
-pub struct HuffmanReader<'a, E: Endianness, R: BitRead<E>> {
-    reader: &'a mut R,
+pub struct HuffmanReader<E: Endianness, R: BitRead<E>> {
+    reader: R,
     max_bits: usize,
     info_: Vec<Box<[HuffmanDecoderInfo]>>,
     _marker: core::marker::PhantomData<E>,
@@ -109,13 +109,14 @@ fn compute_decoder_table(
     Ok(())
 }
 
-impl<'a, E: Endianness, R: BitRead<E>> HuffmanReader<'a, E, R> {
-    pub fn new(reader: &'a mut R, max_bits: usize, num_contexts: usize) -> Result<Self> {
+impl<E: Endianness, R: BitRead<E>> HuffmanReader<E, R> {
+    pub fn new(reader: R, max_bits: usize, num_contexts: usize) -> Result<Self> {
         let num_symbols = 1 << max_bits;
+        let mut reader = reader;
         let mut info = Vec::with_capacity(num_contexts);
         for _ in 0..num_contexts {
             let mut symbol_info = vec![HuffmanSymbolInfo::default(); num_symbols];
-            decode_symbol_num_bits(max_bits, &mut symbol_info, reader)?;
+            decode_symbol_num_bits(max_bits, &mut symbol_info, &mut reader)?;
             compute_symbol_bits(max_bits, &mut symbol_info);
             let mut ctx_info = vec![HuffmanDecoderInfo::default(); num_symbols];
             compute_decoder_table(max_bits, &symbol_info, &mut ctx_info)?;
@@ -130,7 +131,7 @@ impl<'a, E: Endianness, R: BitRead<E>> HuffmanReader<'a, E, R> {
     }
 }
 
-impl<'a, E: Endianness, R: BitRead<E>> EntropyCoder for HuffmanReader<'a, E, R> {
+impl<E: Endianness, R: BitRead<E>> EntropyCoder for HuffmanReader<E, R> {
     fn read_token(&mut self, context: usize) -> Result<usize> {
         let bits: u64 = self.reader.peek_bits(self.max_bits)?.cast();
         let info = self.info_[context][bits as usize];

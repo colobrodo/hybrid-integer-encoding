@@ -26,7 +26,7 @@ pub struct IntegerHistogram<EP: EncodeParams> {
     /// Total number of symbols for each context.
     totals: Vec<usize>,
     num_contexts: usize,
-    marker_: core::marker::PhantomData<EP>,
+    _marker: core::marker::PhantomData<EP>,
 }
 
 impl<EP: EncodeParams> IntegerHistogram<EP> {
@@ -37,7 +37,7 @@ impl<EP: EncodeParams> IntegerHistogram<EP> {
             ctx_histograms: histograms,
             totals: vec![0; num_contexts],
             num_contexts,
-            marker_: core::marker::PhantomData,
+            _marker: core::marker::PhantomData,
         }
     }
 
