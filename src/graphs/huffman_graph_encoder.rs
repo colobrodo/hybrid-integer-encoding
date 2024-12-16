@@ -9,8 +9,7 @@ use webgraph::prelude::*;
 use super::{BvGraphComponent, ContextChoiceStrategy};
 
 /// Encoder to compress a graph using Hybrid integer huffman encoding.
-/// This encoder can be constructed using a HuffmanGraphEncoderBuilder,
-/// and can also be used as an estimator if a MockBitWriter is used as writer
+/// This encoder can be constructed using an `HuffmanGraphEncoderBuilder`
 pub struct HuffmanGraphEncoder<
     'a,
     EP: EncodeParams,
