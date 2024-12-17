@@ -8,6 +8,7 @@ use std::{
 use dsi_bitstream::{
     impls::{BufBitReader, BufBitWriter, MemWordReader, MemWordWriterVec, WordAdapter},
     traits::{BitWrite, LE},
+    utils::CountBitWriter,
 };
 
 use epserde::prelude::*;
@@ -160,12 +161,12 @@ fn encode_file(
 
     let outfile = File::create(output_path)?;
     let writer = BufBitWriter::<LE, _>::new(WordAdapter::<u32, _>::new(outfile));
-    let mut writer = StatBitWriter::new(writer);
+    let mut writer = CountBitWriter::<LE, _>::new(writer);
     // TODO: accept from cli arguments for max bits and for number of contexts
     let encoder = HuffmanEncoder::<DefaultEncodeParams>::new(integer_data, max_bits);
 
     encoder.write_header(&mut writer)?;
-    let header_size = writer.written_bits;
+    let header_size = writer.bits_written;
     for (ctx, number) in integers {
         encoder.write(ctx, number, &mut writer)?;
     }
@@ -173,11 +174,11 @@ fn encode_file(
     writer.flush()?;
 
     if verbose {
-        println!("Written whole file using {} bits", writer.written_bits);
+        println!("Written whole file using {} bits", writer.bits_written);
         println!("Header took {} bits", header_size);
         println!(
             "Compression ration: {:.3}",
-            writer.written_bits as f64 / file_size as f64
+            writer.bits_written as f64 / file_size as f64
         );
     }
     Ok(())
@@ -271,8 +272,7 @@ fn bench<EP: EncodeParams>(
     let num_contexts = histograms.number_of_contexts();
     let encoder = HuffmanEncoder::<EP>::new(histograms, max_bits);
     let word_write = MemWordWriterVec::new(Vec::<u64>::new());
-    let writer = BufBitWriter::<LE, _>::new(word_write);
-    let mut writer = StatBitWriter::new(writer);
+    let mut writer = StatBitWriter::<LE, _>::new(BufBitWriter::<LE, _>::new(word_write));
 
     encoder.write_header(&mut writer).unwrap();
     let header_size = writer.written_bits;
