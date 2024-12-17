@@ -179,23 +179,27 @@ pub fn convert_graph(
     Ok(())
 }
 
-/*
-pub fn load_graph(
-    filepath: PathBuf,
+pub fn load_graph_seq(
+    basename: PathBuf,
     max_bits: usize,
-    compression_window: usize,
-    max_ref_count: usize,
-    min_interval_length: usize,
-) -> Result<()> {
-    let file_factory = FileFactory::<LE>::new(filepath)?;
-    let factory = HuffmanGraphDecoderFactory::new(file_factory, max_bits);
-    let graph = BvGraphSeq::<_>::new(
+) -> Result<
+    BvGraphSeq<
+        HuffmanGraphDecoderFactory<DefaultEncodeParams, LE, FileFactory<LE>, SimpleChoiceStrategy>,
+    >,
+> {
+    let properties_path = basename.with_extension(PROPERTIES_EXTENSION);
+    let (num_nodes, num_arcs, comp_flags) = parse_properties::<BE>(&properties_path)?;
+    let graph_path = basename.with_extension(GRAPH_EXTENSION);
+
+    let file_factory = FileFactory::<LE>::new(graph_path)?;
+    let factory =
+        HuffmanGraphDecoderFactory::<DefaultEncodeParams, _, _, _>::new(file_factory, max_bits);
+    let graph = BvGraphSeq::new(
         factory,
         num_nodes,
-        num_arcs,
-        compression_window,
-        min_interval_length,
+        Some(num_arcs),
+        comp_flags.compression_window,
+        comp_flags.min_interval_length,
     );
-    Ok(())
+    Ok(graph)
 }
-*/

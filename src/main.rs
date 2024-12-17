@@ -15,9 +15,9 @@ use epserde::prelude::*;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use lender::for_;
 use rand::{prelude::Distribution, rngs::SmallRng, SeedableRng};
 
-use hybrid_integer_encoding::utils::IntegerData;
 use hybrid_integer_encoding::utils::StatBitWriter;
 use hybrid_integer_encoding::{
     graphs::convert_graph,
@@ -26,6 +26,7 @@ use hybrid_integer_encoding::{
         IntegerHistogram,
     },
 };
+use hybrid_integer_encoding::{graphs::load_graph_seq, utils::IntegerData};
 
 #[derive(Parser, Debug)]
 #[clap(name = "hybrid-integer-encoding", version)]
@@ -66,6 +67,15 @@ enum Command {
 
     /// Recompress a graph using the Huffman encoder
     Graph {
+        #[clap(subcommand)]
+        command: GraphCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GraphCommand {
+    /// Measure the time taken to decode an encoded sample of random numbers
+    Convert {
         /// The basename of the graph to compress
         basename: PathBuf,
         /// The output path where the huffman compressed representation of the graph is saved
@@ -84,6 +94,16 @@ enum Command {
         /// Number of iteration of the graph compression using the huffman estimator for reference selection
         #[arg(long, default_value = "1")]
         num_rounds: usize,
+    },
+    /// Prints the edges of huffman-compressed graph in csv format
+    Read {
+        /// The basename of the graph to read
+        basename: PathBuf,
+        /// The maximum number of bits for each word of the huffman code used to compress the graph
+        #[arg(short = 'b', long, default_value = "8")]
+        max_bits: usize,
+        #[arg(long, default_value_t = ',')]
+        separator: char,
     },
 }
 
@@ -383,23 +403,39 @@ fn main() -> Result<()> {
                 )?;
             }
         },
-        Command::Graph {
-            basename,
-            output,
-            compression_window,
-            max_ref_count,
-            min_interval_length,
-            max_bits,
-            num_rounds,
-        } => convert_graph(
-            basename,
-            output,
-            max_bits,
-            compression_window,
-            max_ref_count,
-            min_interval_length,
-            num_rounds,
-        )?,
+        Command::Graph { command } => match command {
+            GraphCommand::Convert {
+                basename,
+                output,
+                compression_window,
+                max_ref_count,
+                min_interval_length,
+                max_bits,
+                num_rounds,
+            } => {
+                convert_graph(
+                    basename,
+                    output,
+                    max_bits,
+                    compression_window,
+                    max_ref_count,
+                    min_interval_length,
+                    num_rounds,
+                )?;
+            }
+            GraphCommand::Read {
+                basename,
+                max_bits,
+                separator,
+            } => {
+                let graph = load_graph_seq(basename, max_bits)?;
+                for_!((src, succ) in graph {
+                    for dst in succ {
+                        println!("{}{}{}", src, separator, dst);
+                    }
+                });
+            }
+        },
     }
 
     Ok(())
