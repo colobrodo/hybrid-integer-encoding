@@ -15,7 +15,7 @@ use epserde::prelude::*;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use lender::for_;
+use lender::{for_, Lender};
 use rand::{prelude::Distribution, rngs::SmallRng, SeedableRng};
 
 use hybrid_integer_encoding::utils::StatBitWriter;
@@ -27,6 +27,7 @@ use hybrid_integer_encoding::{
     },
 };
 use hybrid_integer_encoding::{graphs::load_graph_seq, utils::IntegerData};
+use webgraph::traits::SequentialGraph;
 
 #[derive(Parser, Debug)]
 #[clap(name = "hybrid-integer-encoding", version)]
@@ -104,6 +105,16 @@ enum GraphCommand {
         max_bits: usize,
         #[arg(long, default_value_t = ',')]
         separator: char,
+    },
+    /// Bench the sequential access on a huffman compressed graph
+    Bench {
+        /// The basename of the graph to read
+        basename: PathBuf,
+        /// The maximum number of bits for each word of the huffman code used to compress the graph
+        #[arg(short = 'b', long, default_value = "8")]
+        max_bits: usize,
+        #[arg(short = 'R', long, default_value = "10")]
+        repeats: usize,
     },
 }
 
@@ -435,8 +446,34 @@ fn main() -> Result<()> {
                     }
                 });
             }
+            GraphCommand::Bench {
+                basename,
+                max_bits,
+                repeats,
+            } => {
+                let graph = load_graph_seq(basename, max_bits)?;
+                bench_seq(graph, repeats);
+            }
         },
     }
 
     Ok(())
+}
+
+fn bench_seq(graph: impl SequentialGraph, repeats: usize) {
+    for _ in 0..repeats {
+        let mut c: u64 = 0;
+
+        let start = std::time::Instant::now();
+        let mut iter = graph.iter();
+        while let Some((_, succ)) = iter.next() {
+            c += succ.into_iter().count() as u64;
+        }
+        println!(
+            "Sequential:{:>20} ns/arc",
+            (start.elapsed().as_secs_f64() / c as f64) * 1e9
+        );
+
+        assert_eq!(c, graph.num_arcs_hint().unwrap());
+    }
 }
