@@ -706,6 +706,7 @@ dependencies = [
  "dsi-progress-logger",
  "epserde",
  "lender",
+ "log",
  "rand",
  "stderrlog",
  "webgraph",

@@ -357,6 +357,8 @@ fn bench<EP: EncodeParams>(
 fn main() -> Result<()> {
     stderrlog::new().verbosity(2).init()?;
 
+    let start = std::time::Instant::now();
+
     let args = App::parse();
     match args.command {
         Command::Encode {
@@ -456,6 +458,8 @@ fn main() -> Result<()> {
             }
         },
     }
+
+    log::info!("The command took {}s", start.elapsed().as_secs_f64());
 
     Ok(())
 }
