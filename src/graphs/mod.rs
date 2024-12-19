@@ -183,14 +183,10 @@ pub fn convert_graph(
             .write_gamma(0)
             .context("Could not write initial delta")?;
 
-        let mut bitstream_len = 0;
-        let mut real_num_nodes = 0;
         for_! ( (_, successors) in seq_graph {
             let delta = bvcomp.push(successors).context("Could not push successors")?;
-            bitstream_len += delta;
             offsets_writer.write_gamma(delta).context("Could not write delta")?;
             pl.update();
-            real_num_nodes += 1;
         });
     } else {
         for_![ (_, successors) in seq_graph {
