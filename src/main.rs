@@ -355,7 +355,7 @@ fn bench<EP: EncodeParams>(
 }
 
 fn main() -> Result<()> {
-    stderrlog::new().verbosity(2).init()?;
+    let _ = env_logger::builder().try_init();
 
     let start = std::time::Instant::now();
 
