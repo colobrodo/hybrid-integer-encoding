@@ -13,6 +13,7 @@ use dsi_bitstream::traits::{BE, LE};
 use dsi_bitstream::utils::CountBitWriter;
 use dsi_progress_logger::prelude::*;
 use lender::for_;
+use std::io::BufWriter;
 use std::{fs::File, path::PathBuf};
 use webgraph::prelude::{SequentialLabeling, *};
 
@@ -144,7 +145,7 @@ pub fn convert_graph(
     pl.start("Building the encoder after estimation rounds...");
 
     let outfile = File::create(output_path)?;
-    let writer = BufBitWriter::<LE, _>::new(WordAdapter::<u32, _>::new(outfile));
+    let writer = BufBitWriter::<LE, _>::new(WordAdapter::<u32, _>::new(BufWriter::new(outfile)));
     let mut writer = CountBitWriter::<LE, _>::new(writer);
     let mut huffman_graph_encoder = huffman_graph_encoder_builder.build(&mut writer, max_bits);
 
