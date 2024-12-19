@@ -80,7 +80,7 @@ enum GraphCommand {
         /// The basename of the graph to compress
         basename: PathBuf,
         /// The output path where the huffman compressed representation of the graph is saved
-        output: PathBuf,
+        output_basename: PathBuf,
         /// Compression window size
         #[arg(short = 'w', long, default_value = "7")]
         compression_window: usize,
@@ -89,12 +89,15 @@ enum GraphCommand {
         max_ref_count: usize,
         #[arg(short = 'l', long, default_value = "4")]
         min_interval_length: usize,
-        /// The maximum number of bits used for each word of the huffman code
+        /// The maximum number of bits used for each word of the huffman code.
         #[arg(short = 'b', long, default_value = "8")]
         max_bits: usize,
-        /// Number of iteration of the graph compression using the huffman estimator for reference selection
+        /// Number of iteration of the graph compression using the huffman estimator for reference selection.
         #[arg(long, default_value = "1")]
         num_rounds: usize,
+        /// Creates the offsets file at the end of the conversion.
+        #[arg(long, default_value = "false")]
+        build_offsets: bool,
     },
     /// Prints the edges of huffman-compressed graph in csv format
     Read {
@@ -419,21 +422,23 @@ fn main() -> Result<()> {
         Command::Graph { command } => match command {
             GraphCommand::Convert {
                 basename,
-                output,
+                output_basename,
                 compression_window,
                 max_ref_count,
                 min_interval_length,
                 max_bits,
                 num_rounds,
+                build_offsets,
             } => {
                 convert_graph(
                     basename,
-                    output,
+                    output_basename,
                     max_bits,
                     compression_window,
                     max_ref_count,
                     min_interval_length,
                     num_rounds,
+                    build_offsets,
                 )?;
             }
             GraphCommand::Read {

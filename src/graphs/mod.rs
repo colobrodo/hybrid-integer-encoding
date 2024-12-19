@@ -6,7 +6,8 @@ mod huffman_graph_decoder;
 mod huffman_graph_encoder;
 mod huffman_graph_encoder_builder;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
+use dsi_bitstream::codes::GammaWrite;
 use dsi_bitstream::impls::WordAdapter;
 use dsi_bitstream::prelude::BufBitWriter;
 use dsi_bitstream::traits::{BE, LE};
@@ -73,12 +74,13 @@ fn referece_selection_round<
 
 pub fn convert_graph(
     basename: PathBuf,
-    output_path: PathBuf,
+    output_basename: PathBuf,
     max_bits: usize,
     compression_window: usize,
     max_ref_count: usize,
     min_interval_length: usize,
     num_rounds: usize,
+    build_offsets: bool,
 ) -> Result<()> {
     assert!(num_rounds >= 1, "num_rounds must be at least 1");
     let mut pl = ProgressLogger::default();
@@ -144,6 +146,7 @@ pub fn convert_graph(
 
     pl.start("Building the encoder after estimation rounds...");
 
+    let output_path = output_basename.with_extension(GRAPH_EXTENSION);
     let outfile = File::create(output_path)?;
     let writer = BufBitWriter::<LE, _>::new(WordAdapter::<u32, _>::new(BufWriter::new(outfile)));
     let mut writer = CountBitWriter::<LE, _>::new(writer);
@@ -165,11 +168,36 @@ pub fn convert_graph(
     pl.item_name("node")
         .expected_updates(Some(seq_graph.num_nodes()));
     pl.start("Compressing the graph...");
+
     // second iteration: build a model with the entropy mock writer
-    for_![ (_, succ) in seq_graph {
-        bvcomp.push(succ)?;
-        pl.update();
-    }];
+    if build_offsets {
+        let offsets_path = output_basename.with_extension(OFFSETS_EXTENSION);
+        let file = std::fs::File::create(&offsets_path)
+            .with_context(|| format!("Could not create {}", offsets_path.display()))?;
+        // create a bit writer on the file
+        let mut offsets_writer = <BufBitWriter<LE, _>>::new(<WordAdapter<usize, _>>::new(
+            BufWriter::with_capacity(1 << 20, file),
+        ));
+
+        offsets_writer
+            .write_gamma(0)
+            .context("Could not write initial delta")?;
+
+        let mut bitstream_len = 0;
+        let mut real_num_nodes = 0;
+        for_! ( (_, successors) in seq_graph {
+            let delta = bvcomp.push(successors).context("Could not push successors")?;
+            bitstream_len += delta;
+            offsets_writer.write_gamma(delta).context("Could not write delta")?;
+            pl.update();
+            real_num_nodes += 1;
+        });
+    } else {
+        for_![ (_, successors) in seq_graph {
+            bvcomp.push(successors).context("Could not push successors")?;
+            pl.update();
+        }];
+    }
     pl.done();
 
     println!(
