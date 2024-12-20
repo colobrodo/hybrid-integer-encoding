@@ -26,7 +26,10 @@ use hybrid_integer_encoding::{
         IntegerHistogram,
     },
 };
-use hybrid_integer_encoding::{graphs::load_graph_seq, utils::IntegerData};
+use hybrid_integer_encoding::{
+    graphs::{build_offsets, load_graph_seq},
+    utils::IntegerData,
+};
 use webgraph::traits::SequentialGraph;
 
 #[derive(Parser, Debug)]
@@ -98,6 +101,14 @@ enum GraphCommand {
         /// Creates the offsets file at the end of the conversion.
         #[arg(long, default_value = "false")]
         build_offsets: bool,
+    },
+    /// Create the offsets file from an existing huffman compressed graph
+    Offsets {
+        /// The basename of the graph to read
+        basename: PathBuf,
+        /// The maximum number of bits for each word of the huffman code used to compress the graph
+        #[arg(short = 'b', long, default_value = "8")]
+        max_bits: usize,
     },
     /// Prints the edges of huffman-compressed graph in csv format
     Read {
@@ -460,6 +471,10 @@ fn main() -> Result<()> {
             } => {
                 let graph = load_graph_seq(basename, max_bits)?;
                 bench_seq(graph, repeats);
+            }
+            GraphCommand::Offsets { basename, max_bits } => {
+                let graph = load_graph_seq(basename.clone(), max_bits)?;
+                build_offsets(graph, basename)?;
             }
         },
     }

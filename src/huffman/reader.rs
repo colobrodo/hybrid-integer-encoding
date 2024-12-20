@@ -1,4 +1,4 @@
-use dsi_bitstream::traits::{BitRead, Endianness};
+use dsi_bitstream::traits::{BitRead, BitSeek, Endianness};
 
 use super::{compute_symbol_bits, compute_symbol_len_bits, EncodeParams, HuffmanSymbolInfo};
 use common_traits::*;
@@ -179,5 +179,17 @@ impl<E: Endianness, R: BitRead<E>> EntropyCoder for HuffmanReader<E, R> {
     fn read_bits(&mut self, n: usize) -> Result<u64> {
         let bits = self.reader.read_bits(n)?;
         Ok(bits)
+    }
+}
+
+impl<E: Endianness, R: BitRead<E> + BitSeek> BitSeek for HuffmanReader<E, R> {
+    type Error = <R as BitSeek>::Error;
+
+    fn bit_pos(&mut self) -> Result<u64, Self::Error> {
+        self.reader.bit_pos()
+    }
+
+    fn set_bit_pos(&mut self, bit_pos: u64) -> Result<(), Self::Error> {
+        self.reader.set_bit_pos(bit_pos)
     }
 }

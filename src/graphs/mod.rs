@@ -10,7 +10,7 @@ use anyhow::{Context, Result};
 use dsi_bitstream::codes::GammaWrite;
 use dsi_bitstream::impls::WordAdapter;
 use dsi_bitstream::prelude::BufBitWriter;
-use dsi_bitstream::traits::{BE, LE};
+use dsi_bitstream::traits::{BitSeek, BE, LE};
 use dsi_bitstream::utils::CountBitWriter;
 use dsi_progress_logger::prelude::*;
 use lender::for_;
@@ -155,7 +155,7 @@ pub fn convert_graph(
     pl.done();
 
     pl.info(format_args!("Writing header for the graph..."));
-    huffman_graph_encoder.write_header()?;
+    let header_size = huffman_graph_encoder.write_header()?;
 
     let mut bvcomp = BvComp::new(
         &mut huffman_graph_encoder,
@@ -180,11 +180,13 @@ pub fn convert_graph(
         ));
 
         offsets_writer
-            .write_gamma(0)
+            .write_gamma(header_size as _)
             .context("Could not write initial delta")?;
+        println!("{}", header_size); // DEBUG:
 
         for_! [ (_, successors) in seq_graph {
             let delta = bvcomp.push(successors).context("Could not push successors")?;
+            println!("{}", delta); // DEBUG:
             offsets_writer.write_gamma(delta).context("Could not write delta")?;
             pl.update();
         }];
@@ -204,6 +206,39 @@ pub fn convert_graph(
     Ok(())
 }
 
+// TODO: add progress logger
+pub fn build_offsets<F: SequentialDecoderFactory>(
+    graph: BvGraphSeq<F>,
+    basename: PathBuf,
+) -> Result<()>
+where
+    for<'a> F::Decoder<'a>: Decode + BitSeek,
+{
+    let offsets_path = basename.with_extension(OFFSETS_EXTENSION);
+    let file = std::fs::File::create(&offsets_path)
+        .with_context(|| format!("Could not create {}", offsets_path.display()))?;
+    // create a bit writer on the file
+    let mut offsets_writer = <BufBitWriter<LE, _>>::new(<WordAdapter<usize, _>>::new(
+        BufWriter::with_capacity(1 << 20, file),
+    ));
+
+    let mut offset = 0;
+    let mut degs_iter = graph.offset_deg_iter();
+    for (new_offset, _) in &mut degs_iter {
+        // write where
+        offsets_writer
+            .write_gamma(new_offset - offset)
+            .context("Could not write gamma")?;
+        println!("{}", new_offset - offset); // DEBUG:
+        offset = new_offset;
+        // decode the next nodes so we know where the next node_id starts
+    }
+    // write the last offset, this is done to avoid decoding the last node
+    offsets_writer
+        .write_gamma((degs_iter.get_pos() - offset) as _)
+        .context("Could not write final gamma")?;
+    Ok(())
+}
 pub fn load_graph_seq(
     basename: PathBuf,
     max_bits: usize,

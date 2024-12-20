@@ -185,9 +185,10 @@ impl<EP: EncodeParams> HuffmanEncoder<EP> {
     // Very simple encoding: number of symbols (16 bits) followed by, for each
     // symbol, 1 bit for presence/absence, and 4 bits for symbol length if present.
     // TODO: short  encoding for empty ctxs, RLE for missing symbols.
-    pub fn write_header<E: Endianness>(&self, writer: &mut impl BitWrite<E>) -> Result<()> {
+    pub fn write_header<E: Endianness>(&self, writer: &mut impl BitWrite<E>) -> Result<usize> {
         // number of bits needed to represent the length of each symbol in the header
         let symbol_len_bits = compute_symbol_len_bits(self.max_bits as u32);
+        let mut total_bits_written = 0;
         for info in self.info_.iter() {
             let mut ms = 0;
             for (i, sym_info) in info.iter().enumerate() {
@@ -196,16 +197,21 @@ impl<EP: EncodeParams> HuffmanEncoder<EP> {
                 }
             }
 
-            writer.write_bits(ms as u64, self.max_bits)?;
+            total_bits_written += writer.write_bits(ms as u64, self.max_bits)?;
             for sym_info in info.iter().take(ms + 1) {
                 if sym_info.present != 0 {
                     writer.write_bits(1, 1)?;
                     writer.write_bits(sym_info.nbits as u64 - 1, symbol_len_bits as usize)?;
+                    println!("total {} len {} + 1", total_bits_written, symbol_len_bits);
+                    total_bits_written += symbol_len_bits as usize + 1;
+                    println!("result sum {} + 1", total_bits_written)
                 } else {
                     writer.write_bits(0, 1)?;
+                    total_bits_written += 1;
+                    println!("total {}", total_bits_written)
                 }
             }
         }
-        Ok(())
+        Ok(total_bits_written)
     }
 }

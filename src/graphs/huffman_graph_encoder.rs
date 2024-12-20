@@ -42,7 +42,7 @@ impl<'a, EP: EncodeParams, E: Endianness, EE: Encode, W: BitWrite<E>, S: Context
         }
     }
 
-    pub fn write_header(&mut self) -> Result<()> {
+    pub fn write_header(&mut self) -> Result<usize> {
         self.encoder.write_header(self.writer)
     }
 

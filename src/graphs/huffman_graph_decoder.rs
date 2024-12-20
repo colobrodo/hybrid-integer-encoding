@@ -1,4 +1,4 @@
-use dsi_bitstream::traits::{BitRead, Endianness};
+use dsi_bitstream::traits::{BitRead, BitSeek, Endianness};
 use webgraph::prelude::*;
 
 use crate::huffman::{EncodeParams, EntropyCoder, HuffmanReader};
@@ -76,5 +76,19 @@ impl<EP: EncodeParams, E: Endianness, R: BitRead<E>, S: ContextChoiceStrategy> D
 
     fn read_residual(&mut self) -> u64 {
         self.read(BvGraphComponent::Residual)
+    }
+}
+
+impl<EP: EncodeParams, E: Endianness, R: BitRead<E> + BitSeek, S: ContextChoiceStrategy> BitSeek
+    for HuffmanGraphDecoder<EP, E, R, S>
+{
+    type Error = <R as BitSeek>::Error;
+
+    fn bit_pos(&mut self) -> Result<u64, Self::Error> {
+        self.reader.bit_pos()
+    }
+
+    fn set_bit_pos(&mut self, bit_pos: u64) -> Result<(), Self::Error> {
+        self.reader.set_bit_pos(bit_pos)
     }
 }
