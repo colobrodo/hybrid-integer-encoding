@@ -1,9 +1,11 @@
 use dsi_bitstream::traits::{BitRead, BitSeek, Endianness};
+use epserde::deser::MemCase;
+use sux::traits::IndexedSeq;
 use webgraph::prelude::*;
 
 use crate::huffman::{EncodeParams, EntropyCoder, HuffmanReader};
 
-use super::{BvGraphComponent, ContextChoiceStrategy};
+use super::{BvGraphComponent, ContextChoiceStrategy, SimpleChoiceStrategy};
 
 pub struct HuffmanGraphDecoder<
     EP: EncodeParams,
@@ -90,5 +92,108 @@ impl<EP: EncodeParams, E: Endianness, R: BitRead<E> + BitSeek, S: ContextChoiceS
 
     fn set_bit_pos(&mut self, bit_pos: u64) -> Result<(), Self::Error> {
         self.reader.set_bit_pos(bit_pos)
+    }
+}
+
+pub struct SequentialHuffmanDecoderFactory<
+    EP: EncodeParams,
+    E: Endianness,
+    F: BitReaderFactory<E>,
+    S: ContextChoiceStrategy,
+> {
+    _marker: core::marker::PhantomData<(EP, E, F, S)>,
+    factory: F,
+    max_bits: usize,
+}
+
+impl<EP: EncodeParams, E: Endianness, F: BitReaderFactory<E>>
+    SequentialHuffmanDecoderFactory<EP, E, F, SimpleChoiceStrategy>
+{
+    pub fn new(factory: F, max_bits: usize) -> Self {
+        SequentialHuffmanDecoderFactory {
+            factory,
+            max_bits,
+            _marker: std::marker::PhantomData,
+        }
+    }
+}
+
+// TODO: make this work for any context choice strategy: maybe pass a ContextChoiceStrategyFactory and implement this trait for lambdas that return
+//       ContextChoiceStrategy to pass SimpleChoiceStartegy::default and do not create other useless objects
+impl<EP: EncodeParams, E: Endianness, F: BitReaderFactory<E>> SequentialDecoderFactory
+    for SequentialHuffmanDecoderFactory<EP, E, F, SimpleChoiceStrategy>
+where
+    for<'a> <F as BitReaderFactory<E>>::BitReader<'a>: BitRead<E>,
+{
+    type Decoder<'a> = HuffmanGraphDecoder<EP, E, <F as BitReaderFactory<E>>::BitReader<'a>, SimpleChoiceStrategy>
+    where Self:'a;
+
+    fn new_decoder(&self) -> anyhow::Result<Self::Decoder<'_>> {
+        let reader = self.factory.new_reader();
+        let strategy = SimpleChoiceStrategy;
+        let huffman_reader =
+            HuffmanReader::from_bitreader(reader, self.max_bits, strategy.num_contexts())?;
+        Ok(HuffmanGraphDecoder::new(
+            huffman_reader,
+            SimpleChoiceStrategy,
+        ))
+    }
+}
+
+pub struct RandomAccessHuffmanDecoderFactory<
+    EP: EncodeParams,
+    E: Endianness,
+    F: BitReaderFactory<E>,
+    OFF: IndexedSeq<Input = usize, Output = usize>,
+    S: ContextChoiceStrategy,
+> {
+    _marker: core::marker::PhantomData<(EP, E, F, S)>,
+    factory: F,
+    /// The offsets into the data.
+    offsets: MemCase<OFF>,
+    max_bits: usize,
+}
+
+impl<
+        EP: EncodeParams,
+        E: Endianness,
+        OFF: IndexedSeq<Input = usize, Output = usize>,
+        F: BitReaderFactory<E>,
+    > RandomAccessHuffmanDecoderFactory<EP, E, F, OFF, SimpleChoiceStrategy>
+{
+    pub fn new(factory: F, offsets: MemCase<OFF>, max_bits: usize) -> Self {
+        RandomAccessHuffmanDecoderFactory {
+            offsets,
+            factory,
+            max_bits,
+            _marker: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<
+        EP: EncodeParams,
+        E: Endianness,
+        OFF: IndexedSeq<Input = usize, Output = usize>,
+        F: BitReaderFactory<E>,
+    > RandomAccessDecoderFactory
+    for RandomAccessHuffmanDecoderFactory<EP, E, F, OFF, SimpleChoiceStrategy>
+where
+    for<'a> <F as BitReaderFactory<E>>::BitReader<'a>: BitRead<E> + BitSeek,
+{
+    type Decoder<'a> = HuffmanGraphDecoder<EP, E, <F as BitReaderFactory<E>>::BitReader<'a>, SimpleChoiceStrategy>
+    where Self:'a;
+
+    fn new_decoder(&self, node: usize) -> anyhow::Result<Self::Decoder<'_>> {
+        let mut reader = self.factory.new_reader();
+        let strategy = SimpleChoiceStrategy;
+        let table =
+            HuffmanReader::decode_table(&mut reader, self.max_bits, strategy.num_contexts())?;
+        reader.set_bit_pos(self.offsets.get(node) as u64)?;
+        let huffman_reader = HuffmanReader::new(table, reader);
+        Ok(HuffmanGraphDecoder::new(
+            huffman_reader,
+            SimpleChoiceStrategy,
+        ))
     }
 }

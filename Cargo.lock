@@ -707,6 +707,7 @@ dependencies = [
  "lender",
  "log",
  "rand",
+ "sux",
  "webgraph",
  "zipf",
 ]

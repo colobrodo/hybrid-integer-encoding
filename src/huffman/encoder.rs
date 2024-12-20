@@ -202,13 +202,10 @@ impl<EP: EncodeParams> HuffmanEncoder<EP> {
                 if sym_info.present != 0 {
                     writer.write_bits(1, 1)?;
                     writer.write_bits(sym_info.nbits as u64 - 1, symbol_len_bits as usize)?;
-                    println!("total {} len {} + 1", total_bits_written, symbol_len_bits);
                     total_bits_written += symbol_len_bits as usize + 1;
-                    println!("result sum {} + 1", total_bits_written)
                 } else {
                     writer.write_bits(0, 1)?;
                     total_bits_written += 1;
-                    println!("total {}", total_bits_written)
                 }
             }
         }
