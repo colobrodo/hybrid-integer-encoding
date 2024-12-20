@@ -16,9 +16,8 @@ use epserde::prelude::*;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use lender::{for_, Lender};
-use rand::{prelude::Distribution, rngs::SmallRng, SeedableRng};
+use rand::{prelude::Distribution, rngs::SmallRng, Rng, SeedableRng};
 
-use hybrid_integer_encoding::utils::StatBitWriter;
 use hybrid_integer_encoding::{
     graphs::convert_graph,
     huffman::{
@@ -26,8 +25,9 @@ use hybrid_integer_encoding::{
         IntegerHistogram,
     },
 };
+use hybrid_integer_encoding::{graphs::load_graph, utils::StatBitWriter};
 use hybrid_integer_encoding::{graphs::load_graph_seq, utils::IntegerData};
-use webgraph::traits::SequentialGraph;
+use webgraph::traits::{RandomAccessGraph, SequentialGraph};
 
 #[derive(Parser, Debug)]
 #[clap(name = "hybrid-integer-encoding", version)]
@@ -118,6 +118,23 @@ enum GraphCommand {
         max_bits: usize,
         #[arg(short = 'R', long, default_value = "10")]
         repeats: usize,
+    },
+    /// Bench the random access on a huffman compressed graph
+    BenchRandom {
+        /// The basename of the graph to read
+        basename: PathBuf,
+        /// The maximum number of bits for each word of the huffman code used to compress the graph
+        #[arg(short = 'b', long, default_value = "8")]
+        max_bits: usize,
+        /// The number of random sampled nodes to bench the read time of their adjacency list
+        #[arg(short = 'r', long, default_value = "1000")]
+        random: usize,
+        /// The number of repetition performed on the test
+        #[arg(short = 'R', long, default_value = "10")]
+        repeats: usize,
+        /// Seed to reproduce the experiment
+        #[arg(short = 's', long, default_value = "0")]
+        seed: u64,
     },
 }
 
@@ -267,7 +284,7 @@ fn bench_file<EP: EncodeParams>(
     Ok(())
 }
 
-fn bench_random<EP: EncodeParams>(
+fn bench_random_sample<EP: EncodeParams>(
     repeats: usize,
     nsamples: u64,
     max_bits: usize,
@@ -396,7 +413,7 @@ fn main() -> Result<()> {
                 seed,
                 huffman_arguments,
             } => {
-                bench_random::<DefaultEncodeParams>(
+                bench_random_sample::<DefaultEncodeParams>(
                     bench_arguments.repeats,
                     samples,
                     huffman_arguments.max_bits,
@@ -461,6 +478,16 @@ fn main() -> Result<()> {
                 let graph = load_graph_seq(basename, max_bits)?;
                 bench_seq(graph, repeats);
             }
+            GraphCommand::BenchRandom {
+                basename,
+                max_bits,
+                random,
+                repeats,
+                seed,
+            } => {
+                let graph = load_graph(basename, max_bits)?;
+                bench_random_graph(graph, seed, random, repeats);
+            }
         },
     }
 
@@ -484,5 +511,28 @@ fn bench_seq(graph: impl SequentialGraph, repeats: usize) {
         );
 
         assert_eq!(c, graph.num_arcs_hint().unwrap());
+    }
+}
+
+fn bench_random_graph(graph: impl RandomAccessGraph, seed: u64, samples: usize, repeats: usize) {
+    // Random-access speed test
+    for _ in 0..repeats {
+        let mut rng = SmallRng::seed_from_u64(seed);
+        let mut c: u64 = 0;
+        let num_nodes = graph.num_nodes();
+        let start = std::time::Instant::now();
+        for _ in 0..samples {
+            c += black_box(
+                graph
+                    .successors(rng.gen_range(0..num_nodes))
+                    .into_iter()
+                    .count() as u64,
+            );
+        }
+
+        println!(
+            "Random:    {:>20} ns/arc",
+            (start.elapsed().as_secs_f64() / c as f64) * 1e9
+        );
     }
 }

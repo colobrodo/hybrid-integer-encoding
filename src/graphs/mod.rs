@@ -6,15 +6,14 @@ mod huffman_graph_encoder;
 mod huffman_graph_encoder_builder;
 
 use anyhow::{Context, Result};
-use dsi_bitstream::codes::GammaWrite;
-use dsi_bitstream::impls::WordAdapter;
-use dsi_bitstream::prelude::BufBitWriter;
-use dsi_bitstream::traits::{BE, LE};
-use dsi_bitstream::utils::CountBitWriter;
+use dsi_bitstream::prelude::*;
 use dsi_progress_logger::prelude::*;
+use epserde::deser::{Deserialize, MemCase};
 use lender::for_;
 use std::io::BufWriter;
 use std::{fs::File, path::PathBuf};
+use sux::prelude::*;
+use webgraph::cli::build::ef::{build_eliasfano, CliArgs};
 use webgraph::prelude::{SequentialLabeling, *};
 
 use component::*;
@@ -173,7 +172,7 @@ pub fn convert_graph(
         let file = std::fs::File::create(&offsets_path)
             .with_context(|| format!("Could not create {}", offsets_path.display()))?;
         // create a bit writer on the file
-        let mut offsets_writer = <BufBitWriter<LE, _>>::new(<WordAdapter<usize, _>>::new(
+        let mut offsets_writer = <BufBitWriter<BE, _>>::new(<WordAdapter<usize, _>>::new(
             BufWriter::with_capacity(1 << 20, file),
         ));
 
@@ -228,6 +227,54 @@ pub fn load_graph_seq(
         factory,
         num_nodes,
         Some(num_arcs),
+        comp_flags.compression_window,
+        comp_flags.min_interval_length,
+    );
+    Ok(graph)
+}
+
+pub fn load_graph(
+    basename: PathBuf,
+    max_bits: usize,
+) -> Result<
+    BvGraph<
+        RandomAccessHuffmanDecoderFactory<
+            LE,
+            FileFactory<LE>,
+            EliasFano<SelectAdaptConst<BitVec<Box<[usize]>>, Box<[usize]>, 12, 4>>,
+            SimpleChoiceStrategy,
+        >,
+    >,
+> {
+    let eliasfano_path = basename.with_extension(EF_EXTENSION);
+    if !eliasfano_path.exists() {
+        let offsets_path = basename.with_extension(OFFSETS_EXTENSION);
+        assert!(offsets_path.exists(), "In order to load the graph from random access you should first convert it building the offsets with the option 'build-offsets' in the 'convert' command");
+        build_eliasfano::<LE>(CliArgs {
+            src: basename.clone(),
+            n: None,
+        })
+        .context("trying to build elias-fano for the current offsets")?;
+        assert!(eliasfano_path.exists());
+    }
+
+    let properties_path = basename.with_extension(PROPERTIES_EXTENSION);
+    let (num_nodes, num_arcs, comp_flags) = parse_properties::<BE>(&properties_path)?;
+
+    let graph_path = basename.with_extension(GRAPH_EXTENSION);
+    let file_factory = FileFactory::<LE>::new(graph_path)?;
+
+    let ef = EF::load_full(eliasfano_path)?;
+    let factory = RandomAccessHuffmanDecoderFactory::<_, _, _, _, DefaultEncodeParams>::new(
+        file_factory,
+        MemCase::encase(ef),
+        max_bits,
+    );
+
+    let graph = BvGraph::new(
+        factory,
+        num_nodes,
+        num_arcs,
         comp_flags.compression_window,
         comp_flags.min_interval_length,
     );
