@@ -156,7 +156,6 @@ pub struct RandomAccessHuffmanDecoderFactory<
     //TODO: for now we support only stateless context choice strategy
     strategy: S,
     table: HuffmanTable,
-    max_bits: usize,
 }
 
 impl<
@@ -183,7 +182,6 @@ where
             factory,
             table,
             strategy,
-            max_bits,
             _marker: std::marker::PhantomData,
         })
     }
