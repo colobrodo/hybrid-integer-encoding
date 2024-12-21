@@ -31,6 +31,7 @@ impl<EP: EncodeParams, E: Endianness, R: BitRead<E>, S: ContextChoiceStrategy>
         }
     }
 
+    #[inline(always)]
     fn read(&mut self, component: BvGraphComponent) -> u64 {
         let context = self.context_strategy.choose_context(component);
         let symbol = self
@@ -46,38 +47,47 @@ impl<EP: EncodeParams, E: Endianness, R: BitRead<E>, S: ContextChoiceStrategy>
 impl<EP: EncodeParams, E: Endianness, R: BitRead<E>, S: ContextChoiceStrategy> Decode
     for HuffmanGraphDecoder<EP, E, R, S>
 {
+    #[inline(always)]
     fn read_outdegree(&mut self) -> u64 {
         self.read(BvGraphComponent::Outdegree)
     }
 
+    #[inline(always)]
     fn read_reference_offset(&mut self) -> u64 {
         self.read(BvGraphComponent::ReferenceOffset)
     }
 
+    #[inline(always)]
     fn read_block_count(&mut self) -> u64 {
         self.read(BvGraphComponent::BlockCount)
     }
 
+    #[inline(always)]
     fn read_block(&mut self) -> u64 {
         self.read(BvGraphComponent::Blocks)
     }
 
+    #[inline(always)]
     fn read_interval_count(&mut self) -> u64 {
         self.read(BvGraphComponent::IntervalCount)
     }
 
+    #[inline(always)]
     fn read_interval_start(&mut self) -> u64 {
         self.read(BvGraphComponent::IntervalStart)
     }
 
+    #[inline(always)]
     fn read_interval_len(&mut self) -> u64 {
         self.read(BvGraphComponent::IntervalLen)
     }
 
+    #[inline(always)]
     fn read_first_residual(&mut self) -> u64 {
         self.read(BvGraphComponent::FirstResidual)
     }
 
+    #[inline(always)]
     fn read_residual(&mut self) -> u64 {
         self.read(BvGraphComponent::Residual)
     }
