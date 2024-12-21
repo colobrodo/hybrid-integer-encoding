@@ -3,7 +3,6 @@ mod context_choice_strategy;
 pub mod estimator;
 mod huffman_graph_decoder;
 mod huffman_graph_encoder;
-mod huffman_graph_encoder_builder;
 
 use anyhow::{Context, Result};
 use dsi_bitstream::prelude::*;
@@ -21,7 +20,6 @@ use context_choice_strategy::*;
 use estimator::*;
 pub use huffman_graph_decoder::*;
 use huffman_graph_encoder::*;
-pub use huffman_graph_encoder_builder::*;
 
 use crate::huffman::{DefaultEncodeParams, EncodeParams};
 
