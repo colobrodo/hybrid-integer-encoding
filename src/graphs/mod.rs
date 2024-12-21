@@ -267,9 +267,10 @@ pub fn load_graph(
     let ef = EF::load_full(eliasfano_path)?;
     let factory = RandomAccessHuffmanDecoderFactory::<_, _, _, _, DefaultEncodeParams>::new(
         file_factory,
+        SimpleChoiceStrategy,
         MemCase::encase(ef),
         max_bits,
-    );
+    )?;
 
     let graph = BvGraph::new(
         factory,

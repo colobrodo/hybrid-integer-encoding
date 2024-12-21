@@ -3,7 +3,9 @@ use epserde::deser::MemCase;
 use sux::traits::IndexedSeq;
 use webgraph::prelude::*;
 
-use crate::huffman::{DefaultEncodeParams, EncodeParams, EntropyCoder, HuffmanReader};
+use crate::huffman::{
+    DefaultEncodeParams, EncodeParams, EntropyCoder, HuffmanReader, HuffmanTable,
+};
 
 use super::{BvGraphComponent, ContextChoiceStrategy, SimpleChoiceStrategy};
 
@@ -144,13 +146,16 @@ pub struct RandomAccessHuffmanDecoderFactory<
     E: Endianness,
     F: BitReaderFactory<E>,
     OFF: IndexedSeq<Input = usize, Output = usize>,
-    S: ContextChoiceStrategy,
+    S: ContextChoiceStrategy + Clone,
     EP: EncodeParams = DefaultEncodeParams,
 > {
     _marker: core::marker::PhantomData<(EP, E, F, S)>,
     factory: F,
     /// The offsets into the data.
     offsets: MemCase<OFF>,
+    //TODO: for now we support only stateless context choice strategy
+    strategy: S,
+    table: HuffmanTable,
     max_bits: usize,
 }
 
@@ -158,16 +163,29 @@ impl<
         E: Endianness,
         OFF: IndexedSeq<Input = usize, Output = usize>,
         F: BitReaderFactory<E>,
+        S: ContextChoiceStrategy + Clone,
         EP: EncodeParams,
-    > RandomAccessHuffmanDecoderFactory<E, F, OFF, SimpleChoiceStrategy, EP>
+    > RandomAccessHuffmanDecoderFactory<E, F, OFF, S, EP>
+where
+    for<'a> <F as BitReaderFactory<E>>::BitReader<'a>: BitRead<E> + BitSeek,
 {
-    pub fn new(factory: F, offsets: MemCase<OFF>, max_bits: usize) -> Self {
-        RandomAccessHuffmanDecoderFactory {
+    pub fn new(
+        factory: F,
+        strategy: S,
+        offsets: MemCase<OFF>,
+        max_bits: usize,
+    ) -> anyhow::Result<Self> {
+        let mut reader = factory.new_reader();
+        let table = HuffmanReader::decode_table(&mut reader, max_bits, strategy.num_contexts())?;
+        drop(reader);
+        Ok(RandomAccessHuffmanDecoderFactory {
             offsets,
             factory,
+            table,
+            strategy,
             max_bits,
             _marker: std::marker::PhantomData,
-        }
+        })
     }
 }
 
@@ -176,24 +194,19 @@ impl<
         OFF: IndexedSeq<Input = usize, Output = usize>,
         F: BitReaderFactory<E>,
         EP: EncodeParams,
-    > RandomAccessDecoderFactory
-    for RandomAccessHuffmanDecoderFactory<E, F, OFF, SimpleChoiceStrategy, EP>
+        S: ContextChoiceStrategy + Copy,
+    > RandomAccessDecoderFactory for RandomAccessHuffmanDecoderFactory<E, F, OFF, S, EP>
 where
     for<'a> <F as BitReaderFactory<E>>::BitReader<'a>: BitRead<E> + BitSeek,
 {
-    type Decoder<'a> = HuffmanGraphDecoder<EP, E, <F as BitReaderFactory<E>>::BitReader<'a>, SimpleChoiceStrategy>
+    type Decoder<'a> = HuffmanGraphDecoder<EP, E, <F as BitReaderFactory<E>>::BitReader<'a>, S>
     where Self:'a;
 
     fn new_decoder(&self, node: usize) -> anyhow::Result<Self::Decoder<'_>> {
         let mut reader = self.factory.new_reader();
-        let strategy = SimpleChoiceStrategy;
-        // TODO: FIXME: now we are decoding the table at each random access (bleah) (this function is called each time successors is called)
-        //              we should decode it only when the factory is created and then use HuffmanReader::new
-        //              to do so is better if we use a strategy factory that can tell how many contexts you can use in advance (you know)
-        let table =
-            HuffmanReader::decode_table(&mut reader, self.max_bits, strategy.num_contexts())?;
         reader.set_bit_pos(self.offsets.get(node) as u64)?;
-        let huffman_reader = HuffmanReader::new(table, reader);
-        Ok(HuffmanGraphDecoder::new(huffman_reader, strategy))
+        // TODO: remove the clone of the whole table
+        let huffman_reader = HuffmanReader::new(self.table.clone(), reader);
+        Ok(HuffmanGraphDecoder::new(huffman_reader, self.strategy))
     }
 }

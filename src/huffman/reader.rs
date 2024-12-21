@@ -45,6 +45,7 @@ pub struct HuffmanReader<E: Endianness, R: BitRead<E>> {
     _marker: core::marker::PhantomData<E>,
 }
 
+#[derive(Clone)]
 pub struct HuffmanTable {
     max_bits: usize,
     info_: Vec<Box<[HuffmanDecoderInfo]>>,

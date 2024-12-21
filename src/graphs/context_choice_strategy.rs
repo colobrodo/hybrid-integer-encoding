@@ -11,6 +11,7 @@ pub trait ContextChoiceStrategy {
 }
 
 /// Simple context strategy that uses a different context for each graph component, and it's not based on previous values.
+#[derive(Default, Clone, Copy)]
 pub struct SimpleChoiceStrategy;
 
 impl ContextChoiceStrategy for SimpleChoiceStrategy {
@@ -29,7 +30,7 @@ impl ContextChoiceStrategy for SimpleChoiceStrategy {
 }
 
 /// A strategy with only one context.
-#[derive(Default)]
+#[derive(Default, Clone, Copy)]
 pub struct SingleContextStrategy;
 
 impl ContextChoiceStrategy for SingleContextStrategy {
