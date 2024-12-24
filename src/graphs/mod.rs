@@ -11,7 +11,6 @@ use epserde::deser::{Deserialize, MemCase};
 use lender::for_;
 use std::io::BufWriter;
 use std::{fs::File, path::PathBuf};
-use sux::prelude::*;
 use webgraph::cli::build::ef::{build_eliasfano, CliArgs};
 use webgraph::prelude::{SequentialLabeling, *};
 
@@ -234,16 +233,8 @@ pub fn load_graph_seq(
 pub fn load_graph(
     basename: PathBuf,
     max_bits: usize,
-) -> Result<
-    BvGraph<
-        RandomAccessHuffmanDecoderFactory<
-            LE,
-            FileFactory<LE>,
-            EliasFano<SelectAdaptConst<BitVec<Box<[usize]>>, Box<[usize]>, 12, 4>>,
-            SimpleChoiceStrategy,
-        >,
-    >,
-> {
+) -> Result<BvGraph<RandomAccessHuffmanDecoderFactory<LE, FileFactory<LE>, EF, SimpleChoiceStrategy>>>
+{
     let eliasfano_path = basename.with_extension(EF_EXTENSION);
     if !eliasfano_path.exists() {
         let offsets_path = basename.with_extension(OFFSETS_EXTENSION);
