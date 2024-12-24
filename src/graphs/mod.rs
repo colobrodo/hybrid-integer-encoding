@@ -188,12 +188,12 @@ pub fn convert_graph(
             pl.update();
         }];
     }
-    pl.done();
-
     pl.info(format_args!(
         "After second round with Huffman estimator: Recompressed graph using {} bits",
         writer.bits_written
     ));
+
+    pl.done();
 
     Ok(())
 }
