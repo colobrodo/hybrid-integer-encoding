@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use dsi_bitstream::traits::{BitRead, BitSeek, Endianness};
 
 use super::{compute_symbol_bits, compute_symbol_len_bits, EncodeParams, HuffmanSymbolInfo};
@@ -40,15 +42,14 @@ struct HuffmanDecoderInfo {
 pub struct HuffmanReader<E: Endianness, R: BitRead<E>> {
     reader: R,
     max_bits: usize,
-    /// The Huffman decoder table
-    info_: Vec<Box<[HuffmanDecoderInfo]>>,
+    info_: Rc<[Box<[HuffmanDecoderInfo]>]>,
     _marker: core::marker::PhantomData<E>,
 }
 
 #[derive(Clone)]
 pub struct HuffmanTable {
     max_bits: usize,
-    info_: Vec<Box<[HuffmanDecoderInfo]>>,
+    info_: Rc<[Box<[HuffmanDecoderInfo]>]>,
 }
 
 fn decode_symbol_num_bits<E: Endianness, R: BitRead<E>>(
@@ -123,15 +124,18 @@ impl HuffmanTable {
         num_contexts: usize,
     ) -> Result<Self> {
         let num_symbols = 1 << max_bits;
-        let mut info = Vec::with_capacity(num_contexts);
-        for _ in 0..num_contexts {
+        let mut info = Rc::new_uninit_slice(num_contexts);
+        let data = Rc::get_mut(&mut info).unwrap();
+        //let mut info = Vec::with_capacity(num_contexts);
+        for i in 0..num_contexts {
             let mut symbol_info = vec![HuffmanSymbolInfo::default(); num_symbols];
             decode_symbol_num_bits(max_bits, &mut symbol_info, reader)?;
             compute_symbol_bits(max_bits, &mut symbol_info);
             let mut ctx_info = vec![HuffmanDecoderInfo::default(); num_symbols];
             compute_decoder_table(max_bits, &symbol_info, &mut ctx_info)?;
-            info.push(ctx_info.into_boxed_slice());
+            data[i].write(ctx_info.into_boxed_slice());
         }
+        let info = unsafe { info.assume_init() };
         Ok(Self {
             max_bits,
             info_: info,
