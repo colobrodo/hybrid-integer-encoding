@@ -233,7 +233,7 @@ pub fn load_graph_seq(
 pub fn load_graph(
     basename: PathBuf,
     max_bits: usize,
-) -> Result<BvGraph<RandomAccessHuffmanDecoderFactory<LE, FileFactory<LE>, EF, SimpleChoiceStrategy>>>
+) -> Result<BvGraph<RandomAccessHuffmanDecoderFactory<LE, MmapHelper<u32>, EF, SimpleChoiceStrategy>>>
 {
     let eliasfano_path = basename.with_extension(EF_EXTENSION);
     if !eliasfano_path.exists() {
@@ -251,11 +251,12 @@ pub fn load_graph(
     let (num_nodes, num_arcs, comp_flags) = parse_properties::<BE>(&properties_path)?;
 
     let graph_path = basename.with_extension(GRAPH_EXTENSION);
-    let file_factory = FileFactory::<LE>::new(graph_path)?;
+    let flags = MemoryFlags::TRANSPARENT_HUGE_PAGES;
+    let mmap_factory = MmapHelper::mmap(&graph_path, flags.into())?;
 
     let ef = EF::load_full(eliasfano_path)?;
     let factory = RandomAccessHuffmanDecoderFactory::<_, _, _, _, DefaultEncodeParams>::new(
-        file_factory,
+        mmap_factory,
         SimpleChoiceStrategy,
         MemCase::encase(ef),
         max_bits,
