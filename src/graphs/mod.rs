@@ -230,6 +230,7 @@ pub fn load_graph_seq(
     Ok(graph)
 }
 
+/// Load an huffman-encoded graph to be accessed in random order
 pub fn load_graph(
     basename: PathBuf,
     max_bits: usize,
@@ -251,7 +252,7 @@ pub fn load_graph(
     let (num_nodes, num_arcs, comp_flags) = parse_properties::<BE>(&properties_path)?;
 
     let graph_path = basename.with_extension(GRAPH_EXTENSION);
-    let flags = MemoryFlags::TRANSPARENT_HUGE_PAGES;
+    let flags = MemoryFlags::TRANSPARENT_HUGE_PAGES | MemoryFlags::RANDOM_ACCESS;
     let mmap_factory = MmapHelper::mmap(&graph_path, flags.into())?;
 
     let ef = EF::load_full(eliasfano_path)?;
