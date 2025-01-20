@@ -116,15 +116,17 @@ pub struct SequentialHuffmanDecoderFactory<
     _marker: core::marker::PhantomData<(EP, E, F, S)>,
     factory: F,
     max_bits: usize,
+    small_table_size: usize,
 }
 
 impl<EP: EncodeParams, E: Endianness, F: BitReaderFactory<E>>
     SequentialHuffmanDecoderFactory<EP, E, F, SimpleChoiceStrategy>
 {
-    pub fn new(factory: F, max_bits: usize) -> Self {
+    pub fn new(factory: F, max_bits: usize, small_table_size: usize) -> Self {
         SequentialHuffmanDecoderFactory {
             factory,
             max_bits,
+            small_table_size,
             _marker: std::marker::PhantomData,
         }
     }
@@ -137,14 +139,17 @@ impl<EP: EncodeParams, E: Endianness, F: BitReaderFactory<E>> SequentialDecoderF
 where
     for<'a> <F as BitReaderFactory<E>>::BitReader<'a>: BitRead<E>,
 {
-    type Decoder<'a> = HuffmanGraphDecoder<EP, E, <F as BitReaderFactory<E>>::BitReader<'a>, SimpleChoiceStrategy>
-    where Self:'a;
+    type Decoder<'a>
+        =
+        HuffmanGraphDecoder<EP, E, <F as BitReaderFactory<E>>::BitReader<'a>, SimpleChoiceStrategy>
+    where
+        Self: 'a;
 
     fn new_decoder(&self) -> anyhow::Result<Self::Decoder<'_>> {
         let reader = self.factory.new_reader();
         let strategy = SimpleChoiceStrategy;
         let huffman_reader =
-            HuffmanReader::from_bitreader(reader, self.max_bits, strategy.num_contexts())?;
+            HuffmanReader::from_bitreader(reader, self.max_bits, self.small_table_size, strategy.num_contexts())?;
         Ok(HuffmanGraphDecoder::new(
             huffman_reader,
             SimpleChoiceStrategy,
@@ -183,9 +188,15 @@ where
         strategy: S,
         offsets: MemCase<OFF>,
         max_bits: usize,
+        small_table_size: usize,
     ) -> anyhow::Result<Self> {
         let mut reader = factory.new_reader();
-        let table = HuffmanReader::decode_table(&mut reader, max_bits, strategy.num_contexts())?;
+        let table = HuffmanReader::decode_table(
+            &mut reader,
+            max_bits,
+            small_table_size,
+            strategy.num_contexts(),
+        )?;
         drop(reader);
         Ok(RandomAccessHuffmanDecoderFactory {
             offsets,
@@ -207,8 +218,10 @@ impl<
 where
     for<'a> <F as BitReaderFactory<E>>::BitReader<'a>: BitRead<E> + BitSeek,
 {
-    type Decoder<'a> = HuffmanGraphDecoder<EP, E, <F as BitReaderFactory<E>>::BitReader<'a>, S>
-    where Self:'a;
+    type Decoder<'a>
+        = HuffmanGraphDecoder<EP, E, <F as BitReaderFactory<E>>::BitReader<'a>, S>
+    where
+        Self: 'a;
 
     fn new_decoder(&self, node: usize) -> anyhow::Result<Self::Decoder<'_>> {
         let mut reader = self.factory.new_reader();

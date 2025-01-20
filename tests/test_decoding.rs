@@ -13,6 +13,7 @@ mod tests {
     fn encode_and_decode<
         const NUM_CONTEXT: usize,
         const MAX_BITS: usize,
+        const SMALL_TABLE_SIZE: usize,
         const NUM_SYMBOLS: usize,
     >(
         seed: u64,
@@ -48,6 +49,7 @@ mod tests {
         let mut reader = HuffmanReader::<LE, _>::from_bitreader(
             BufBitReader::<LE, _>::new(MemWordReader::new(binary_data)),
             MAX_BITS,
+            SMALL_TABLE_SIZE,
             NUM_CONTEXT,
         )
         .unwrap();
@@ -60,23 +62,23 @@ mod tests {
 
     #[test]
     fn encode_and_decode_with_default_params() {
-        encode_and_decode::<1, DEFAULT_MAX_HUFFMAN_BITS, DEFAULT_NUM_SYMBOLS>(0);
+        encode_and_decode::<1, DEFAULT_MAX_HUFFMAN_BITS, 8, DEFAULT_NUM_SYMBOLS>(0);
     }
 
     #[test]
     fn encode_and_decode2() {
-        encode_and_decode::<1, DEFAULT_MAX_HUFFMAN_BITS, DEFAULT_NUM_SYMBOLS>(31415);
+        encode_and_decode::<1, DEFAULT_MAX_HUFFMAN_BITS, 8, DEFAULT_NUM_SYMBOLS>(31415);
     }
 
     #[test]
     fn encode_and_decode_with_custom_params() {
         const MAX_BITS: usize = 10;
-        encode_and_decode::<1, MAX_BITS, { 1 << MAX_BITS }>(0);
+        encode_and_decode::<1, MAX_BITS, 8, { 1 << MAX_BITS }>(0);
     }
 
     #[test]
     fn encode_and_decode_with_multiple_contexts() {
         const MAX_BITS: usize = 10;
-        encode_and_decode::<4, MAX_BITS, { 1 << MAX_BITS }>(0);
+        encode_and_decode::<4, MAX_BITS, 8, { 1 << MAX_BITS }>(0);
     }
 }

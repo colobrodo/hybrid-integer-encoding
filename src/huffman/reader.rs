@@ -135,9 +135,9 @@ impl HuffmanTable {
     fn new<R: BitRead<E>, E: Endianness>(
         reader: &mut R,
         max_bits: usize,
+        max_bits_small_table: usize,
         num_contexts: usize,
     ) -> Result<Self> {
-        let max_bits_small_table = 8usize;
         let small_table_symbols = 1 << max_bits_small_table;
         let num_symbols = 1 << max_bits;
         let mut info = Rc::new_uninit_slice(num_contexts);
@@ -175,9 +175,15 @@ impl HuffmanTable {
 impl<E: Endianness, R: BitRead<E>> HuffmanReader<E, R> {
     /// Constructs a `HuffmanReader` by consuming the provided `BitRead` implementation.
     /// Reads the Huffman table from the start and fully owns the bitstream.
-    pub fn from_bitreader(reader: R, max_bits: usize, num_contexts: usize) -> Result<Self> {
+    pub fn from_bitreader(
+        reader: R,
+        max_bits: usize,
+        max_bits_small_table: usize,
+        num_contexts: usize,
+    ) -> Result<Self> {
         let mut reader = reader;
-        let table_decoder = HuffmanTable::new(&mut reader, max_bits, num_contexts)?;
+        let table_decoder =
+            HuffmanTable::new(&mut reader, max_bits, max_bits_small_table, num_contexts)?;
         Ok(HuffmanReader::new(table_decoder, reader))
     }
 
@@ -186,9 +192,10 @@ impl<E: Endianness, R: BitRead<E>> HuffmanReader<E, R> {
     pub fn decode_table(
         reader: &mut R,
         max_bits: usize,
+        max_bits_small_table: usize,
         num_contexts: usize,
     ) -> Result<HuffmanTable> {
-        HuffmanTable::new(reader, max_bits, num_contexts)
+        HuffmanTable::new(reader, max_bits, max_bits_small_table, num_contexts)
     }
 
     pub fn new(table: HuffmanTable, reader: R) -> Self {

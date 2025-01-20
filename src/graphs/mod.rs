@@ -201,6 +201,7 @@ pub fn convert_graph(
 pub fn load_graph_seq(
     basename: PathBuf,
     max_bits: usize,
+    small_table_size: usize,
 ) -> Result<
     BvGraphSeq<
         SequentialHuffmanDecoderFactory<
@@ -219,6 +220,7 @@ pub fn load_graph_seq(
     let factory = SequentialHuffmanDecoderFactory::<DefaultEncodeParams, _, _, _>::new(
         file_factory,
         max_bits,
+        small_table_size,
     );
     let graph = BvGraphSeq::new(
         factory,
@@ -234,6 +236,7 @@ pub fn load_graph_seq(
 pub fn load_graph(
     basename: PathBuf,
     max_bits: usize,
+    small_table_size: usize,
 ) -> Result<BvGraph<RandomAccessHuffmanDecoderFactory<LE, MmapHelper<u32>, EF, SimpleChoiceStrategy>>>
 {
     let eliasfano_path = basename.with_extension(EF_EXTENSION);
@@ -261,6 +264,7 @@ pub fn load_graph(
         SimpleChoiceStrategy,
         MemCase::encase(ef),
         max_bits,
+        small_table_size,
     )?;
 
     let graph = BvGraph::new(

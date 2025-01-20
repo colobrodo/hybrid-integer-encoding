@@ -106,6 +106,9 @@ enum GraphCommand {
         /// The maximum number of bits for each word of the huffman code used to compress the graph
         #[arg(short = 'b', long, default_value = "8")]
         max_bits: usize,
+        /// The maximum length of bits for the symbol to put into the small table to speedup the lookup of common symbols
+        #[arg(long, default_value = "8")]
+        small_table_size: usize,
         #[arg(long, default_value_t = ',')]
         separator: char,
     },
@@ -116,6 +119,9 @@ enum GraphCommand {
         /// The maximum number of bits for each word of the huffman code used to compress the graph
         #[arg(short = 'b', long, default_value = "8")]
         max_bits: usize,
+        /// The maximum length of bits for the symbol to put into the small table to speedup the lookup of common symbols
+        #[arg(long, default_value = "8")]
+        small_table_size: usize,
         #[arg(short = 'R', long, default_value = "10")]
         repeats: usize,
     },
@@ -126,6 +132,9 @@ enum GraphCommand {
         /// The maximum number of bits for each word of the huffman code used to compress the graph
         #[arg(short = 'b', long, default_value = "8")]
         max_bits: usize,
+        /// The maximum length of bits for the symbol to put into the small table to speedup the lookup of common symbols
+        #[arg(long, default_value = "8")]
+        small_table_size: usize,
         /// The number of random sampled nodes to bench the read time of their adjacency list
         #[arg(short = 'r', long, default_value = "1000")]
         random: usize,
@@ -179,6 +188,9 @@ struct HuffmanArguments {
     /// The maximum number of bits used for each code
     #[arg(short = 'b', long, default_value = "8")]
     max_bits: usize,
+    /// The maximum length of bits for the symbol to put into the small table to speedup the lookup of common symbols
+    #[arg(long, default_value = "8")]
+    small_table: usize,
 }
 
 fn encode_file(
@@ -235,11 +247,18 @@ fn encode_file(
     Ok(())
 }
 
-fn decode_file(path: PathBuf, lenght: u64, max_bits: usize, num_context: usize) -> Result<()> {
+fn decode_file(
+    path: PathBuf,
+    lenght: u64,
+    max_bits: usize,
+    max_bits_small_table: usize,
+    num_context: usize,
+) -> Result<()> {
     let file = File::open(path)?;
     let mut reader = HuffmanReader::<LE, _>::from_bitreader(
         BufBitReader::<LE, _>::new(WordAdapter::<u32, _>::new(BufReader::new(file))),
         max_bits,
+        max_bits_small_table,
         num_context,
     )?;
     let mut i = 0;
@@ -265,6 +284,7 @@ fn bench_file<EP: EncodeParams>(
     path: PathBuf,
     repeats: usize,
     max_bits: usize,
+    max_bits_small_table: usize,
     num_contexts: usize,
     verbose: bool,
 ) -> Result<()> {
@@ -280,7 +300,13 @@ fn bench_file<EP: EncodeParams>(
         last_integer = n;
     }
 
-    bench(integer_data, max_bits, repeats, verbose)?;
+    bench(
+        integer_data,
+        max_bits,
+        max_bits_small_table,
+        repeats,
+        verbose,
+    )?;
     Ok(())
 }
 
@@ -288,6 +314,7 @@ fn bench_random_sample<EP: EncodeParams>(
     repeats: usize,
     nsamples: u64,
     max_bits: usize,
+    max_bits_small_table: usize,
     num_contexts: usize,
     seed: u64,
     verbose: bool,
@@ -305,13 +332,20 @@ fn bench_random_sample<EP: EncodeParams>(
         last_sample = sample;
     }
 
-    bench(integer_data, max_bits, repeats, verbose)?;
+    bench(
+        integer_data,
+        max_bits,
+        max_bits_small_table,
+        repeats,
+        verbose,
+    )?;
     Ok(())
 }
 
 fn bench<EP: EncodeParams>(
     integer_data: IntegerData<EP>,
     max_bits: usize,
+    max_bits_small_table: usize,
     repeats: usize,
     verbose: bool,
 ) -> Result<()> {
@@ -351,6 +385,7 @@ fn bench<EP: EncodeParams>(
         let mut reader = HuffmanReader::<LE, _>::from_bitreader(
             BufBitReader::<LE, _>::new(MemWordReader::new(&binary_data)),
             max_bits,
+            max_bits_small_table,
             num_contexts,
         )?;
 
@@ -403,6 +438,7 @@ fn main() -> Result<()> {
                 path,
                 lenght,
                 huffman_arguments.max_bits,
+                huffman_arguments.small_table,
                 huffman_arguments.contexts,
             )?;
         }
@@ -417,6 +453,7 @@ fn main() -> Result<()> {
                     bench_arguments.repeats,
                     samples,
                     huffman_arguments.max_bits,
+                    huffman_arguments.small_table,
                     huffman_arguments.contexts,
                     seed,
                     !args.silent,
@@ -431,6 +468,7 @@ fn main() -> Result<()> {
                     path,
                     bench_arguments.repeats,
                     huffman_arguments.max_bits,
+                    huffman_arguments.small_table,
                     huffman_arguments.contexts,
                     !args.silent,
                 )?;
@@ -462,8 +500,9 @@ fn main() -> Result<()> {
                 basename,
                 max_bits,
                 separator,
+                small_table_size,
             } => {
-                let graph = load_graph_seq(basename, max_bits)?;
+                let graph = load_graph_seq(basename, max_bits, small_table_size)?;
                 for_!((src, succ) in graph {
                     for dst in succ {
                         println!("{}{}{}", src, separator, dst);
@@ -474,18 +513,20 @@ fn main() -> Result<()> {
                 basename,
                 max_bits,
                 repeats,
+                small_table_size,
             } => {
-                let graph = load_graph_seq(basename, max_bits)?;
+                let graph = load_graph_seq(basename, max_bits, small_table_size)?;
                 bench_seq(graph, repeats);
             }
             GraphCommand::BenchRandom {
                 basename,
                 max_bits,
+                small_table_size,
                 random,
                 repeats,
                 seed,
             } => {
-                let graph = load_graph(basename, max_bits)?;
+                let graph = load_graph(basename, max_bits, small_table_size)?;
                 bench_random_graph(graph, seed, random, repeats);
             }
         },
