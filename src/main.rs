@@ -362,9 +362,7 @@ fn bench<EP: EncodeParams>(
         let elapsed_time = (start.elapsed().as_secs_f64() / num_values as f64) * 1e9;
         println!("Decode:    {:>20} ns/read", elapsed_time);
         time_per_repeat.push(elapsed_time);
-        println!("small_table_hit: {} vs small_table_miss {}", reader.small_table_hit, reader.small_table_miss);
     }
-
 
     time_per_repeat.sort_by(|a, b| a.partial_cmp(b).unwrap());
     let median_time = time_per_repeat[time_per_repeat.len() / 2];
