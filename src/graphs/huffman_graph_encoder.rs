@@ -13,21 +13,21 @@ use super::{BvGraphComponent, ContextChoiceStrategy, HuffmanEstimator};
 pub struct HuffmanGraphEncoder<
     'a,
     EP: EncodeParams,
-    EE: Encode,
+    E: Encode,
     W: BitWrite<LE>,
     S: ContextChoiceStrategy,
 > {
     encoder: HuffmanEncoder<EP>,
-    estimator: EE,
+    estimator: E,
     context_strategy: S,
     writer: &'a mut W,
 }
-impl<'a, EP: EncodeParams, EE: Encode, W: BitWrite<LE>, S: ContextChoiceStrategy>
-    HuffmanGraphEncoder<'a, EP, EE, W, S>
+impl<'a, EP: EncodeParams, E: Encode, W: BitWrite<LE>, S: ContextChoiceStrategy>
+    HuffmanGraphEncoder<'a, EP, E, W, S>
 {
     pub(crate) fn new(
         encoder: HuffmanEncoder<EP>,
-        estimator: EE,
+        estimator: E,
         context_strategy: S,
         writer: &'a mut W,
     ) -> Self {
@@ -51,8 +51,8 @@ impl<'a, EP: EncodeParams, EE: Encode, W: BitWrite<LE>, S: ContextChoiceStrategy
     }
 }
 
-impl<EP: EncodeParams, EE: Encode, W: BitWrite<LE>, S: ContextChoiceStrategy> Encode
-    for HuffmanGraphEncoder<'_, EP, EE, W, S>
+impl<EP: EncodeParams, E: Encode, W: BitWrite<LE>, S: ContextChoiceStrategy> Encode
+    for HuffmanGraphEncoder<'_, EP, E, W, S>
 {
     type Error = Infallible;
 
@@ -117,11 +117,11 @@ impl<EP: EncodeParams, EE: Encode, W: BitWrite<LE>, S: ContextChoiceStrategy> En
     }
 }
 
-impl<EP: EncodeParams, EE: Encode, W: BitWrite<LE>, S: ContextChoiceStrategy> EncodeAndEstimate
-    for HuffmanGraphEncoder<'_, EP, EE, W, S>
+impl<EP: EncodeParams, E: Encode, W: BitWrite<LE>, S: ContextChoiceStrategy> EncodeAndEstimate
+    for HuffmanGraphEncoder<'_, EP, E, W, S>
 {
     type Estimator<'b>
-        = &'b mut EE
+        = &'b mut E
     where
         Self: 'b;
 
@@ -133,14 +133,14 @@ impl<EP: EncodeParams, EE: Encode, W: BitWrite<LE>, S: ContextChoiceStrategy> En
 /// Builder to construct a HuffmanGraphEncoder, it requires an estimator that implements the Encode
 /// trait and is used for estimating the adjacency list size of each node during the process of
 /// reference selection.
-pub struct HuffmanGraphEncoderBuilder<EP: EncodeParams, EE: Encode, S: ContextChoiceStrategy> {
-    estimator: EE,
+pub struct HuffmanGraphEncoderBuilder<EP: EncodeParams, E: Encode, S: ContextChoiceStrategy> {
+    estimator: E,
     context_strategy: S,
     data: IntegerHistogram<EP>,
 }
 
-impl<EP: EncodeParams, EE: Encode, S: ContextChoiceStrategy> HuffmanGraphEncoderBuilder<EP, EE, S> {
-    pub fn new(num_symbols: usize, estimator: EE, context_choice_strategy: S) -> Self {
+impl<EP: EncodeParams, E: Encode, S: ContextChoiceStrategy> HuffmanGraphEncoderBuilder<EP, E, S> {
+    pub fn new(num_symbols: usize, estimator: E, context_choice_strategy: S) -> Self {
         let contexts = context_choice_strategy.num_contexts();
         Self {
             estimator,
@@ -153,7 +153,7 @@ impl<EP: EncodeParams, EE: Encode, S: ContextChoiceStrategy> HuffmanGraphEncoder
         self,
         writer: &'_ mut W,
         max_bits: usize,
-    ) -> HuffmanGraphEncoder<'_, EP, EE, W, S> {
+    ) -> HuffmanGraphEncoder<'_, EP, E, W, S> {
         let encoder = HuffmanEncoder::<EP>::new(self.data, max_bits);
         HuffmanGraphEncoder::new(encoder, self.estimator, self.context_strategy, writer)
     }
@@ -163,10 +163,10 @@ impl<EP: EncodeParams, EE: Encode, S: ContextChoiceStrategy> HuffmanGraphEncoder
     }
 }
 
-impl<EP: EncodeParams, EE: Encode, S: ContextChoiceStrategy> Encode
-    for HuffmanGraphEncoderBuilder<EP, EE, S>
+impl<EP: EncodeParams, E: Encode, S: ContextChoiceStrategy> Encode
+    for HuffmanGraphEncoderBuilder<EP, E, S>
 {
-    type Error = EE::Error;
+    type Error = E::Error;
 
     fn start_node(&mut self, _node: usize) -> Result<usize, Self::Error> {
         Ok(0)
@@ -243,11 +243,11 @@ impl<EP: EncodeParams, EE: Encode, S: ContextChoiceStrategy> Encode
     }
 }
 
-impl<EP: EncodeParams, EE: Encode, S: ContextChoiceStrategy> EncodeAndEstimate
-    for HuffmanGraphEncoderBuilder<EP, EE, S>
+impl<EP: EncodeParams, E: Encode, S: ContextChoiceStrategy> EncodeAndEstimate
+    for HuffmanGraphEncoderBuilder<EP, E, S>
 {
     type Estimator<'a>
-        = &'a mut EE
+        = &'a mut E
     where
         Self: 'a;
 

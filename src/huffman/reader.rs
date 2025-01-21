@@ -150,7 +150,7 @@ impl<R: BitRead<LE>> HuffmanReader<R> {
     }
 
     /// Decodes the Huffman table from the provided BitReader without consuming it.
-    /// Returns a HuffmanReaderLoader for further operations while allowing reuse of the BitReader.
+    /// Returns a HuffmanTable for further operations while allowing reuse of the BitReader.
     pub fn decode_table(
         reader: &mut R,
         max_bits: usize,

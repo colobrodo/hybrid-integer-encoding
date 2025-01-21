@@ -164,7 +164,7 @@ pub fn convert_graph(
         .expected_updates(Some(seq_graph.num_nodes()));
     pl.start("Compressing the graph...");
 
-    // second iteration: build a model with the entropy mock writer
+    // final round
     if build_offsets {
         let offsets_path = output_basename.with_extension(OFFSETS_EXTENSION);
         let file = std::fs::File::create(&offsets_path)
@@ -178,6 +178,7 @@ pub fn convert_graph(
             .write_gamma(header_size as _)
             .context("Could not write initial delta")?;
 
+        // we should also build the offsets: write the number of bits written for each list compression
         for_! [ (_, successors) in seq_graph {
             let delta = bvcomp.push(successors).context("Could not push successors")?;
             offsets_writer.write_gamma(delta).context("Could not write delta")?;

@@ -122,8 +122,9 @@ impl<EP: EncodeParams, F: BitReaderFactory<LE>>
     }
 }
 
-// TODO: make this work for any context choice strategy: maybe pass a ContextChoiceStrategyFactory and implement this trait for lambdas that return
-//       ContextChoiceStrategy to pass SimpleChoiceStartegy::default and do not create other useless objects
+// TODO: make this work for any context choice strategy: we should pass something that creates a strategy
+//       each time with a fixed amount of contexts know in advance to be able to create the huffman header
+//       and reuse it at each random access like now
 impl<EP: EncodeParams, F: BitReaderFactory<LE>> SequentialDecoderFactory
     for SequentialHuffmanDecoderFactory<EP, F, SimpleChoiceStrategy>
 where
@@ -139,10 +140,7 @@ where
         let strategy = SimpleChoiceStrategy;
         let huffman_reader =
             HuffmanReader::from_bitreader(reader, self.max_bits, strategy.num_contexts())?;
-        Ok(HuffmanGraphDecoder::new(
-            huffman_reader,
-            SimpleChoiceStrategy,
-        ))
+        Ok(HuffmanGraphDecoder::new(huffman_reader, strategy))
     }
 }
 
