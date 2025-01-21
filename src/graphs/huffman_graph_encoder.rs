@@ -1,9 +1,9 @@
-use std::{convert::Infallible, marker::PhantomData};
+use std::convert::Infallible;
 
 use crate::huffman::{EncodeParams, HuffmanEncoder, IntegerHistogram};
 
 use anyhow::Result;
-use dsi_bitstream::traits::{BitWrite, Endianness};
+use dsi_bitstream::traits::{BitWrite, LE};
 use webgraph::prelude::*;
 
 use super::{BvGraphComponent, ContextChoiceStrategy, HuffmanEstimator};
@@ -13,19 +13,17 @@ use super::{BvGraphComponent, ContextChoiceStrategy, HuffmanEstimator};
 pub struct HuffmanGraphEncoder<
     'a,
     EP: EncodeParams,
-    E: Endianness,
     EE: Encode,
-    W: BitWrite<E>,
+    W: BitWrite<LE>,
     S: ContextChoiceStrategy,
 > {
     encoder: HuffmanEncoder<EP>,
     estimator: EE,
     context_strategy: S,
     writer: &'a mut W,
-    _marker: PhantomData<E>,
 }
-impl<'a, EP: EncodeParams, E: Endianness, EE: Encode, W: BitWrite<E>, S: ContextChoiceStrategy>
-    HuffmanGraphEncoder<'a, EP, E, EE, W, S>
+impl<'a, EP: EncodeParams, EE: Encode, W: BitWrite<LE>, S: ContextChoiceStrategy>
+    HuffmanGraphEncoder<'a, EP, EE, W, S>
 {
     pub(crate) fn new(
         encoder: HuffmanEncoder<EP>,
@@ -38,7 +36,6 @@ impl<'a, EP: EncodeParams, E: Endianness, EE: Encode, W: BitWrite<E>, S: Context
             estimator,
             context_strategy,
             writer,
-            _marker: PhantomData,
         }
     }
 
@@ -54,8 +51,8 @@ impl<'a, EP: EncodeParams, E: Endianness, EE: Encode, W: BitWrite<E>, S: Context
     }
 }
 
-impl<'a, EP: EncodeParams, E: Endianness, EE: Encode, W: BitWrite<E>, S: ContextChoiceStrategy>
-    Encode for HuffmanGraphEncoder<'a, EP, E, EE, W, S>
+impl<'a, EP: EncodeParams, EE: Encode, W: BitWrite<LE>, S: ContextChoiceStrategy> Encode
+    for HuffmanGraphEncoder<'a, EP, EE, W, S>
 {
     type Error = Infallible;
 
@@ -120,10 +117,13 @@ impl<'a, EP: EncodeParams, E: Endianness, EE: Encode, W: BitWrite<E>, S: Context
     }
 }
 
-impl<'a, EP: EncodeParams, E: Endianness, EE: Encode, W: BitWrite<E>, S: ContextChoiceStrategy>
-    EncodeAndEstimate for HuffmanGraphEncoder<'a, EP, E, EE, W, S>
+impl<'a, EP: EncodeParams, EE: Encode, W: BitWrite<LE>, S: ContextChoiceStrategy> EncodeAndEstimate
+    for HuffmanGraphEncoder<'a, EP, EE, W, S>
 {
-    type Estimator<'b> = &'b mut EE where Self:'b;
+    type Estimator<'b>
+        = &'b mut EE
+    where
+        Self: 'b;
 
     fn estimator(&mut self) -> Self::Estimator<'_> {
         &mut self.estimator
@@ -150,11 +150,11 @@ impl<EP: EncodeParams, EE: Encode, S: ContextChoiceStrategy> HuffmanGraphEncoder
         }
     }
 
-    pub fn build<E: Endianness, W: BitWrite<E>>(
+    pub fn build<W: BitWrite<LE>>(
         self,
         writer: &'_ mut W,
         max_bits: usize,
-    ) -> HuffmanGraphEncoder<'_, EP, E, EE, W, S> {
+    ) -> HuffmanGraphEncoder<'_, EP, EE, W, S> {
         let encoder = HuffmanEncoder::<EP>::new(self.data, max_bits);
         HuffmanGraphEncoder::new(encoder, self.estimator, self.context_strategy, writer)
     }
@@ -247,7 +247,10 @@ impl<EP: EncodeParams, EE: Encode, S: ContextChoiceStrategy> Encode
 impl<EP: EncodeParams, EE: Encode, S: ContextChoiceStrategy> EncodeAndEstimate
     for HuffmanGraphEncoderBuilder<EP, EE, S>
 {
-    type Estimator<'a> = &'a mut EE where Self:'a;
+    type Estimator<'a>
+        = &'a mut EE
+    where
+        Self: 'a;
 
     fn estimator(&mut self) -> Self::Estimator<'_> {
         &mut self.estimator

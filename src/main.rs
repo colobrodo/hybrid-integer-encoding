@@ -237,7 +237,7 @@ fn encode_file(
 
 fn decode_file(path: PathBuf, lenght: u64, max_bits: usize, num_context: usize) -> Result<()> {
     let file = File::open(path)?;
-    let mut reader = HuffmanReader::<LE, _>::from_bitreader(
+    let mut reader = HuffmanReader::from_bitreader(
         BufBitReader::<LE, _>::new(WordAdapter::<u32, _>::new(BufReader::new(file))),
         max_bits,
         num_context,
@@ -348,7 +348,7 @@ fn bench<EP: EncodeParams>(
     let mut time_per_repeat = Vec::new();
 
     for _ in 0..repeats {
-        let mut reader = HuffmanReader::<LE, _>::from_bitreader(
+        let mut reader = HuffmanReader::from_bitreader(
             BufBitReader::<LE, _>::new(MemWordReader::new(&binary_data)),
             max_bits,
             num_contexts,

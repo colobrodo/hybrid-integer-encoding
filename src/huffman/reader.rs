@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use dsi_bitstream::traits::{BitRead, BitSeek, Endianness};
+use dsi_bitstream::traits::{BitRead, BitSeek, LE};
 
 use super::{compute_symbol_bits, compute_symbol_len_bits, EncodeParams, HuffmanSymbolInfo};
 use common_traits::*;
@@ -39,11 +39,10 @@ struct HuffmanDecoderInfo {
     symbol: u8,
 }
 
-pub struct HuffmanReader<E: Endianness, R: BitRead<E>> {
+pub struct HuffmanReader<R: BitRead<LE>> {
     reader: R,
     max_bits: usize,
     info_: Rc<[Box<[HuffmanDecoderInfo]>]>,
-    _marker: core::marker::PhantomData<E>,
 }
 
 #[derive(Clone)]
@@ -52,7 +51,7 @@ pub struct HuffmanTable {
     info_: Rc<[Box<[HuffmanDecoderInfo]>]>,
 }
 
-fn decode_symbol_num_bits<E: Endianness, R: BitRead<E>>(
+fn decode_symbol_num_bits<R: BitRead<LE>>(
     max_bits: usize,
     infos: &mut [HuffmanSymbolInfo],
     reader: &mut R,
@@ -103,6 +102,9 @@ fn compute_decoder_table(
             if sym_info.present == 0 {
                 continue;
             }
+            // NOTE: in case we want to support both big endian and little endian we should
+            // change this condition to create the table looking at the low/top part of the
+            // next 'max_bits' bits
             if (i & ((1 << sym_info.nbits) - 1)) as u16 == sym_info.bits {
                 s = sym;
                 break;
@@ -118,11 +120,7 @@ fn compute_decoder_table(
 }
 
 impl HuffmanTable {
-    fn new<R: BitRead<E>, E: Endianness>(
-        reader: &mut R,
-        max_bits: usize,
-        num_contexts: usize,
-    ) -> Result<Self> {
+    fn new<R: BitRead<LE>>(reader: &mut R, max_bits: usize, num_contexts: usize) -> Result<Self> {
         let num_symbols = 1 << max_bits;
         let mut info = Rc::new_uninit_slice(num_contexts);
         let data = Rc::get_mut(&mut info).unwrap();
@@ -143,7 +141,7 @@ impl HuffmanTable {
     }
 }
 
-impl<E: Endianness, R: BitRead<E>> HuffmanReader<E, R> {
+impl<R: BitRead<LE>> HuffmanReader<R> {
     /// Constructs a `HuffmanReader` by consuming the provided `BitRead` implementation.
     /// Reads the Huffman table from the start and fully owns the bitstream.
     pub fn from_bitreader(reader: R, max_bits: usize, num_contexts: usize) -> Result<Self> {
@@ -167,12 +165,11 @@ impl<E: Endianness, R: BitRead<E>> HuffmanReader<E, R> {
             reader,
             max_bits: table.max_bits,
             info_: table.info_,
-            _marker: std::marker::PhantomData,
         }
     }
 }
 
-impl<E: Endianness, R: BitRead<E>> EntropyCoder for HuffmanReader<E, R> {
+impl<R: BitRead<LE>> EntropyCoder for HuffmanReader<R> {
     fn read_token(&mut self, context: usize) -> Result<usize> {
         let bits: u64 = self.reader.peek_bits(self.max_bits)?.cast();
         let info = self.info_[context][bits as usize];
@@ -187,7 +184,7 @@ impl<E: Endianness, R: BitRead<E>> EntropyCoder for HuffmanReader<E, R> {
     }
 }
 
-impl<E: Endianness, R: BitRead<E> + BitSeek> BitSeek for HuffmanReader<E, R> {
+impl<R: BitRead<LE> + BitSeek> BitSeek for HuffmanReader<R> {
     type Error = <R as BitSeek>::Error;
 
     fn bit_pos(&mut self) -> Result<u64, Self::Error> {

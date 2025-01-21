@@ -1,6 +1,6 @@
 use std::mem;
 
-use dsi_bitstream::traits::{BitWrite, Endianness};
+use dsi_bitstream::traits::{BitWrite, Endianness, LE};
 
 use crate::huffman::compute_symbol_bits;
 
@@ -165,11 +165,11 @@ impl<EP: EncodeParams> HuffmanEncoder<EP> {
 
     /// Write the value into the bit stream, if successfull returns a tuple with the
     /// number of bits written for the symbol and for the trailing bits.
-    pub fn write<E: Endianness>(
+    pub fn write(
         &self,
         ctx: u8,
         value: u32,
-        writer: &mut impl BitWrite<E>,
+        writer: &mut impl BitWrite<LE>,
     ) -> Result<(usize, usize)> {
         let (token, nbits, bits) = encode::<EP>(value as u64);
         debug_assert!(
