@@ -17,9 +17,9 @@ mod tests {
     >(
         seed: u64,
     ) {
-        let nsamples = 1000;
+        let nsamples = 100_000;
         let mut rng = SmallRng::seed_from_u64(seed);
-        let zipf = zipf::ZipfDistribution::new(1000000000, 1.5).unwrap();
+        let zipf = zipf::ZipfDistribution::new(1000_000_000, 1.5).unwrap();
 
         let mut data = IntegerHistogram::new(NUM_CONTEXT, NUM_SYMBOLS);
         let default_context = 0;
