@@ -51,8 +51,8 @@ impl<'a, EP: EncodeParams, EE: Encode, W: BitWrite<LE>, S: ContextChoiceStrategy
     }
 }
 
-impl<'a, EP: EncodeParams, EE: Encode, W: BitWrite<LE>, S: ContextChoiceStrategy> Encode
-    for HuffmanGraphEncoder<'a, EP, EE, W, S>
+impl<EP: EncodeParams, EE: Encode, W: BitWrite<LE>, S: ContextChoiceStrategy> Encode
+    for HuffmanGraphEncoder<'_, EP, EE, W, S>
 {
     type Error = Infallible;
 
@@ -117,8 +117,8 @@ impl<'a, EP: EncodeParams, EE: Encode, W: BitWrite<LE>, S: ContextChoiceStrategy
     }
 }
 
-impl<'a, EP: EncodeParams, EE: Encode, W: BitWrite<LE>, S: ContextChoiceStrategy> EncodeAndEstimate
-    for HuffmanGraphEncoder<'a, EP, EE, W, S>
+impl<EP: EncodeParams, EE: Encode, W: BitWrite<LE>, S: ContextChoiceStrategy> EncodeAndEstimate
+    for HuffmanGraphEncoder<'_, EP, EE, W, S>
 {
     type Estimator<'b>
         = &'b mut EE
@@ -140,7 +140,6 @@ pub struct HuffmanGraphEncoderBuilder<EP: EncodeParams, EE: Encode, S: ContextCh
 }
 
 impl<EP: EncodeParams, EE: Encode, S: ContextChoiceStrategy> HuffmanGraphEncoderBuilder<EP, EE, S> {
-    // TODO: for now num_contexts is the number of components
     pub fn new(num_symbols: usize, estimator: EE, context_choice_strategy: S) -> Self {
         let contexts = context_choice_strategy.num_contexts();
         Self {

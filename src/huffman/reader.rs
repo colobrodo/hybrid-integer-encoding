@@ -124,14 +124,13 @@ impl HuffmanTable {
         let num_symbols = 1 << max_bits;
         let mut info = Rc::new_uninit_slice(num_contexts);
         let data = Rc::get_mut(&mut info).unwrap();
-        //let mut info = Vec::with_capacity(num_contexts);
-        for i in 0..num_contexts {
+        for ctx_cell in data.iter_mut() {
             let mut symbol_info = vec![HuffmanSymbolInfo::default(); num_symbols];
             decode_symbol_num_bits(max_bits, &mut symbol_info, reader)?;
             compute_symbol_bits(max_bits, &mut symbol_info);
             let mut ctx_info = vec![HuffmanDecoderInfo::default(); num_symbols];
             compute_decoder_table(max_bits, &symbol_info, &mut ctx_info)?;
-            data[i].write(ctx_info.into_boxed_slice());
+            ctx_cell.write(ctx_info.into_boxed_slice());
         }
         let info = unsafe { info.assume_init() };
         Ok(Self {

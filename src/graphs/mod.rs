@@ -23,7 +23,7 @@ use huffman_graph_encoder::*;
 use crate::huffman::{DefaultEncodeParams, EncodeParams};
 
 #[allow(clippy::too_many_arguments)]
-fn referece_selection_round<
+fn reference_selection_round<
     F: SequentialDecoderFactory,
     EP: EncodeParams,
     E: Encode,
@@ -32,9 +32,7 @@ fn referece_selection_round<
     graph: &BvGraphSeq<F>,
     huffman_graph_encoder_builder: HuffmanGraphEncoderBuilder<EP, E, S>,
     max_bits: usize,
-    compression_window: usize,
-    max_ref_count: usize,
-    min_interval_length: usize,
+    compression_parameters: &CompressionParameters,
     msg: &str,
     pl: &mut ProgressLogger,
 ) -> Result<HuffmanGraphEncoderBuilder<EP, HuffmanEstimator<EP, S>, SimpleChoiceStrategy>> {
@@ -48,9 +46,9 @@ fn referece_selection_round<
     );
     let mut bvcomp = BvComp::new(
         &mut huffman_graph_encoder_builder,
-        compression_window,
-        max_ref_count,
-        min_interval_length,
+        compression_parameters.compression_window,
+        compression_parameters.max_ref_count,
+        compression_parameters.min_interval_length,
         0,
     );
 
@@ -66,17 +64,24 @@ fn referece_selection_round<
     Ok(huffman_graph_encoder_builder)
 }
 
+pub struct CompressionParameters {
+    pub compression_window: usize,
+    pub max_ref_count: usize,
+    pub min_interval_length: usize,
+    pub num_rounds: usize,
+}
+
 pub fn convert_graph(
     basename: PathBuf,
     output_basename: PathBuf,
     max_bits: usize,
-    compression_window: usize,
-    max_ref_count: usize,
-    min_interval_length: usize,
-    num_rounds: usize,
+    compression_parameters: CompressionParameters,
     build_offsets: bool,
 ) -> Result<()> {
-    assert!(num_rounds >= 1, "num_rounds must be at least 1");
+    assert!(
+        compression_parameters.num_rounds >= 1,
+        "num_rounds must be at least 1"
+    );
     let mut pl = ProgressLogger::default();
     let num_symbols = 1 << max_bits;
 
@@ -93,9 +98,9 @@ pub fn convert_graph(
         );
     let mut bvcomp = BvComp::new(
         &mut huffman_graph_encoder_builder,
-        compression_window,
-        max_ref_count,
-        min_interval_length,
+        compression_parameters.compression_window,
+        compression_parameters.max_ref_count,
+        compression_parameters.min_interval_length,
         0,
     );
 
@@ -111,24 +116,20 @@ pub fn convert_graph(
     bvcomp.flush()?;
     pl.done();
 
-    let mut huffman_graph_encoder_builder = referece_selection_round(
+    let mut huffman_graph_encoder_builder = reference_selection_round(
         &seq_graph,
         huffman_graph_encoder_builder,
         max_bits,
-        compression_window,
-        max_ref_count,
-        min_interval_length,
+        &compression_parameters,
         "Pushing symbols into encoder builder on first round...",
         &mut pl,
     )?;
-    for round in 1..num_rounds {
-        huffman_graph_encoder_builder = referece_selection_round(
+    for round in 1..compression_parameters.num_rounds {
+        huffman_graph_encoder_builder = reference_selection_round(
             &seq_graph,
             huffman_graph_encoder_builder,
             max_bits,
-            compression_window,
-            max_ref_count,
-            min_interval_length,
+            &compression_parameters,
             format!(
                 "Pushing symbols into encoder builder with Huffman estimator for round {}...",
                 round + 1
@@ -153,9 +154,9 @@ pub fn convert_graph(
 
     let mut bvcomp = BvComp::new(
         &mut huffman_graph_encoder,
-        compression_window,
-        max_ref_count,
-        min_interval_length,
+        compression_parameters.compression_window,
+        compression_parameters.max_ref_count,
+        compression_parameters.min_interval_length,
         0,
     );
 

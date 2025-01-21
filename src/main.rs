@@ -18,15 +18,15 @@ use clap::{Parser, Subcommand};
 use lender::{for_, Lender};
 use rand::{prelude::Distribution, rngs::SmallRng, Rng, SeedableRng};
 
+use hybrid_integer_encoding::{graphs::load_graph, utils::StatBitWriter};
+use hybrid_integer_encoding::{graphs::load_graph_seq, utils::IntegerData};
 use hybrid_integer_encoding::{
-    graphs::convert_graph,
+    graphs::{convert_graph, CompressionParameters},
     huffman::{
         encode, DefaultEncodeParams, EncodeParams, EntropyCoder, HuffmanEncoder, HuffmanReader,
         IntegerHistogram,
     },
 };
-use hybrid_integer_encoding::{graphs::load_graph, utils::StatBitWriter};
-use hybrid_integer_encoding::{graphs::load_graph_seq, utils::IntegerData};
 use webgraph::traits::{RandomAccessGraph, SequentialGraph};
 
 #[derive(Parser, Debug)]
@@ -447,14 +447,17 @@ fn main() -> Result<()> {
                 num_rounds,
                 build_offsets,
             } => {
-                convert_graph(
-                    basename,
-                    output_basename,
-                    max_bits,
+                let compression_parameters = CompressionParameters {
                     compression_window,
                     max_ref_count,
                     min_interval_length,
                     num_rounds,
+                };
+                convert_graph(
+                    basename,
+                    output_basename,
+                    max_bits,
+                    compression_parameters,
                     build_offsets,
                 )?;
             }
