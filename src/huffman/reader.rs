@@ -45,6 +45,8 @@ pub struct HuffmanReader<R: BitRead<LE>> {
     info_: Rc<[Box<[HuffmanDecoderInfo]>]>,
 }
 
+/// The huffman decoder table computed from the header of the file and the maximum
+/// number of bits per token know in advance  
 #[derive(Clone)]
 pub struct HuffmanTable {
     max_bits: usize,
