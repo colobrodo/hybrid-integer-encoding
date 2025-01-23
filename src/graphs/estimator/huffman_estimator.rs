@@ -4,32 +4,32 @@ use anyhow::Result;
 
 use webgraph::prelude::Encode;
 
-use crate::graphs::{BvGraphComponent, ContextChoiceStrategy};
+use crate::graphs::{BvGraphComponent, ContextModel};
 use crate::huffman::{EncodeParams, IntegerHistogram};
 
-pub struct HuffmanEstimator<EP: EncodeParams, S: ContextChoiceStrategy> {
+pub struct HuffmanEstimator<EP: EncodeParams, S: ContextModel> {
     data: IntegerHistogram<EP>,
-    context_strategy: S,
+    context_model: S,
     marker_: core::marker::PhantomData<EP>,
 }
 
-impl<EP: EncodeParams, S: ContextChoiceStrategy> HuffmanEstimator<EP, S> {
-    pub fn new(data: IntegerHistogram<EP>, context_choice_strategy: S) -> Self {
+impl<EP: EncodeParams, S: ContextModel> HuffmanEstimator<EP, S> {
+    pub fn new(data: IntegerHistogram<EP>, context_model: S) -> Self {
         Self {
             data,
-            context_strategy: context_choice_strategy,
+            context_model,
             marker_: core::marker::PhantomData,
         }
     }
 
     pub fn estimate(&mut self, component: BvGraphComponent, value: u64) -> usize {
-        let ctx = self.context_strategy.choose_context(component);
-        self.context_strategy.update(component, value);
+        let ctx = self.context_model.choose_context(component);
+        self.context_model.update(component, value);
         self.data.cost(ctx, value)
     }
 }
 
-impl<EP: EncodeParams, S: ContextChoiceStrategy> Encode for HuffmanEstimator<EP, S> {
+impl<EP: EncodeParams, S: ContextModel> Encode for HuffmanEstimator<EP, S> {
     type Error = Infallible;
 
     fn start_node(&mut self, _node: usize) -> Result<usize, Self::Error> {

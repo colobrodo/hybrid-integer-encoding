@@ -1,5 +1,5 @@
 mod component;
-mod context_choice_strategy;
+mod context_model;
 pub mod estimator;
 mod huffman_graph_decoder;
 mod huffman_graph_encoder;
@@ -15,7 +15,7 @@ use webgraph::cli::build::ef::{build_eliasfano, CliArgs};
 use webgraph::prelude::{SequentialLabeling, *};
 
 use component::*;
-use context_choice_strategy::*;
+use context_model::*;
 use estimator::*;
 pub use huffman_graph_decoder::*;
 use huffman_graph_encoder::*;
@@ -27,7 +27,7 @@ fn reference_selection_round<
     F: SequentialDecoderFactory,
     EP: EncodeParams,
     E: Encode,
-    S: ContextChoiceStrategy,
+    S: ContextModel,
 >(
     graph: &BvGraphSeq<F>,
     huffman_graph_encoder_builder: HuffmanGraphEncoderBuilder<EP, E, S>,
@@ -35,14 +35,14 @@ fn reference_selection_round<
     compression_parameters: &CompressionParameters,
     msg: &str,
     pl: &mut ProgressLogger,
-) -> Result<HuffmanGraphEncoderBuilder<EP, HuffmanEstimator<EP, S>, SimpleChoiceStrategy>> {
+) -> Result<HuffmanGraphEncoderBuilder<EP, HuffmanEstimator<EP, S>, SimpleContextModel>> {
     let num_symbols = 1 << max_bits;
     let huffman_estimator = huffman_graph_encoder_builder.build_estimator();
     // setup for the new iteration with huffman estimator
     let mut huffman_graph_encoder_builder = HuffmanGraphEncoderBuilder::<EP, _, _>::new(
         num_symbols,
         huffman_estimator,
-        SimpleChoiceStrategy,
+        SimpleContextModel,
     );
     let mut bvcomp = BvComp::new(
         &mut huffman_graph_encoder_builder,
@@ -94,7 +94,7 @@ pub fn convert_graph(
         HuffmanGraphEncoderBuilder::<DefaultEncodeParams, _, _>::new(
             num_symbols,
             Log2Estimator,
-            SimpleChoiceStrategy,
+            SimpleContextModel,
         );
     let mut bvcomp = BvComp::new(
         &mut huffman_graph_encoder_builder,
@@ -205,7 +205,7 @@ pub fn load_graph_seq(
     max_bits: usize,
 ) -> Result<
     BvGraphSeq<
-        SequentialHuffmanDecoderFactory<DefaultEncodeParams, FileFactory<LE>, SimpleChoiceStrategy>,
+        SequentialHuffmanDecoderFactory<DefaultEncodeParams, FileFactory<LE>, SimpleContextModel>,
     >,
 > {
     let properties_path = basename.with_extension(PROPERTIES_EXTENSION);
@@ -229,7 +229,7 @@ pub fn load_graph_seq(
 pub fn load_graph(
     basename: PathBuf,
     max_bits: usize,
-) -> Result<BvGraph<RandomAccessHuffmanDecoderFactory<MmapHelper<u32>, EF, SimpleChoiceStrategy>>> {
+) -> Result<BvGraph<RandomAccessHuffmanDecoderFactory<MmapHelper<u32>, EF, SimpleContextModel>>> {
     let eliasfano_path = basename.with_extension(EF_EXTENSION);
     if !eliasfano_path.exists() {
         let offsets_path = basename.with_extension(OFFSETS_EXTENSION);
@@ -252,7 +252,7 @@ pub fn load_graph(
     let ef = EF::load_full(eliasfano_path)?;
     let factory = RandomAccessHuffmanDecoderFactory::<_, _, _, DefaultEncodeParams>::new(
         mmap_factory,
-        SimpleChoiceStrategy,
+        SimpleContextModel,
         MemCase::encase(ef),
         max_bits,
     )?;

@@ -1,20 +1,20 @@
 use super::BvGraphComponent;
 
-/// A strategy defines how the context of each encoded or estimated value is chosen during graph compression.
-pub trait ContextChoiceStrategy {
+/// A model defines how the context of each encoded or estimated value is chosen during graph compression.
+pub trait ContextModel {
     /// Returns the number of contexts available.
     fn num_contexts(&self) -> usize;
     /// Choose the context based on the current component that should be encoded.
     fn choose_context(&mut self, component: BvGraphComponent) -> u8;
-    /// Update the strategy with the last value seen, for stateful strategy (like the one described in zuckerli).
+    /// Update the model with the last value seen, for stateful model (like the one described in zuckerli).
     fn update(&mut self, component: BvGraphComponent, value: u64);
 }
 
-/// Simple context strategy that uses a different context for each graph component, and it's not based on previous values.
+/// Simple context model that uses a different context for each graph component, and it's not based on previous values.
 #[derive(Default, Clone, Copy)]
-pub struct SimpleChoiceStrategy;
+pub struct SimpleContextModel;
 
-impl ContextChoiceStrategy for SimpleChoiceStrategy {
+impl ContextModel for SimpleContextModel {
     #[inline(always)]
     fn num_contexts(&self) -> usize {
         BvGraphComponent::COMPONENTS
@@ -29,11 +29,11 @@ impl ContextChoiceStrategy for SimpleChoiceStrategy {
     fn update(&mut self, _component: BvGraphComponent, _value: u64) {}
 }
 
-/// A strategy with only one context.
+/// A model with only one fixed context.
 #[derive(Default, Clone, Copy)]
-pub struct SingleContextStrategy;
+pub struct SingleContextModel;
 
-impl ContextChoiceStrategy for SingleContextStrategy {
+impl ContextModel for SingleContextModel {
     #[inline(always)]
     fn num_contexts(&self) -> usize {
         1
