@@ -128,6 +128,9 @@ enum GraphCommand {
         max_bits: usize,
         #[arg(short = 'R', long, default_value = "10")]
         repeats: usize,
+        /// The type of context model used to encode the graph.
+        #[arg(long, default_value = "simple")]
+        context_model: ContextModelArgument,
     },
     /// Bench the random access on a huffman compressed graph
     BenchRandom {
@@ -136,6 +139,9 @@ enum GraphCommand {
         /// The maximum number of bits for each word of the huffman code used to compress the graph
         #[arg(short = 'b', long, default_value = "8")]
         max_bits: usize,
+        /// The type of context model used to encode the graph.
+        #[arg(long, default_value = "simple")]
+        context_model: ContextModelArgument,
         /// The number of random sampled nodes to bench the read time of their adjacency list
         #[arg(short = 'r', long, default_value = "1000")]
         random: usize,
@@ -538,20 +544,46 @@ fn main() -> Result<()> {
                 basename,
                 max_bits,
                 repeats,
-            } => {
-                let graph = load_graph_seq::<SimpleContextModel>(basename, max_bits)?;
-                bench_seq(graph, repeats);
-            }
+                context_model,
+            } => match context_model {
+                ContextModelArgument::Single => {
+                    let graph = load_graph_seq::<SingleContextModel>(basename, max_bits)?;
+                    bench_seq(graph, repeats);
+                }
+                ContextModelArgument::Simple => {
+                    let graph = load_graph_seq::<SimpleContextModel>(basename, max_bits)?;
+                    bench_seq(graph, repeats);
+                }
+                ContextModelArgument::Zuckerli => {
+                    let graph = load_graph_seq::<ZuckerliContextModel<DefaultEncodeParams>>(
+                        basename, max_bits,
+                    )?;
+                    bench_seq(graph, repeats);
+                }
+            },
             GraphCommand::BenchRandom {
                 basename,
                 max_bits,
+                context_model,
                 random,
                 repeats,
                 seed,
-            } => {
-                let graph = load_graph::<SimpleContextModel>(basename, max_bits)?;
-                bench_random_graph(graph, seed, random, repeats);
-            }
+            } => match context_model {
+                ContextModelArgument::Single => {
+                    let graph = load_graph::<SingleContextModel>(basename, max_bits)?;
+                    bench_random_graph(graph, seed, random, repeats);
+                }
+                ContextModelArgument::Simple => {
+                    let graph = load_graph::<SimpleContextModel>(basename, max_bits)?;
+                    bench_random_graph(graph, seed, random, repeats);
+                }
+                ContextModelArgument::Zuckerli => {
+                    let graph = load_graph::<ZuckerliContextModel<DefaultEncodeParams>>(
+                        basename, max_bits,
+                    )?;
+                    bench_random_graph(graph, seed, random, repeats);
+                }
+            },
         },
     }
 
