@@ -490,13 +490,15 @@ fn main() -> Result<()> {
                         compression_parameters,
                         build_offsets,
                     )?,
-                    ContextModelArgument::Zuckerli => convert_graph::<ZuckerliContextModel>(
-                        basename,
-                        output_basename,
-                        max_bits,
-                        compression_parameters,
-                        build_offsets,
-                    )?,
+                    ContextModelArgument::Zuckerli => {
+                        convert_graph::<ZuckerliContextModel<DefaultEncodeParams>>(
+                            basename,
+                            output_basename,
+                            max_bits,
+                            compression_parameters,
+                            build_offsets,
+                        )?
+                    }
                 }
             }
             GraphCommand::Read {
@@ -522,7 +524,9 @@ fn main() -> Result<()> {
                     });
                 }
                 ContextModelArgument::Zuckerli => {
-                    let graph = load_graph_seq::<ZuckerliContextModel>(basename, max_bits)?;
+                    let graph = load_graph_seq::<ZuckerliContextModel<DefaultEncodeParams>>(
+                        basename, max_bits,
+                    )?;
                     for_!((src, succ) in graph {
                         for dst in succ {
                             println!("{}{}{}", src, separator, dst);

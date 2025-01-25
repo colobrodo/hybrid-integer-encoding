@@ -1,3 +1,5 @@
+use crate::huffman::{encode, EncodeParams};
+
 use super::BvGraphComponent;
 
 /// A model defines how the context of each encoded or estimated value is chosen during graph compression.
@@ -57,11 +59,18 @@ impl ContextModel for SingleContextModel {
 /// A partial implementation of the zuckerli context model, it does not implement
 /// multiple contexts for outdegrees and references
 #[derive(Default, Clone, Copy)]
-pub struct ZuckerliContextModel {
-    pub block_number: u32,
+pub struct ZuckerliContextModel<EP: EncodeParams> {
+    block_number: u32,
+    last_residual: u64,
+    _marker: core::marker::PhantomData<EP>,
 }
 
-impl ZuckerliContextModel {
+impl<EP: EncodeParams> ZuckerliContextModel<EP> {
+    // The original implementation divides the adjacency lists into blocks of 32, then encodes the
+    // outdegree as a delta with the previous (except for the first) and then does the dame with
+    // references.
+    // When decoding they use the previous delta as context but when they randomly access a node
+    // they first decode the outdegree and reference and the previous element in the block.
     const BASE_OUTDEGREE: usize = 0;
     const NUM_OUTDEGREES: usize = 1;
     const BASE_REFERENCE: usize = Self::BASE_OUTDEGREE + Self::NUM_OUTDEGREES;
@@ -70,21 +79,21 @@ impl ZuckerliContextModel {
     const BASE_FIRST_BLOCK: usize = Self::BASE_BLOCK_COUNT + 1;
     const BASE_EVEN_BLOCK: usize = Self::BASE_FIRST_BLOCK + 1;
     const BASE_ODD_BLOCK: usize = Self::BASE_EVEN_BLOCK + 1;
-    // TODO: For delta-encoding the first residual with respect to the current node, the symbol that would
-    // be used to represent the number of residuals defines which distribution to use. This is because a
-    // list with a high number of residuals will likely be harder to predict.
-    // Finally, for all other residual deltas, the symbol that was used to encode the previous one is
-    // used to choose the corresponding probability distribution for the current delta
+    // TODO: zuckerli doesn't use intervals but we can try to figure out a way to assign context to the intervals
     const BASE_INTERVAL_COUNT: usize = Self::BASE_ODD_BLOCK + 1;
     const BASE_INTERVAL_START: usize = Self::BASE_INTERVAL_COUNT + 1;
     const BASE_INTERVAL_LEN: usize = Self::BASE_INTERVAL_START + 1;
+    // TODO: For delta-encoding the first residual with respect to the current node, the symbol that would
+    // be used to represent the number of residuals defines which distribution to use. This is because a
+    // list with a high number of residuals will likely be harder to predict.
     const BASE_FIRST_RESIDUAL: usize = Self::BASE_INTERVAL_LEN + 1;
     const BASE_RESIDUAL: usize = Self::BASE_FIRST_RESIDUAL + 1;
-    const NUM_RESIDUALS: usize = 1;
+    // 80 in the original implementation
+    const NUM_RESIDUALS: usize = 16;
     const NUM_CONTEXTS: usize = Self::BASE_RESIDUAL + Self::NUM_RESIDUALS;
 }
 
-impl ContextModel for ZuckerliContextModel {
+impl<EP: EncodeParams> ContextModel for ZuckerliContextModel<EP> {
     fn num_contexts(&self) -> usize {
         Self::NUM_CONTEXTS
     }
@@ -106,17 +115,27 @@ impl ContextModel for ZuckerliContextModel {
             BvGraphComponent::IntervalStart => Self::BASE_INTERVAL_START,
             BvGraphComponent::IntervalLen => Self::BASE_INTERVAL_LEN,
             BvGraphComponent::FirstResidual => Self::BASE_FIRST_RESIDUAL,
-            BvGraphComponent::Residual => Self::BASE_RESIDUAL,
+            BvGraphComponent::Residual => {
+                let (token, _, _) = encode::<EP>(self.last_residual);
+                Self::BASE_RESIDUAL + token.min(Self::NUM_RESIDUALS - 1)
+            }
         }) as u8
     }
 
-    fn update(&mut self, component: BvGraphComponent, _value: u64) {
-        if component == BvGraphComponent::Blocks {
-            self.block_number += 1;
+    fn update(&mut self, component: BvGraphComponent, value: u64) {
+        match component {
+            BvGraphComponent::Blocks => {
+                self.block_number += 1;
+            }
+            BvGraphComponent::FirstResidual | BvGraphComponent::Residual => {
+                self.last_residual = value;
+            }
+            _ => {}
         }
     }
 
     fn reset(&mut self) {
         self.block_number = 0;
+        self.last_residual = 0;
     }
 }

@@ -9,9 +9,9 @@ use crate::huffman::{
 
 use super::{BvGraphComponent, ContextModel};
 
-pub struct HuffmanGraphDecoder<EP: EncodeParams, R: BitRead<LE>, S: ContextModel> {
+pub struct HuffmanGraphDecoder<EP: EncodeParams, R: BitRead<LE>, M: ContextModel> {
     reader: HuffmanReader<R>,
-    context_model: S,
+    context_model: M,
     _marker: core::marker::PhantomData<EP>,
 }
 

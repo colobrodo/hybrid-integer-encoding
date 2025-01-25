@@ -23,6 +23,7 @@ pub trait EncodeParams {
     const LSB_IN_TOKEN: u32;
 }
 
+#[derive(Default, Clone, Copy)]
 pub struct DefaultEncodeParams;
 
 impl EncodeParams for DefaultEncodeParams {
