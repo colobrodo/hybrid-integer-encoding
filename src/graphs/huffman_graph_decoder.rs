@@ -7,7 +7,7 @@ use crate::huffman::{
     DefaultEncodeParams, EncodeParams, EntropyCoder, HuffmanReader, HuffmanTable,
 };
 
-use super::{BvGraphComponent, ContextModel, SimpleContextModel};
+use super::{BvGraphComponent, ContextModel};
 
 pub struct HuffmanGraphDecoder<EP: EncodeParams, R: BitRead<LE>, S: ContextModel> {
     reader: HuffmanReader<R>,
@@ -40,6 +40,7 @@ impl<EP: EncodeParams, R: BitRead<LE>, S: ContextModel> HuffmanGraphDecoder<EP, 
 impl<EP: EncodeParams, R: BitRead<LE>, S: ContextModel> Decode for HuffmanGraphDecoder<EP, R, S> {
     #[inline(always)]
     fn read_outdegree(&mut self) -> u64 {
+        self.context_model.reset();
         self.read(BvGraphComponent::Outdegree)
     }
 
@@ -108,8 +109,8 @@ pub struct SequentialHuffmanDecoderFactory<
     max_bits: usize,
 }
 
-impl<EP: EncodeParams, F: BitReaderFactory<LE>>
-    SequentialHuffmanDecoderFactory<EP, F, SimpleContextModel>
+impl<EP: EncodeParams, F: BitReaderFactory<LE>, C: ContextModel>
+    SequentialHuffmanDecoderFactory<EP, F, C>
 {
     pub fn new(factory: F, max_bits: usize) -> Self {
         SequentialHuffmanDecoderFactory {
@@ -123,19 +124,19 @@ impl<EP: EncodeParams, F: BitReaderFactory<LE>>
 // TODO: make this work for any context model: we should pass something that creates a model
 //       each time with a fixed amount of contexts know in advance to be able to create the huffman header
 //       and reuse it at each random access like now
-impl<EP: EncodeParams, F: BitReaderFactory<LE>> SequentialDecoderFactory
-    for SequentialHuffmanDecoderFactory<EP, F, SimpleContextModel>
+impl<EP: EncodeParams, F: BitReaderFactory<LE>, C: ContextModel + Default> SequentialDecoderFactory
+    for SequentialHuffmanDecoderFactory<EP, F, C>
 where
     for<'a> <F as BitReaderFactory<LE>>::BitReader<'a>: BitRead<LE>,
 {
     type Decoder<'a>
-        = HuffmanGraphDecoder<EP, <F as BitReaderFactory<LE>>::BitReader<'a>, SimpleContextModel>
+        = HuffmanGraphDecoder<EP, <F as BitReaderFactory<LE>>::BitReader<'a>, C>
     where
         Self: 'a;
 
     fn new_decoder(&self) -> anyhow::Result<Self::Decoder<'_>> {
         let reader = self.factory.new_reader();
-        let model = SimpleContextModel;
+        let model = C::default();
         let huffman_reader =
             HuffmanReader::from_bitreader(reader, self.max_bits, model.num_contexts())?;
         Ok(HuffmanGraphDecoder::new(huffman_reader, model))
@@ -145,30 +146,30 @@ where
 pub struct RandomAccessHuffmanDecoderFactory<
     F: BitReaderFactory<LE>,
     OFF: IndexedSeq<Input = usize, Output = usize>,
-    S: ContextModel + Clone,
+    C: ContextModel + Clone,
     EP: EncodeParams = DefaultEncodeParams,
 > {
-    _marker: core::marker::PhantomData<(EP, S)>,
+    _marker: core::marker::PhantomData<(EP, C)>,
     factory: F,
     /// The offsets into the data.
     offsets: MemCase<OFF>,
     //TODO: for now we support only stateless context model
-    model: S,
+    model: C,
     table: HuffmanTable,
 }
 
 impl<
         OFF: IndexedSeq<Input = usize, Output = usize>,
         F: BitReaderFactory<LE>,
-        S: ContextModel + Clone,
+        C: ContextModel + Clone,
         EP: EncodeParams,
-    > RandomAccessHuffmanDecoderFactory<F, OFF, S, EP>
+    > RandomAccessHuffmanDecoderFactory<F, OFF, C, EP>
 where
     for<'a> <F as BitReaderFactory<LE>>::BitReader<'a>: BitRead<LE> + BitSeek,
 {
     pub fn new(
         factory: F,
-        model: S,
+        model: C,
         offsets: MemCase<OFF>,
         max_bits: usize,
     ) -> anyhow::Result<Self> {
@@ -189,13 +190,13 @@ impl<
         OFF: IndexedSeq<Input = usize, Output = usize>,
         F: BitReaderFactory<LE>,
         EP: EncodeParams,
-        S: ContextModel + Copy,
-    > RandomAccessDecoderFactory for RandomAccessHuffmanDecoderFactory<F, OFF, S, EP>
+        C: ContextModel + Copy,
+    > RandomAccessDecoderFactory for RandomAccessHuffmanDecoderFactory<F, OFF, C, EP>
 where
     for<'a> <F as BitReaderFactory<LE>>::BitReader<'a>: BitRead<LE> + BitSeek,
 {
     type Decoder<'a>
-        = HuffmanGraphDecoder<EP, <F as BitReaderFactory<LE>>::BitReader<'a>, S>
+        = HuffmanGraphDecoder<EP, <F as BitReaderFactory<LE>>::BitReader<'a>, C>
     where
         Self: 'a;
 

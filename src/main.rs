@@ -18,14 +18,17 @@ use clap::{Parser, Subcommand};
 use lender::{for_, Lender};
 use rand::{prelude::Distribution, rngs::SmallRng, Rng, SeedableRng};
 
-use hybrid_integer_encoding::{graphs::load_graph, utils::StatBitWriter};
-use hybrid_integer_encoding::{graphs::load_graph_seq, utils::IntegerData};
+use hybrid_integer_encoding::utils::IntegerData;
 use hybrid_integer_encoding::{
-    graphs::{convert_graph, CompressionParameters},
+    graphs::{
+        convert_graph, load_graph, load_graph_seq, CompressionParameters, SimpleContextModel,
+        SingleContextModel, ZuckerliContextModel,
+    },
     huffman::{
         encode, DefaultEncodeParams, EncodeParams, EntropyCoder, HuffmanEncoder, HuffmanReader,
         IntegerHistogram,
     },
+    utils::StatBitWriter,
 };
 use webgraph::traits::{RandomAccessGraph, SequentialGraph};
 
@@ -92,6 +95,9 @@ enum GraphCommand {
         /// The maximum number of bits used for each word of the huffman code.
         #[arg(short = 'b', long, default_value = "8")]
         max_bits: usize,
+        /// The type of context model to be used to choose the distribution of the next encoded symbol.
+        #[arg(long, default_value = "simple")]
+        context_model: ContextModelArgument,
         /// Number of iteration of the graph compression using the huffman estimator for reference selection.
         #[arg(long, default_value = "1")]
         num_rounds: usize,
@@ -106,6 +112,10 @@ enum GraphCommand {
         /// The maximum number of bits for each word of the huffman code used to compress the graph
         #[arg(short = 'b', long, default_value = "8")]
         max_bits: usize,
+        /// The type of context model used to encode the graph.
+        #[arg(long, default_value = "simple")]
+        context_model: ContextModelArgument,
+        /// csv character separator between the source node id and the destination node id (in order).
         #[arg(long, default_value_t = ',')]
         separator: char,
     },
@@ -179,6 +189,17 @@ struct HuffmanArguments {
     /// The maximum number of bits used for each code
     #[arg(short = 'b', long, default_value = "8")]
     max_bits: usize,
+}
+
+#[derive(clap::ValueEnum, Debug, Clone)]
+enum ContextModelArgument {
+    /// Uses only one single context for each symbol
+    Single,
+    /// Uses one context for each component of the adjacency list
+    Simple,
+    /// Implements a partial version of context model described in zuckerli
+    /// using only the information available in the current adjacency list
+    Zuckerli,
 }
 
 fn encode_file(
@@ -446,6 +467,7 @@ fn main() -> Result<()> {
                 max_bits,
                 num_rounds,
                 build_offsets,
+                context_model,
             } => {
                 let compression_parameters = CompressionParameters {
                     compression_window,
@@ -453,32 +475,67 @@ fn main() -> Result<()> {
                     min_interval_length,
                     num_rounds,
                 };
-                convert_graph(
-                    basename,
-                    output_basename,
-                    max_bits,
-                    compression_parameters,
-                    build_offsets,
-                )?;
+                match context_model {
+                    ContextModelArgument::Single => convert_graph::<SingleContextModel>(
+                        basename,
+                        output_basename,
+                        max_bits,
+                        compression_parameters,
+                        build_offsets,
+                    )?,
+                    ContextModelArgument::Simple => convert_graph::<SimpleContextModel>(
+                        basename,
+                        output_basename,
+                        max_bits,
+                        compression_parameters,
+                        build_offsets,
+                    )?,
+                    ContextModelArgument::Zuckerli => convert_graph::<ZuckerliContextModel>(
+                        basename,
+                        output_basename,
+                        max_bits,
+                        compression_parameters,
+                        build_offsets,
+                    )?,
+                }
             }
             GraphCommand::Read {
                 basename,
                 max_bits,
                 separator,
-            } => {
-                let graph = load_graph_seq(basename, max_bits)?;
-                for_!((src, succ) in graph {
-                    for dst in succ {
-                        println!("{}{}{}", src, separator, dst);
-                    }
-                });
-            }
+                context_model,
+            } => match context_model {
+                ContextModelArgument::Single => {
+                    let graph = load_graph_seq::<SingleContextModel>(basename, max_bits)?;
+                    for_!((src, succ) in graph {
+                        for dst in succ {
+                            println!("{}{}{}", src, separator, dst);
+                        }
+                    });
+                }
+                ContextModelArgument::Simple => {
+                    let graph = load_graph_seq::<SimpleContextModel>(basename, max_bits)?;
+                    for_!((src, succ) in graph {
+                        for dst in succ {
+                            println!("{}{}{}", src, separator, dst);
+                        }
+                    });
+                }
+                ContextModelArgument::Zuckerli => {
+                    let graph = load_graph_seq::<ZuckerliContextModel>(basename, max_bits)?;
+                    for_!((src, succ) in graph {
+                        for dst in succ {
+                            println!("{}{}{}", src, separator, dst);
+                        }
+                    });
+                }
+            },
             GraphCommand::Bench {
                 basename,
                 max_bits,
                 repeats,
             } => {
-                let graph = load_graph_seq(basename, max_bits)?;
+                let graph = load_graph_seq::<SimpleContextModel>(basename, max_bits)?;
                 bench_seq(graph, repeats);
             }
             GraphCommand::BenchRandom {
@@ -488,7 +545,7 @@ fn main() -> Result<()> {
                 repeats,
                 seed,
             } => {
-                let graph = load_graph(basename, max_bits)?;
+                let graph = load_graph::<SimpleContextModel>(basename, max_bits)?;
                 bench_random_graph(graph, seed, random, repeats);
             }
         },

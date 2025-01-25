@@ -50,7 +50,8 @@ impl<EP: EncodeParams, E: Encode, W: BitWrite<LE>, S: ContextModel> Encode
 {
     type Error = Infallible;
 
-    fn start_node(&mut self, _node: usize) -> Result<usize, Self::Error> {
+    fn start_node(&mut self, _node_id: usize) -> Result<usize, Self::Error> {
+        self.context_model.reset();
         Ok(0)
     }
 
@@ -155,74 +156,73 @@ impl<EP: EncodeParams, E: Encode, S: ContextModel> HuffmanGraphEncoderBuilder<EP
     pub fn build_estimator(self) -> HuffmanEstimator<EP, S> {
         HuffmanEstimator::new(self.data, self.context_model)
     }
+
+    fn add_data(&mut self, component: BvGraphComponent, value: u64) {
+        let context = self.context_model.choose_context(component);
+        self.data.add(context, value as u32);
+        self.context_model.update(component, value);
+    }
 }
 
 impl<EP: EncodeParams, E: Encode, S: ContextModel> Encode for HuffmanGraphEncoderBuilder<EP, E, S> {
     type Error = E::Error;
 
     fn start_node(&mut self, _node: usize) -> Result<usize, Self::Error> {
+        self.context_model.reset();
         Ok(0)
     }
 
     fn write_outdegree(&mut self, value: u64) -> Result<usize, Self::Error> {
         let result = self.estimator.write_outdegree(value)?;
-        self.data
-            .add(BvGraphComponent::Outdegree as u8, value as u32);
+        self.add_data(BvGraphComponent::Outdegree, value);
         Ok(result)
     }
 
     fn write_reference_offset(&mut self, value: u64) -> Result<usize, Self::Error> {
         let result = self.estimator.write_reference_offset(value)?;
-        self.data
-            .add(BvGraphComponent::ReferenceOffset as u8, value as u32);
+        self.add_data(BvGraphComponent::ReferenceOffset, value);
         Ok(result)
     }
 
     fn write_block_count(&mut self, value: u64) -> Result<usize, Self::Error> {
         let result = self.estimator.write_block_count(value)?;
-        self.data
-            .add(BvGraphComponent::BlockCount as u8, value as u32);
+        self.add_data(BvGraphComponent::BlockCount, value);
         Ok(result)
     }
 
     fn write_block(&mut self, value: u64) -> Result<usize, Self::Error> {
         let result = self.estimator.write_block(value)?;
-        self.data.add(BvGraphComponent::Blocks as u8, value as u32);
+        self.add_data(BvGraphComponent::Blocks, value);
         Ok(result)
     }
 
     fn write_interval_count(&mut self, value: u64) -> Result<usize, Self::Error> {
         let result = self.estimator.write_interval_count(value)?;
-        self.data
-            .add(BvGraphComponent::IntervalCount as u8, value as u32);
+        self.add_data(BvGraphComponent::IntervalCount, value);
         Ok(result)
     }
 
     fn write_interval_start(&mut self, value: u64) -> Result<usize, Self::Error> {
         let result = self.estimator.write_interval_start(value)?;
-        self.data
-            .add(BvGraphComponent::IntervalStart as u8, value as u32);
+        self.add_data(BvGraphComponent::IntervalStart, value);
         Ok(result)
     }
 
     fn write_interval_len(&mut self, value: u64) -> Result<usize, Self::Error> {
         let result = self.estimator.write_interval_len(value)?;
-        self.data
-            .add(BvGraphComponent::IntervalLen as u8, value as u32);
+        self.add_data(BvGraphComponent::IntervalLen, value);
         Ok(result)
     }
 
     fn write_first_residual(&mut self, value: u64) -> Result<usize, Self::Error> {
         let result = self.estimator.write_first_residual(value)?;
-        self.data
-            .add(BvGraphComponent::FirstResidual as u8, value as u32);
+        self.add_data(BvGraphComponent::FirstResidual, value);
         Ok(result)
     }
 
     fn write_residual(&mut self, value: u64) -> Result<usize, Self::Error> {
         let result = self.estimator.write_residual(value)?;
-        self.data
-            .add(BvGraphComponent::Residual as u8, value as u32);
+        self.add_data(BvGraphComponent::Residual, value);
         Ok(result)
     }
 

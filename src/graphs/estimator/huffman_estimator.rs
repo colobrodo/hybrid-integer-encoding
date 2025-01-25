@@ -33,6 +33,7 @@ impl<EP: EncodeParams, S: ContextModel> Encode for HuffmanEstimator<EP, S> {
     type Error = Infallible;
 
     fn start_node(&mut self, _node: usize) -> Result<usize, Self::Error> {
+        self.context_model.reset();
         Ok(0)
     }
 
