@@ -86,6 +86,9 @@ impl<EP: EncodeParams> ZuckerliContextModel<EP> {
     // TODO: For delta-encoding the first residual with respect to the current node, the symbol that would
     // be used to represent the number of residuals defines which distribution to use. This is because a
     // list with a high number of residuals will likely be harder to predict.
+    // TODO: to calculate the number of residual we should keep track of the number of items written and deduce the remaining from the outdegree
+    //       we can do that looking at the number of odd blocks and lenghts of the intervals except for the fact that the last block is implicit and never written
+    //       because can be deduced from the reference's outdegree. unfortunatly we don't have it from bvcomp and we cannot calculate it :/
     const BASE_FIRST_RESIDUAL: usize = Self::BASE_INTERVAL_LEN + 1;
     const BASE_RESIDUAL: usize = Self::BASE_FIRST_RESIDUAL + 1;
     // 80 in the original implementation
