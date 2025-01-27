@@ -121,9 +121,6 @@ impl<EP: EncodeParams, F: BitReaderFactory<LE>, C: ContextModel>
     }
 }
 
-// TODO: make this work for any context model: we should pass something that creates a model
-//       each time with a fixed amount of contexts know in advance to be able to create the huffman header
-//       and reuse it at each random access like now
 impl<EP: EncodeParams, F: BitReaderFactory<LE>, C: ContextModel + Default> SequentialDecoderFactory
     for SequentialHuffmanDecoderFactory<EP, F, C>
 where
@@ -136,9 +133,9 @@ where
 
     fn new_decoder(&self) -> anyhow::Result<Self::Decoder<'_>> {
         let reader = self.factory.new_reader();
-        let model = C::default();
         let huffman_reader =
-            HuffmanReader::from_bitreader(reader, self.max_bits, model.num_contexts())?;
+            HuffmanReader::from_bitreader(reader, self.max_bits, C::num_contexts())?;
+        let model = C::default();
         Ok(HuffmanGraphDecoder::new(huffman_reader, model))
     }
 }
@@ -153,7 +150,6 @@ pub struct RandomAccessHuffmanDecoderFactory<
     factory: F,
     /// The offsets into the data.
     offsets: MemCase<OFF>,
-    //TODO: for now we support only stateless context model
     model: C,
     table: HuffmanTable,
 }
@@ -174,7 +170,7 @@ where
         max_bits: usize,
     ) -> anyhow::Result<Self> {
         let mut reader = factory.new_reader();
-        let table = HuffmanReader::decode_table(&mut reader, max_bits, model.num_contexts())?;
+        let table = HuffmanReader::decode_table(&mut reader, max_bits, C::num_contexts())?;
         drop(reader);
         Ok(RandomAccessHuffmanDecoderFactory {
             offsets,

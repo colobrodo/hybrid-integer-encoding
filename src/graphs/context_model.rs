@@ -5,7 +5,7 @@ use super::BvGraphComponent;
 /// A model defines how the context of each encoded or estimated value is chosen during graph compression.
 pub trait ContextModel {
     /// Returns the number of contexts available.
-    fn num_contexts(&self) -> usize;
+    fn num_contexts() -> usize;
     /// Choose the context based on the current component that should be encoded.
     fn choose_context(&mut self, component: BvGraphComponent) -> u8;
     /// Update the model with the last value seen, for stateful model (like the one described in zuckerli).
@@ -20,7 +20,7 @@ pub struct SimpleContextModel;
 
 impl ContextModel for SimpleContextModel {
     #[inline(always)]
-    fn num_contexts(&self) -> usize {
+    fn num_contexts() -> usize {
         BvGraphComponent::COMPONENTS
     }
 
@@ -41,7 +41,7 @@ pub struct SingleContextModel;
 
 impl ContextModel for SingleContextModel {
     #[inline(always)]
-    fn num_contexts(&self) -> usize {
+    fn num_contexts() -> usize {
         1
     }
 
@@ -97,7 +97,7 @@ impl<EP: EncodeParams> ZuckerliContextModel<EP> {
 }
 
 impl<EP: EncodeParams> ContextModel for ZuckerliContextModel<EP> {
-    fn num_contexts(&self) -> usize {
+    fn num_contexts() -> usize {
         Self::NUM_CONTEXTS
     }
 

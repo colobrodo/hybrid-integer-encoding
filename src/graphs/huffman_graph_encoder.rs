@@ -128,15 +128,15 @@ impl<EP: EncodeParams, E: Encode, W: BitWrite<LE>, S: ContextModel> EncodeAndEst
 /// Builder to construct a HuffmanGraphEncoder, it requires an estimator that implements the Encode
 /// trait and is used for estimating the adjacency list size of each node during the process of
 /// reference selection.
-pub struct HuffmanGraphEncoderBuilder<EP: EncodeParams, E: Encode, S: ContextModel> {
+pub struct HuffmanGraphEncoderBuilder<EP: EncodeParams, E: Encode, C: ContextModel> {
     estimator: E,
-    context_model: S,
+    context_model: C,
     data: IntegerHistogram<EP>,
 }
 
-impl<EP: EncodeParams, E: Encode, S: ContextModel> HuffmanGraphEncoderBuilder<EP, E, S> {
-    pub fn new(num_symbols: usize, estimator: E, context_model: S) -> Self {
-        let contexts = context_model.num_contexts();
+impl<EP: EncodeParams, E: Encode, C: ContextModel> HuffmanGraphEncoderBuilder<EP, E, C> {
+    pub fn new(num_symbols: usize, estimator: E, context_model: C) -> Self {
+        let contexts = C::num_contexts();
         Self {
             estimator,
             context_model,
@@ -148,12 +148,12 @@ impl<EP: EncodeParams, E: Encode, S: ContextModel> HuffmanGraphEncoderBuilder<EP
         self,
         writer: &'_ mut W,
         max_bits: usize,
-    ) -> HuffmanGraphEncoder<'_, EP, E, W, S> {
+    ) -> HuffmanGraphEncoder<'_, EP, E, W, C> {
         let encoder = HuffmanEncoder::<EP>::new(self.data, max_bits);
         HuffmanGraphEncoder::new(encoder, self.estimator, self.context_model, writer)
     }
 
-    pub fn build_estimator(self) -> HuffmanEstimator<EP, S> {
+    pub fn build_estimator(self) -> HuffmanEstimator<EP, C> {
         HuffmanEstimator::new(self.data, self.context_model)
     }
 
