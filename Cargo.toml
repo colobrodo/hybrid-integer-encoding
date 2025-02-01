@@ -15,5 +15,5 @@ sux = "0.4.1"
 lender = "0.2.9"
 log = "0.4.22"
 rand = "0.8.5"
-webgraph = "0.1.4"
+webgraph = { git = "https://github.com/colobrodo/webgraph-rs.git", branch = "bvgraphz" }
 zipf = "7.0.1"
