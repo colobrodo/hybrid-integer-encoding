@@ -1,4 +1,5 @@
 mod component;
+pub mod compressors;
 mod context_model;
 pub mod estimator;
 mod huffman_graph_decoder;
@@ -15,6 +16,7 @@ use webgraph::cli::build::ef::{build_eliasfano, CliArgs};
 use webgraph::prelude::{SequentialLabeling, *};
 
 use component::*;
+pub use compressors::*;
 pub use context_model::*;
 use estimator::*;
 pub use huffman_graph_decoder::*;
@@ -41,9 +43,10 @@ fn reference_selection_round<
     // setup for the new iteration with huffman estimator
     let mut huffman_graph_encoder_builder =
         HuffmanGraphEncoderBuilder::<EP, _, _>::new(num_symbols, huffman_estimator, C::default());
-    let mut bvcomp = BvComp::new(
+    let mut bvcomp = BvCompZ::new(
         &mut huffman_graph_encoder_builder,
         compression_parameters.compression_window,
+        10000,
         compression_parameters.max_ref_count,
         compression_parameters.min_interval_length,
         0,
@@ -59,13 +62,6 @@ fn reference_selection_round<
     bvcomp.flush()?;
     pl.done();
     Ok(huffman_graph_encoder_builder)
-}
-
-pub struct CompressionParameters {
-    pub compression_window: usize,
-    pub max_ref_count: usize,
-    pub min_interval_length: usize,
-    pub num_rounds: usize,
 }
 
 pub fn convert_graph<C: ContextModel + Default + Copy>(
@@ -93,9 +89,10 @@ pub fn convert_graph<C: ContextModel + Default + Copy>(
             Log2Estimator,
             C::default(),
         );
-    let mut bvcomp = BvComp::new(
+    let mut bvcomp = BvCompZ::new(
         &mut huffman_graph_encoder_builder,
         compression_parameters.compression_window,
+        10000,
         compression_parameters.max_ref_count,
         compression_parameters.min_interval_length,
         0,
@@ -149,9 +146,10 @@ pub fn convert_graph<C: ContextModel + Default + Copy>(
     pl.info(format_args!("Writing header for the graph..."));
     let header_size = huffman_graph_encoder.write_header()?;
 
-    let mut bvcomp = BvComp::new(
+    let mut bvcomp = BvCompZ::new(
         &mut huffman_graph_encoder,
         compression_parameters.compression_window,
+        10000,
         compression_parameters.max_ref_count,
         compression_parameters.min_interval_length,
         0,

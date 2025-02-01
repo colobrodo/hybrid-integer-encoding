@@ -21,8 +21,8 @@ use rand::{prelude::Distribution, rngs::SmallRng, Rng, SeedableRng};
 use hybrid_integer_encoding::utils::IntegerData;
 use hybrid_integer_encoding::{
     graphs::{
-        convert_graph, load_graph, load_graph_seq, CompressionParameters, SimpleContextModel,
-        SingleContextModel, ZuckerliContextModel,
+        compressors::CompressionParameters, convert_graph, load_graph, load_graph_seq,
+        SimpleContextModel, SingleContextModel, ZuckerliContextModel,
     },
     huffman::{
         encode, DefaultEncodeParams, EncodeParams, EntropyCoder, HuffmanEncoder, HuffmanReader,
