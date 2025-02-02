@@ -185,6 +185,7 @@ pub fn convert_graph<C: ContextModel + Default + Copy>(
             pl.update();
         }];
     }
+    bvcomp.flush()?;
     pl.info(format_args!(
         "After second round with Huffman estimator: Recompressed graph using {} bits",
         writer.bits_written
