@@ -11,6 +11,7 @@ use dsi_progress_logger::prelude::*;
 use epserde::deser::{Deserialize, MemCase};
 use lender::for_;
 use std::io::BufWriter;
+use std::time::Duration;
 use std::{fs::File, path::PathBuf};
 use webgraph::cli::build::ef::{build_eliasfano, CliArgs};
 use webgraph::prelude::{SequentialLabeling, *};
@@ -76,6 +77,8 @@ pub fn convert_graph<C: ContextModel + Default + Copy>(
         "num_rounds must be at least 1"
     );
     let mut pl = ProgressLogger::default();
+    // log every five minutes
+    pl.log_interval(Duration::from_secs(5 * 60));
     let num_symbols = 1 << max_bits;
 
     let seq_graph = BvGraphSeq::with_basename(&basename)
