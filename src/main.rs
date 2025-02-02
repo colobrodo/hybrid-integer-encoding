@@ -18,7 +18,7 @@ use clap::{Parser, Subcommand};
 use lender::{for_, Lender};
 use rand::{prelude::Distribution, rngs::SmallRng, Rng, SeedableRng};
 
-use hybrid_integer_encoding::utils::IntegerData;
+use hybrid_integer_encoding::{graphs::build_offsets, utils::IntegerData};
 use hybrid_integer_encoding::{
     graphs::{
         compressors::CompressionParameters, convert_graph, load_graph, load_graph_seq,
@@ -151,6 +151,17 @@ enum GraphCommand {
         /// Seed to reproduce the experiment
         #[arg(short = 's', long, default_value = "0")]
         seed: u64,
+    },
+    /// Create the offsets file from an existing huffman compressed graph
+    Offsets {
+        /// The basename of the graph to read
+        basename: PathBuf,
+        /// The maximum number of bits for each word of the huffman code used to compress the graph
+        #[arg(short = 'b', long, default_value = "8")]
+        max_bits: usize,
+        /// The type of context model used to encode the graph.
+        #[arg(long, default_value = "simple")]
+        context_model: ContextModelArgument,
     },
 }
 
@@ -582,6 +593,27 @@ fn main() -> Result<()> {
                         basename, max_bits,
                     )?;
                     bench_random_graph(graph, seed, random, repeats);
+                }
+            },
+            GraphCommand::Offsets {
+                basename,
+                max_bits,
+                context_model,
+            } => match context_model {
+                ContextModelArgument::Single => {
+                    let graph = load_graph_seq::<SingleContextModel>(basename.clone(), max_bits)?;
+                    build_offsets(graph, basename)?;
+                }
+                ContextModelArgument::Simple => {
+                    let graph = load_graph_seq::<SimpleContextModel>(basename.clone(), max_bits)?;
+                    build_offsets(graph, basename)?;
+                }
+                ContextModelArgument::Zuckerli => {
+                    let graph = load_graph_seq::<ZuckerliContextModel<DefaultEncodeParams>>(
+                        basename.clone(),
+                        max_bits,
+                    )?;
+                    build_offsets(graph, basename)?;
                 }
             },
         },

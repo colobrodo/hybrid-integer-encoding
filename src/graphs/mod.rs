@@ -199,14 +199,15 @@ pub fn convert_graph<C: ContextModel + Default + Copy>(
 pub fn load_graph_seq<C: ContextModel + Default + Copy>(
     basename: PathBuf,
     max_bits: usize,
-) -> Result<BvGraphSeq<SequentialHuffmanDecoderFactory<DefaultEncodeParams, FileFactory<LE>, C>>> {
+) -> Result<BvGraphSeq<SequentialHuffmanDecoderFactory<DefaultEncodeParams, MmapHelper<u32>, C>>> {
     let properties_path = basename.with_extension(PROPERTIES_EXTENSION);
     let (num_nodes, num_arcs, comp_flags) = parse_properties::<BE>(&properties_path)?;
-    let graph_path = basename.with_extension(GRAPH_EXTENSION);
 
-    let file_factory = FileFactory::<LE>::new(graph_path)?;
+    let graph_path = basename.with_extension(GRAPH_EXTENSION);
+    let flags = MemoryFlags::TRANSPARENT_HUGE_PAGES | MemoryFlags::SEQUENTIAL;
+    let mmap_factory = MmapHelper::mmap(&graph_path, flags.into())?;
     let factory =
-        SequentialHuffmanDecoderFactory::<DefaultEncodeParams, _, _>::new(file_factory, max_bits);
+        SequentialHuffmanDecoderFactory::<DefaultEncodeParams, _, _>::new(mmap_factory, max_bits);
     let graph = BvGraphSeq::new(
         factory,
         num_nodes,
@@ -257,4 +258,34 @@ pub fn load_graph<C: ContextModel + Default + Copy>(
         comp_flags.min_interval_length,
     );
     Ok(graph)
+}
+
+pub fn build_offsets<F: SequentialDecoderFactory>(
+    graph: BvGraphSeq<F>,
+    basename: PathBuf,
+) -> Result<()>
+where
+    for<'a> F::Decoder<'a>: Decode + BitSeek,
+{
+    let offsets_path = basename.with_extension(OFFSETS_EXTENSION);
+    let file = std::fs::File::create(&offsets_path)
+        .with_context(|| format!("Could not create {}", offsets_path.display()))?;
+    // create a bit writer on the file
+    let mut offsets_writer = <BufBitWriter<LE, _>>::new(<WordAdapter<usize, _>>::new(
+        BufWriter::with_capacity(1 << 20, file),
+    ));
+    let mut offset = 0;
+    let mut degs_iter = graph.offset_deg_iter();
+    for (new_offset, _) in &mut degs_iter {
+        // write where
+        offsets_writer
+            .write_gamma(new_offset - offset)
+            .context("Could not write gamma")?;
+        offset = new_offset;
+    }
+    // write the last offset, this is done to avoid decoding the last node
+    offsets_writer
+        .write_gamma((degs_iter.get_pos() - offset) as _)
+        .context("Could not write final gamma")?;
+    Ok(())
 }
