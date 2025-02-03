@@ -274,7 +274,7 @@ where
     let file = std::fs::File::create(&offsets_path)
         .with_context(|| format!("Could not create {}", offsets_path.display()))?;
     // create a bit writer on the file
-    let mut offsets_writer = <BufBitWriter<LE, _>>::new(<WordAdapter<usize, _>>::new(
+    let mut offsets_writer = <BufBitWriter<BE, _>>::new(<WordAdapter<usize, _>>::new(
         BufWriter::with_capacity(1 << 20, file),
     ));
 
@@ -292,13 +292,14 @@ where
         offsets_writer
             .write_gamma(new_offset - offset)
             .context("Could not write gamma")?;
-        pl.update();
+        pl.light_update();
         offset = new_offset;
     }
     // write the last offset, this is done to avoid decoding the last node
     offsets_writer
         .write_gamma((degs_iter.get_pos() - offset) as _)
         .context("Could not write final gamma")?;
+    pl.light_update();
     pl.start("Done!");
     Ok(())
 }
