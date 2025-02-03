@@ -277,6 +277,14 @@ where
     let mut offsets_writer = <BufBitWriter<LE, _>>::new(<WordAdapter<usize, _>>::new(
         BufWriter::with_capacity(1 << 20, file),
     ));
+
+    let mut pl = ProgressLogger::default();
+    // log every five minutes
+    pl.log_interval(Duration::from_secs(5 * 60));
+    pl.start("Start building the offsets...");
+    pl.item_name("offset")
+        .expected_updates(Some(graph.num_nodes()));
+
     let mut offset = 0;
     let mut degs_iter = graph.offset_deg_iter();
     for (new_offset, _) in &mut degs_iter {
@@ -284,11 +292,13 @@ where
         offsets_writer
             .write_gamma(new_offset - offset)
             .context("Could not write gamma")?;
+        pl.update();
         offset = new_offset;
     }
     // write the last offset, this is done to avoid decoding the last node
     offsets_writer
         .write_gamma((degs_iter.get_pos() - offset) as _)
         .context("Could not write final gamma")?;
+    pl.start("Done!");
     Ok(())
 }
