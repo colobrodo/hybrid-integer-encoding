@@ -17,3 +17,4 @@ log = "0.4.22"
 rand = "0.8.5"
 webgraph = { git = "https://github.com/colobrodo/webgraph-rs.git", branch = "bvgraphz" }
 zipf = "7.0.1"
+tempfile = "3.2"

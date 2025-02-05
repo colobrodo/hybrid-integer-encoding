@@ -708,6 +708,7 @@ dependencies = [
  "log",
  "rand",
  "sux",
+ "tempfile",
  "webgraph",
  "zipf",
 ]
