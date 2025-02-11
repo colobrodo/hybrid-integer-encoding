@@ -8,7 +8,12 @@ mod tests {
         huffman::DefaultEncodeParams,
     };
     use lender::Lender;
-    use std::{fs, path::PathBuf, str::FromStr};
+    use std::{
+        fs::File,
+        io::{BufReader, BufWriter},
+        path::PathBuf,
+        str::FromStr,
+    };
     use tempfile::TempDir;
     use webgraph::prelude::*;
 
@@ -28,11 +33,26 @@ mod tests {
         // Copy the properties file to the temporary directory
         let properties_path = basename.with_extension("properties");
         let temp_properties_path = temp_dir.path().join(properties_path.file_name().unwrap());
-        // TODO: now only the default parameters are used, but we should allow to overwrite the ones in CompressionParameters
-        //       to the copy of the properties file
-        fs::copy(&properties_path, &temp_properties_path)?;
+        let properties_file = BufReader::new(File::open(&properties_path)?);
+        let mut properties_map = java_properties::read(properties_file)?;
+        // Override the properties with passed compression parameters
+        properties_map.insert(
+            "windowsize".into(),
+            compression_parameters.compression_window.to_string(),
+        );
+        properties_map.insert(
+            "maxrefcount".into(),
+            compression_parameters.max_ref_count.to_string(),
+        );
+        properties_map.insert(
+            "minintervallength".into(),
+            compression_parameters.min_interval_length.to_string(),
+        );
 
-        // get output basename with the same full path as the properties file but without extension
+        let new_properties_file = BufWriter::new(File::create(&temp_properties_path)?);
+        java_properties::write(new_properties_file, &properties_map)?;
+
+        // Get output basename with the same full path as the properties file but without extension
         let output_basename = temp_properties_path.with_extension("");
         convert_graph::<C>(
             basename.clone(),
@@ -97,5 +117,16 @@ mod tests {
         compress_graph::<ZuckerliContextModel<DefaultEncodeParams>>(compression_parameters, 12)
             .expect("Converting the graph");
     }
-    // TODO: test with each context model and with different compression window
+
+    #[test]
+    fn compress_and_decompress_with_bigger_window_size() {
+        let compression_parameters = CompressionParameters {
+            compression_window: 32,
+            max_ref_count: 3,
+            min_interval_length: 4,
+            num_rounds: 1,
+        };
+        compress_graph::<SimpleContextModel>(compression_parameters, 12)
+            .expect("Converting the graph");
+    }
 }

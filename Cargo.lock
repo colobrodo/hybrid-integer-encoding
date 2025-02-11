@@ -704,6 +704,7 @@ dependencies = [
  "dsi-progress-logger",
  "env_logger",
  "epserde",
+ "java-properties",
  "lender",
  "log",
  "rand",
