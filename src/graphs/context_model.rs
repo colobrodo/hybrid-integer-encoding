@@ -10,6 +10,8 @@ pub trait ContextModel {
     fn choose_context(&mut self, component: BvGraphComponent) -> u8;
     /// Update the model with the last value seen, for stateful model (like the one described in zuckerli).
     fn update(&mut self, component: BvGraphComponent, value: u64);
+    /// Callback called to signal the number of total residuals
+    fn num_of_residuals(&mut self, _total_residuals: usize) {}
     /// Signal the context model the start decoding of a new adjacency list
     fn reset(&mut self);
 }
@@ -56,11 +58,17 @@ impl ContextModel for SingleContextModel {
     fn reset(&mut self) {}
 }
 
-/// A partial implementation of the zuckerli context model, it does not implement
-/// multiple contexts for outdegrees and references
+/// A partial implementation of the Zuckerli context model, it does not implement
+/// multiple contexts for outdegrees and references and introduce a context model
+/// for intervals (originaly not presents)
 #[derive(Default, Clone, Copy)]
 pub struct ZuckerliContextModel<EP: EncodeParams> {
+    /// Index of the upcoming block
     block_number: u32,
+    /// total number of residuals: used to predict the context of the
+    /// first residual
+    total_residuals: usize,
+    /// Last seen residual
     last_residual: u64,
     _marker: core::marker::PhantomData<EP>,
 }
@@ -125,6 +133,10 @@ impl<EP: EncodeParams> ContextModel for ZuckerliContextModel<EP> {
         }) as u8
     }
 
+    fn num_of_residuals(&mut self, total_residuals: usize) {
+        self.total_residuals = total_residuals;
+    }
+
     fn update(&mut self, component: BvGraphComponent, value: u64) {
         match component {
             BvGraphComponent::Blocks => {
@@ -138,6 +150,7 @@ impl<EP: EncodeParams> ContextModel for ZuckerliContextModel<EP> {
     }
 
     fn reset(&mut self) {
+        self.total_residuals = 0;
         self.block_number = 0;
         self.last_residual = 0;
     }
