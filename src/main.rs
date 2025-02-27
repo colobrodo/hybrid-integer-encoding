@@ -1,4 +1,5 @@
 use std::{
+    fmt::Debug,
     fs::File,
     hint::black_box,
     io::{BufRead, BufReader},

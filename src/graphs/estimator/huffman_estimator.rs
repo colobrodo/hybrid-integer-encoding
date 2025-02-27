@@ -65,6 +65,10 @@ impl<EP: EncodeParams, S: ContextModel> Encode for HuffmanEstimator<EP, S> {
         Ok(self.estimate(BvGraphComponent::IntervalLen, value))
     }
 
+    fn num_of_residuals(&mut self, total_residuals: usize) {
+        self.context_model.num_of_residuals(total_residuals);
+    }
+
     fn write_first_residual(&mut self, value: u64) -> Result<usize, Self::Error> {
         Ok(self.estimate(BvGraphComponent::FirstResidual, value))
     }

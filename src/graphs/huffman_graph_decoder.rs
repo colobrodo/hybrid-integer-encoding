@@ -80,6 +80,11 @@ impl<EP: EncodeParams, R: BitRead<LE>, S: ContextModel> Decode for HuffmanGraphD
     }
 
     #[inline(always)]
+    fn num_of_residuals(&mut self, total_residuals: usize) {
+        self.context_model.num_of_residuals(total_residuals);
+    }
+
+    #[inline(always)]
     fn read_residual(&mut self) -> u64 {
         self.read(BvGraphComponent::Residual)
     }
