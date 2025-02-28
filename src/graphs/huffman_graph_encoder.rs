@@ -97,6 +97,10 @@ impl<EP: EncodeParams, E: Encode, W: BitWrite<LE>, S: ContextModel> Encode
         Ok(result)
     }
 
+    fn num_of_residuals(&mut self, total_residuals: usize) {
+        self.context_model.num_of_residuals(total_residuals);
+    }
+
     fn write_residual(&mut self, value: u64) -> Result<usize, Self::Error> {
         let result = self.write(BvGraphComponent::Residual, value).unwrap();
         Ok(result)
@@ -219,7 +223,7 @@ impl<EP: EncodeParams, E: Encode, S: ContextModel> Encode for HuffmanGraphEncode
         self.add_data(BvGraphComponent::FirstResidual, value);
         Ok(result)
     }
-    
+
     fn num_of_residuals(&mut self, total_residuals: usize) {
         self.context_model.num_of_residuals(total_residuals);
     }
@@ -237,7 +241,6 @@ impl<EP: EncodeParams, E: Encode, S: ContextModel> Encode for HuffmanGraphEncode
     fn end_node(&mut self, node: usize) -> Result<usize, Self::Error> {
         self.estimator.end_node(node)
     }
-
 }
 
 impl<EP: EncodeParams, E: Encode, S: ContextModel> EncodeAndEstimate

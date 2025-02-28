@@ -97,8 +97,7 @@ impl<EP: EncodeParams> ZuckerliContextModel<EP> {
     const BASE_FIRST_RESIDUAL: usize = Self::BASE_INTERVAL_LEN + 1;
     const BASE_RESIDUAL: usize = Self::BASE_FIRST_RESIDUAL + Self::NUM_FIRST_RESIDUALS;
     // 32 in the original implementation
-    // TODO: check why this doesn't work
-    const NUM_FIRST_RESIDUALS: usize = 1;
+    const NUM_FIRST_RESIDUALS: usize = 16;
     // 80 in the original implementation
     const NUM_RESIDUALS: usize = 16;
     const NUM_CONTEXTS: usize = Self::BASE_RESIDUAL + Self::NUM_RESIDUALS;
