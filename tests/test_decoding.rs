@@ -8,7 +8,8 @@ mod tests {
         DefaultEncodeParams, EntropyCoder, HuffmanEncoder, HuffmanReader, IntegerHistogram,
         DEFAULT_MAX_HUFFMAN_BITS, DEFAULT_NUM_SYMBOLS,
     };
-    use rand::{prelude::Distribution, rngs::SmallRng, SeedableRng};
+    use rand::prelude::*;
+    use rand_distr::Zipf;
 
     fn encode_and_decode<
         const NUM_CONTEXT: usize,
@@ -19,7 +20,7 @@ mod tests {
     ) {
         let nsamples = 100_000;
         let mut rng = SmallRng::seed_from_u64(seed);
-        let zipf = zipf::ZipfDistribution::new(1000_000_000, 1.5).unwrap();
+        let zipf = Zipf::new(1000_000_000.0, 1.5).unwrap();
 
         let mut data = IntegerHistogram::new(NUM_CONTEXT, NUM_SYMBOLS);
         let default_context = 0;
