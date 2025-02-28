@@ -8,12 +8,7 @@ mod tests {
         huffman::DefaultEncodeParams,
     };
     use lender::Lender;
-    use std::{
-        fs::File,
-        io::{BufReader, BufWriter},
-        path::PathBuf,
-        str::FromStr,
-    };
+    use std::{path::PathBuf, str::FromStr};
     use tempfile::TempDir;
     use webgraph::prelude::*;
 
@@ -29,31 +24,9 @@ mod tests {
 
         // Create a temporary directory
         let temp_dir = TempDir::new()?;
+        // Get output basename with the same full path as the but in the temp folder
+        let output_basename = temp_dir.path().join(basename.file_name().unwrap());
 
-        // Copy the properties file to the temporary directory
-        let properties_path = basename.with_extension("properties");
-        let temp_properties_path = temp_dir.path().join(properties_path.file_name().unwrap());
-        let properties_file = BufReader::new(File::open(&properties_path)?);
-        let mut properties_map = java_properties::read(properties_file)?;
-        // Override the properties with passed compression parameters
-        properties_map.insert(
-            "windowsize".into(),
-            compression_parameters.compression_window.to_string(),
-        );
-        properties_map.insert(
-            "maxrefcount".into(),
-            compression_parameters.max_ref_count.to_string(),
-        );
-        properties_map.insert(
-            "minintervallength".into(),
-            compression_parameters.min_interval_length.to_string(),
-        );
-
-        let new_properties_file = BufWriter::new(File::create(&temp_properties_path)?);
-        java_properties::write(new_properties_file, &properties_map)?;
-
-        // Get output basename with the same full path as the properties file but without extension
-        let output_basename = temp_properties_path.with_extension("");
         convert_graph::<C>(
             basename.clone(),
             output_basename.clone(),

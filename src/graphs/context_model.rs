@@ -4,6 +4,8 @@ use super::BvGraphComponent;
 
 /// A model defines how the context of each encoded or estimated value is chosen during graph compression.
 pub trait ContextModel {
+    /// The name of the context model to be readed and written on the properties file
+    const NAME: &str;
     /// Returns the number of contexts available.
     fn num_contexts() -> usize;
     /// Choose the context based on the current component that should be encoded.
@@ -21,6 +23,8 @@ pub trait ContextModel {
 pub struct SimpleContextModel;
 
 impl ContextModel for SimpleContextModel {
+    const NAME: &str = "simple";
+
     #[inline(always)]
     fn num_contexts() -> usize {
         BvGraphComponent::COMPONENTS
@@ -42,6 +46,8 @@ impl ContextModel for SimpleContextModel {
 pub struct SingleContextModel;
 
 impl ContextModel for SingleContextModel {
+    const NAME: &str = "single";
+
     #[inline(always)]
     fn num_contexts() -> usize {
         1
@@ -60,7 +66,7 @@ impl ContextModel for SingleContextModel {
 
 /// A partial implementation of the Zuckerli context model, it does not implement
 /// multiple contexts for outdegrees and references and introduce a context model
-/// for intervals (originaly not presents)
+/// for intervals (originaly not presents because Zuckerli uses RLE instead)
 #[derive(Default, Clone, Copy)]
 pub struct ZuckerliContextModel<EP: EncodeParams> {
     /// Index of the upcoming block
@@ -104,6 +110,8 @@ impl<EP: EncodeParams> ZuckerliContextModel<EP> {
 }
 
 impl<EP: EncodeParams> ContextModel for ZuckerliContextModel<EP> {
+    const NAME: &str = "zuckerli";
+
     fn num_contexts() -> usize {
         Self::NUM_CONTEXTS
     }
@@ -165,6 +173,8 @@ pub struct DebugContextModel<C: ContextModel> {
 }
 
 impl<C: ContextModel> ContextModel for DebugContextModel<C> {
+    const NAME: &str = C::NAME;
+
     fn num_contexts() -> usize {
         C::num_contexts()
     }
@@ -190,6 +200,15 @@ impl<C: ContextModel> ContextModel for DebugContextModel<C> {
     fn reset(&mut self) {
         eprintln!("Resetted context model");
         self.model.reset();
+    }
+}
+
+impl<C: ContextModel> DebugContextModel<C> {
+    #[allow(dead_code)]
+    fn new(context_model: C) -> Self {
+        DebugContextModel {
+            model: context_model,
+        }
     }
 }
 

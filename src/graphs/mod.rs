@@ -10,7 +10,8 @@ use dsi_bitstream::prelude::*;
 use dsi_progress_logger::prelude::*;
 use epserde::deser::{Deserialize, MemCase};
 use lender::for_;
-use std::io::BufWriter;
+use std::io::{BufReader, BufWriter};
+use std::path::Path;
 use std::time::Duration;
 use std::{fs::File, path::PathBuf};
 use webgraph::cli::build::ef::{build_eliasfano, CliArgs};
@@ -63,6 +64,39 @@ fn reference_selection_round<
     bvcomp.flush()?;
     pl.done();
     Ok(huffman_graph_encoder_builder)
+}
+
+/// Copy the original properties file and update the compression parameters used for the new graph
+fn copy_properties_file(
+    basename: &Path,
+    destination_basename: &Path,
+    compression_parameters: &CompressionParameters,
+    context_model_name: &str,
+    max_bits: usize,
+) -> Result<()> {
+    let properties_path = basename.with_extension("properties");
+    let temp_properties_path = destination_basename.with_extension("properties");
+    let properties_file = BufReader::new(File::open(&properties_path)?);
+    let mut properties_map = java_properties::read(properties_file)?;
+    // Override the properties with passed compression parameters
+    properties_map.insert(
+        "windowsize".into(),
+        compression_parameters.compression_window.to_string(),
+    );
+    properties_map.insert(
+        "maxrefcount".into(),
+        compression_parameters.max_ref_count.to_string(),
+    );
+    properties_map.insert(
+        "minintervallength".into(),
+        compression_parameters.min_interval_length.to_string(),
+    );
+    properties_map.insert("maxhuffmanbits".into(), max_bits.to_string());
+    properties_map.insert("contextmodel".into(), context_model_name.to_string());
+
+    let new_properties_file = BufWriter::new(File::create(&temp_properties_path)?);
+    java_properties::write(new_properties_file, &properties_map)?;
+    Ok(())
 }
 
 pub fn convert_graph<C: ContextModel + Default + Copy>(
@@ -193,6 +227,15 @@ pub fn convert_graph<C: ContextModel + Default + Copy>(
         "After second round with Huffman estimator: Recompressed graph using {} bits",
         writer.bits_written
     ));
+
+    copy_properties_file(
+        &basename,
+        &output_basename,
+        &compression_parameters,
+        C::NAME,
+        max_bits,
+    )
+    .expect("Cannot copy the properties file");
 
     pl.done();
 

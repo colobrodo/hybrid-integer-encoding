@@ -495,6 +495,7 @@ fn main() -> Result<()> {
                     num_rounds,
                 };
                 match context_model {
+                    // TODO: instead of passing the name as literal make a static property for the context model
                     ContextModelArgument::Single => convert_graph::<SingleContextModel>(
                         basename,
                         output_basename,
