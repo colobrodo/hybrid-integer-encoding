@@ -17,7 +17,8 @@ use epserde::prelude::*;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use lender::{for_, Lender};
-use rand::{prelude::Distribution, rngs::SmallRng, Rng, SeedableRng};
+use rand::prelude::*;
+use rand_distr::Zipf;
 
 use hybrid_integer_encoding::{graphs::build_offsets, utils::IntegerData};
 use hybrid_integer_encoding::{
@@ -333,12 +334,12 @@ fn bench_random_sample<EP: EncodeParams>(
 ) -> Result<()> {
     let num_symbols = 1 << max_bits;
     let mut rng = SmallRng::seed_from_u64(seed);
-    let zipf = zipf::ZipfDistribution::new(1000000000, 1.5).unwrap();
+    let zipf = Zipf::new(1000000000.0, 1.5)?;
 
     let mut integer_data = IntegerData::<EP>::new(num_contexts, num_symbols);
     let mut last_sample = 0;
     for _ in 0..nsamples {
-        let sample = zipf.sample(&mut rng) as u32;
+        let sample = rng.sample(zipf) as u32;
         let context = choose_context::<EP>(last_sample as u64, num_contexts);
         integer_data.add(context, sample);
         last_sample = sample;
@@ -653,7 +654,7 @@ fn bench_random_graph(graph: impl RandomAccessGraph, seed: u64, samples: usize, 
         for _ in 0..samples {
             c += black_box(
                 graph
-                    .successors(rng.gen_range(0..num_nodes))
+                    .successors(rng.random_range(0..num_nodes))
                     .into_iter()
                     .count() as u64,
             );
