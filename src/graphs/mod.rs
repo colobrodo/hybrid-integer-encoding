@@ -264,11 +264,51 @@ pub fn load_graph_seq<C: ContextModel + Default + Copy>(
     Ok(graph)
 }
 
-/// Load an huffman-encoded graph to be accessed in random order
+/// Checks that the compression parameter for statistical encoding are the same between the
+/// expected one, and then ones in the properties file used to compress the graph, if presents
+fn check_compression_parameters(
+    properties_path: &Path,
+    expected_max_bits: usize,
+    expected_context_model_name: &str,
+) -> Result<()> {
+    let properties_file = BufReader::new(File::open(&properties_path)?);
+    let name = properties_path.display();
+    let properties_map = java_properties::read(properties_file)?;
+    if let Some(max_bits) = properties_map.get("maxhuffmanbits") {
+        let max_bits = max_bits
+            .parse::<usize>()
+            .with_context(|| format!("Cannot parse 'maxhuffmanbits' as usize in {}", name))?;
+        if max_bits != expected_max_bits {
+            return Err(anyhow::anyhow!(
+                "Expected maximum length for huffman codewords to be '{}', but have '{}' in {}",
+                expected_max_bits.to_string(),
+                max_bits.to_string(),
+                name
+            ));
+        }
+    }
+    if let Some(context_model_name) = properties_map.get("contextmodel") {
+        if context_model_name != expected_context_model_name {
+            return Err(anyhow::anyhow!(
+                "Expected context model '{}', but have '{}' in {}",
+                expected_context_model_name,
+                context_model_name,
+                name
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Load an Huffman-encoded graph to be accessed in random order
 pub fn load_graph<C: ContextModel + Default + Copy>(
     basename: PathBuf,
     max_bits: usize,
 ) -> Result<BvGraph<RandomAccessHuffmanDecoderFactory<MmapHelper<u32>, EF, C>>> {
+    let properties_path = basename.with_extension(PROPERTIES_EXTENSION);
+    let (num_nodes, num_arcs, comp_flags) = parse_properties::<BE>(&properties_path)?;
+    check_compression_parameters(&properties_path, max_bits, C::NAME)?;
+
     let eliasfano_path = basename.with_extension(EF_EXTENSION);
     if !eliasfano_path.exists() {
         let offsets_path = basename.with_extension(OFFSETS_EXTENSION);
@@ -280,9 +320,6 @@ pub fn load_graph<C: ContextModel + Default + Copy>(
         .context("trying to build elias-fano for the current offsets")?;
         assert!(eliasfano_path.exists());
     }
-
-    let properties_path = basename.with_extension(PROPERTIES_EXTENSION);
-    let (num_nodes, num_arcs, comp_flags) = parse_properties::<BE>(&properties_path)?;
 
     let graph_path = basename.with_extension(GRAPH_EXTENSION);
     let flags = MemoryFlags::TRANSPARENT_HUGE_PAGES | MemoryFlags::RANDOM_ACCESS;
