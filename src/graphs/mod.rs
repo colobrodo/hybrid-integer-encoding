@@ -248,6 +248,7 @@ pub fn load_graph_seq<C: ContextModel + Default + Copy>(
 ) -> Result<BvGraphSeq<SequentialHuffmanDecoderFactory<DefaultEncodeParams, MmapHelper<u32>, C>>> {
     let properties_path = basename.with_extension(PROPERTIES_EXTENSION);
     let (num_nodes, num_arcs, comp_flags) = parse_properties::<BE>(&properties_path)?;
+    check_compression_parameters(&properties_path, max_bits, C::NAME)?;
 
     let graph_path = basename.with_extension(GRAPH_EXTENSION);
     let flags = MemoryFlags::TRANSPARENT_HUGE_PAGES | MemoryFlags::SEQUENTIAL;
