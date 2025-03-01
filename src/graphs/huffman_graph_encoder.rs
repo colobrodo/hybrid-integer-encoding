@@ -171,9 +171,10 @@ impl<EP: EncodeParams, E: Encode, C: ContextModel> HuffmanGraphEncoderBuilder<EP
 impl<EP: EncodeParams, E: Encode, S: ContextModel> Encode for HuffmanGraphEncoderBuilder<EP, E, S> {
     type Error = E::Error;
 
-    fn start_node(&mut self, _node: usize) -> Result<usize, Self::Error> {
+    fn start_node(&mut self, node: usize) -> Result<usize, Self::Error> {
+        let result = self.estimator.start_node(node)?;
         self.context_model.reset();
-        Ok(0)
+        Ok(result)
     }
 
     fn write_outdegree(&mut self, value: u64) -> Result<usize, Self::Error> {

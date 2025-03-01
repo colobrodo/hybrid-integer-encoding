@@ -69,9 +69,15 @@ impl ContextModel for SingleContextModel {
 /// for intervals (originaly not presents because Zuckerli uses RLE instead)
 #[derive(Default, Clone, Copy)]
 pub struct ZuckerliContextModel<EP: EncodeParams> {
+    /// Outdegree of the current node used to determine the context for the interval count
+    outdegree: u64,
     /// Index of the upcoming block
     block_number: u32,
-    /// total number of residuals: used to predict the context of the
+    // TODO: check if using the remaining number of intervals or node to encode in the intervals
+    //       is more precise
+    /// Total number of intervals: used to predict the context of the interval lengths
+    total_intervals: u64,
+    /// Total number of residuals: used to predict the context of the
     /// first residual
     total_residuals: usize,
     /// Last seen residual
@@ -95,17 +101,21 @@ impl<EP: EncodeParams> ZuckerliContextModel<EP> {
     const BASE_ODD_BLOCK: usize = Self::BASE_EVEN_BLOCK + 1;
     // TODO: zuckerli doesn't use intervals but we can try to figure out a way to assign context to the intervals
     const BASE_INTERVAL_COUNT: usize = Self::BASE_ODD_BLOCK + 1;
-    const BASE_INTERVAL_START: usize = Self::BASE_INTERVAL_COUNT + 1;
+    // TODO: Multiple contexts for num interval count doesn't works :/
+    const NUM_INTERVAL_COUNT: usize = 1;
+    const BASE_INTERVAL_START: usize = Self::BASE_INTERVAL_COUNT + Self::NUM_INTERVAL_COUNT;
     const BASE_INTERVAL_LEN: usize = Self::BASE_INTERVAL_START + 1;
+    const NUM_INTERVAL_LEN: usize = 16;
     // For delta-encoding the first residual with respect to the current node, the symbol that would
     // be used to represent the number of residuals defines which distribution to use. This is because a
     // list with a high number of residuals will likely be harder to predict.
-    const BASE_FIRST_RESIDUAL: usize = Self::BASE_INTERVAL_LEN + 1;
+    const BASE_FIRST_RESIDUAL: usize = Self::BASE_INTERVAL_LEN + Self::NUM_INTERVAL_LEN;
     const BASE_RESIDUAL: usize = Self::BASE_FIRST_RESIDUAL + Self::NUM_FIRST_RESIDUALS;
     // 32 in the original implementation
     const NUM_FIRST_RESIDUALS: usize = 16;
     // 80 in the original implementation
     const NUM_RESIDUALS: usize = 16;
+
     const NUM_CONTEXTS: usize = Self::BASE_RESIDUAL + Self::NUM_RESIDUALS;
 }
 
@@ -129,9 +139,15 @@ impl<EP: EncodeParams> ContextModel for ZuckerliContextModel<EP> {
                     Self::BASE_ODD_BLOCK
                 }
             }
-            BvGraphComponent::IntervalCount => Self::BASE_INTERVAL_COUNT,
+            BvGraphComponent::IntervalCount => {
+                let (token, _, _) = encode::<EP>(self.outdegree as u64);
+                Self::BASE_INTERVAL_COUNT + token.min(Self::NUM_INTERVAL_COUNT - 1)
+            }
             BvGraphComponent::IntervalStart => Self::BASE_INTERVAL_START,
-            BvGraphComponent::IntervalLen => Self::BASE_INTERVAL_LEN,
+            BvGraphComponent::IntervalLen => {
+                let (token, _, _) = encode::<EP>(self.total_intervals as u64);
+                Self::BASE_INTERVAL_LEN + token.min(Self::NUM_INTERVAL_LEN - 1)
+            }
             BvGraphComponent::FirstResidual => {
                 let (token, _, _) = encode::<EP>(self.total_residuals as u64);
                 Self::BASE_FIRST_RESIDUAL + token.min(Self::NUM_FIRST_RESIDUALS - 1)
@@ -149,6 +165,12 @@ impl<EP: EncodeParams> ContextModel for ZuckerliContextModel<EP> {
 
     fn update(&mut self, component: BvGraphComponent, value: u64) {
         match component {
+            BvGraphComponent::Outdegree => {
+                self.outdegree = value;
+            }
+            BvGraphComponent::IntervalCount => {
+                self.total_intervals = value;
+            }
             BvGraphComponent::Blocks => {
                 self.block_number += 1;
             }
@@ -160,6 +182,8 @@ impl<EP: EncodeParams> ContextModel for ZuckerliContextModel<EP> {
     }
 
     fn reset(&mut self) {
+        self.outdegree = 0;
+        self.total_intervals = 0;
         self.total_residuals = 0;
         self.block_number = 0;
         self.last_residual = 0;
@@ -180,14 +204,18 @@ impl<C: ContextModel> ContextModel for DebugContextModel<C> {
     }
 
     fn choose_context(&mut self, component: BvGraphComponent) -> u8 {
-        eprintln!("Choose context for the next component {}", component);
-        self.model.choose_context(component)
+        let context = self.model.choose_context(component);
+        eprintln!(
+            "Choosed context {} for the next component {}",
+            context, component
+        );
+        context
     }
 
     fn update(&mut self, component: BvGraphComponent, value: u64) {
         eprintln!(
             "Updated context model with value {} on component {}",
-            component, value
+            value, component
         );
         self.model.update(component, value);
     }
