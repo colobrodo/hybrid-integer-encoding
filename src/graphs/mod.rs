@@ -313,7 +313,7 @@ pub fn load_graph<C: ContextModel + Default + Copy>(
     let eliasfano_path = basename.with_extension(EF_EXTENSION);
     if !eliasfano_path.exists() {
         let offsets_path = basename.with_extension(OFFSETS_EXTENSION);
-        assert!(offsets_path.exists(), "In order to load the graph from random access you should first convert it building the offsets with the option 'build-offsets' in the 'convert' command");
+        assert!(offsets_path.exists(), "In order to load the graph from random access you should first convert it building the offsets with the mode 'offsets' in the 'graph' command");
         build_eliasfano::<LE>(CliArgs {
             src: basename.clone(),
             n: None,
