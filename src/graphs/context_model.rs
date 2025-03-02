@@ -79,7 +79,7 @@ pub struct ZuckerliContextModel<EP: EncodeParams> {
     total_intervals: u64,
     /// Total number of residuals: used to predict the context of the
     /// first residual
-    total_residuals: usize,
+    total_residuals: u64,
     /// Last seen residual
     last_residual: u64,
     _marker: core::marker::PhantomData<EP>,
@@ -140,16 +140,16 @@ impl<EP: EncodeParams> ContextModel for ZuckerliContextModel<EP> {
                 }
             }
             BvGraphComponent::IntervalCount => {
-                let (token, _, _) = encode::<EP>(self.outdegree as u64);
+                let (token, _, _) = encode::<EP>(self.outdegree);
                 Self::BASE_INTERVAL_COUNT + token.min(Self::NUM_INTERVAL_COUNT - 1)
             }
             BvGraphComponent::IntervalStart => Self::BASE_INTERVAL_START,
             BvGraphComponent::IntervalLen => {
-                let (token, _, _) = encode::<EP>(self.total_intervals as u64);
+                let (token, _, _) = encode::<EP>(self.total_intervals);
                 Self::BASE_INTERVAL_LEN + token.min(Self::NUM_INTERVAL_LEN - 1)
             }
             BvGraphComponent::FirstResidual => {
-                let (token, _, _) = encode::<EP>(self.total_residuals as u64);
+                let (token, _, _) = encode::<EP>(self.total_residuals);
                 Self::BASE_FIRST_RESIDUAL + token.min(Self::NUM_FIRST_RESIDUALS - 1)
             }
             BvGraphComponent::Residual => {
@@ -160,7 +160,7 @@ impl<EP: EncodeParams> ContextModel for ZuckerliContextModel<EP> {
     }
 
     fn num_of_residuals(&mut self, total_residuals: usize) {
-        self.total_residuals = total_residuals;
+        self.total_residuals = total_residuals as u64;
     }
 
     fn update(&mut self, component: BvGraphComponent, value: u64) {
