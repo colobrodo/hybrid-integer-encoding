@@ -272,7 +272,7 @@ fn check_compression_parameters(
     expected_max_bits: usize,
     expected_context_model_name: &str,
 ) -> Result<()> {
-    let properties_file = BufReader::new(File::open(&properties_path)?);
+    let properties_file = BufReader::new(File::open(properties_path)?);
     let name = properties_path.display();
     let properties_map = java_properties::read(properties_file)?;
     if let Some(max_bits) = properties_map.get("maxhuffmanbits") {
