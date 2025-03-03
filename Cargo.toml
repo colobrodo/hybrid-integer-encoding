@@ -19,3 +19,6 @@ webgraph = { git = "https://github.com/colobrodo/webgraph-rs.git", branch = "bvg
 tempfile = "3.2"
 java-properties = "2.0.0"
 rand_distr = "0.5.1"
+
+[profile.release]
+debug = true             # Include debug info.
