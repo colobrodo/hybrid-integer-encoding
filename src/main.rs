@@ -20,7 +20,10 @@ use lender::{for_, Lender};
 use rand::prelude::*;
 use rand_distr::Zipf;
 
-use hybrid_integer_encoding::{graphs::build_offsets, utils::IntegerData};
+use hybrid_integer_encoding::{
+    graphs::{build_offsets, convert_graph_greedy},
+    utils::IntegerData,
+};
 use hybrid_integer_encoding::{
     graphs::{
         compressors::CompressionParameters, convert_graph, load_graph, load_graph_seq,
@@ -97,6 +100,10 @@ enum GraphCommand {
         /// The maximum number of bits used for each word of the huffman code.
         #[arg(short = 'b', long, default_value = "8")]
         max_bits: usize,
+        /// If specified uses the BVGraph's greedy reference selection algorithm.
+        /// Otherwise it choose the reference using the Zuckerli approximated algorithm.
+        #[arg(long, default_value = "true")]
+        greedy_compressor: bool,
         /// The type of context model to be used to choose the distribution of the next encoded symbol.
         #[arg(long, default_value = "simple")]
         context_model: ContextModelArgument,
@@ -483,6 +490,7 @@ fn main() -> Result<()> {
                 compression_window,
                 max_ref_count,
                 min_interval_length,
+                greedy_compressor,
                 max_bits,
                 num_rounds,
                 build_offsets,
@@ -494,24 +502,50 @@ fn main() -> Result<()> {
                     min_interval_length,
                     num_rounds,
                 };
-                match context_model {
-                    // TODO: instead of passing the name as literal make a static property for the context model
-                    ContextModelArgument::Single => convert_graph::<SingleContextModel>(
+                match (context_model, greedy_compressor) {
+                    (ContextModelArgument::Single, false) => convert_graph::<SingleContextModel>(
                         basename,
                         output_basename,
                         max_bits,
                         compression_parameters,
                         build_offsets,
                     )?,
-                    ContextModelArgument::Simple => convert_graph::<SimpleContextModel>(
+                    (ContextModelArgument::Single, true) => {
+                        convert_graph_greedy::<SingleContextModel>(
+                            basename,
+                            output_basename,
+                            max_bits,
+                            compression_parameters,
+                            build_offsets,
+                        )?
+                    }
+                    (ContextModelArgument::Simple, false) => convert_graph::<SimpleContextModel>(
                         basename,
                         output_basename,
                         max_bits,
                         compression_parameters,
                         build_offsets,
                     )?,
-                    ContextModelArgument::Zuckerli => {
+                    (ContextModelArgument::Simple, true) => {
+                        convert_graph_greedy::<SimpleContextModel>(
+                            basename,
+                            output_basename,
+                            max_bits,
+                            compression_parameters,
+                            build_offsets,
+                        )?
+                    }
+                    (ContextModelArgument::Zuckerli, false) => {
                         convert_graph::<ZuckerliContextModel<DefaultEncodeParams>>(
+                            basename,
+                            output_basename,
+                            max_bits,
+                            compression_parameters,
+                            build_offsets,
+                        )?
+                    }
+                    (ContextModelArgument::Zuckerli, true) => {
+                        convert_graph_greedy::<ZuckerliContextModel<DefaultEncodeParams>>(
                             basename,
                             output_basename,
                             max_bits,
