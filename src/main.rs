@@ -102,7 +102,7 @@ enum GraphCommand {
         max_bits: usize,
         /// If specified uses the BVGraph's greedy reference selection algorithm.
         /// Otherwise it choose the reference using the Zuckerli approximated algorithm.
-        #[arg(long, default_value = "true")]
+        #[arg(long, default_value = "false")]
         greedy_compressor: bool,
         /// The type of context model to be used to choose the distribution of the next encoded symbol.
         #[arg(long, default_value = "simple")]
