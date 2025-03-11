@@ -4,6 +4,7 @@ use std::{
     hint::black_box,
     io::{BufRead, BufReader},
     path::PathBuf,
+    str::FromStr,
 };
 
 use dsi_bitstream::{
@@ -140,6 +141,11 @@ enum GraphCommand {
         /// The type of context model used to encode the graph.
         #[arg(long, default_value = "simple")]
         context_model: ContextModelArgument,
+        /// If specified prints the results in tsv format
+        /// Each line is composed by two fields: the iteration index and the running time
+        /// (in nanoseconds)
+        #[arg(long, default_value = "false")]
+        tsv: bool,
     },
     /// Bench the random access on a huffman compressed graph
     BenchRandom {
@@ -160,6 +166,11 @@ enum GraphCommand {
         /// Seed to reproduce the experiment
         #[arg(short = 's', long, default_value = "0")]
         seed: u64,
+        /// If specified prints the results in tsv format
+        /// Each line is composed by two fields: the iteration index and the running time
+        /// (in nanoseconds)
+        #[arg(long, default_value = "false")]
+        tsv: bool,
     },
     /// Create the offsets file from an existing huffman compressed graph
     Offsets {
@@ -593,22 +604,30 @@ fn main() -> Result<()> {
                 max_bits,
                 repeats,
                 context_model,
-            } => match context_model {
-                ContextModelArgument::Single => {
-                    let graph = load_graph_seq::<SingleContextModel>(basename, max_bits)?;
-                    bench_seq(graph, repeats);
+                tsv,
+            } => {
+                let bench_result = match context_model {
+                    ContextModelArgument::Single => {
+                        let graph = load_graph_seq::<SingleContextModel>(basename, max_bits)?;
+                        bench_seq(graph, repeats)
+                    }
+                    ContextModelArgument::Simple => {
+                        let graph = load_graph_seq::<SimpleContextModel>(basename, max_bits)?;
+                        bench_seq(graph, repeats)
+                    }
+                    ContextModelArgument::Zuckerli => {
+                        let graph = load_graph_seq::<ZuckerliContextModel<DefaultEncodeParams>>(
+                            basename, max_bits,
+                        )?;
+                        bench_seq(graph, repeats)
+                    }
+                };
+                if tsv {
+                    bench_result.print_as_tsv();
+                } else {
+                    bench_result.print_formatted();
                 }
-                ContextModelArgument::Simple => {
-                    let graph = load_graph_seq::<SimpleContextModel>(basename, max_bits)?;
-                    bench_seq(graph, repeats);
-                }
-                ContextModelArgument::Zuckerli => {
-                    let graph = load_graph_seq::<ZuckerliContextModel<DefaultEncodeParams>>(
-                        basename, max_bits,
-                    )?;
-                    bench_seq(graph, repeats);
-                }
-            },
+            }
             GraphCommand::BenchRandom {
                 basename,
                 max_bits,
@@ -616,22 +635,30 @@ fn main() -> Result<()> {
                 random,
                 repeats,
                 seed,
-            } => match context_model {
-                ContextModelArgument::Single => {
-                    let graph = load_graph::<SingleContextModel>(basename, max_bits)?;
-                    bench_random_graph(graph, seed, random, repeats);
+                tsv,
+            } => {
+                let bench_result = match context_model {
+                    ContextModelArgument::Single => {
+                        let graph = load_graph::<SingleContextModel>(basename, max_bits)?;
+                        bench_random_graph(graph, seed, random, repeats)
+                    }
+                    ContextModelArgument::Simple => {
+                        let graph = load_graph::<SimpleContextModel>(basename, max_bits)?;
+                        bench_random_graph(graph, seed, random, repeats)
+                    }
+                    ContextModelArgument::Zuckerli => {
+                        let graph = load_graph::<ZuckerliContextModel<DefaultEncodeParams>>(
+                            basename, max_bits,
+                        )?;
+                        bench_random_graph(graph, seed, random, repeats)
+                    }
+                };
+                if tsv {
+                    bench_result.print_as_tsv();
+                } else {
+                    bench_result.print_formatted();
                 }
-                ContextModelArgument::Simple => {
-                    let graph = load_graph::<SimpleContextModel>(basename, max_bits)?;
-                    bench_random_graph(graph, seed, random, repeats);
-                }
-                ContextModelArgument::Zuckerli => {
-                    let graph = load_graph::<ZuckerliContextModel<DefaultEncodeParams>>(
-                        basename, max_bits,
-                    )?;
-                    bench_random_graph(graph, seed, random, repeats);
-                }
-            },
+            }
             GraphCommand::Offsets {
                 basename,
                 max_bits,
@@ -661,7 +688,40 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn bench_seq(graph: impl SequentialGraph, repeats: usize) {
+struct BenchResult {
+    samples: Vec<f64>,
+    name: String,
+    measure_token: String,
+}
+
+impl BenchResult {
+    fn new(name: &str, measure_token: &str) -> BenchResult {
+        BenchResult {
+            samples: Vec::new(),
+            name: String::from_str(name).unwrap(),
+            measure_token: String::from_str(measure_token).unwrap(),
+        }
+    }
+
+    fn add(&mut self, sample: f64) {
+        self.samples.push(sample);
+    }
+
+    fn print_as_tsv(&self) {
+        for (i, sample) in self.samples.iter().enumerate() {
+            println!("{}\t{}", i + 1, sample);
+        }
+    }
+
+    fn print_formatted(&self) {
+        for sample in self.samples.iter() {
+            println!("{}: {:>20} {}", self.name, sample, self.measure_token)
+        }
+    }
+}
+
+fn bench_seq(graph: impl SequentialGraph, repeats: usize) -> BenchResult {
+    let mut bench_result = BenchResult::new("Sequential", "ns/arc");
     for _ in 0..repeats {
         let mut c: u64 = 0;
 
@@ -670,16 +730,20 @@ fn bench_seq(graph: impl SequentialGraph, repeats: usize) {
         while let Some((_, succ)) = iter.next() {
             c += succ.into_iter().count() as u64;
         }
-        println!(
-            "Sequential:{:>20} ns/arc",
-            (start.elapsed().as_secs_f64() / c as f64) * 1e9
-        );
-
         assert_eq!(c, graph.num_arcs_hint().unwrap());
+
+        bench_result.add((start.elapsed().as_secs_f64() / c as f64) * 1e9);
     }
+    bench_result
 }
 
-fn bench_random_graph(graph: impl RandomAccessGraph, seed: u64, samples: usize, repeats: usize) {
+fn bench_random_graph(
+    graph: impl RandomAccessGraph,
+    seed: u64,
+    samples: usize,
+    repeats: usize,
+) -> BenchResult {
+    let mut bench_result = BenchResult::new("Random", "ns/arc");
     // Random-access speed test
     for _ in 0..repeats {
         let mut rng = SmallRng::seed_from_u64(seed);
@@ -695,9 +759,7 @@ fn bench_random_graph(graph: impl RandomAccessGraph, seed: u64, samples: usize, 
             );
         }
 
-        println!(
-            "Random:    {:>20} ns/arc",
-            (start.elapsed().as_secs_f64() / c as f64) * 1e9
-        );
+        bench_result.add((start.elapsed().as_secs_f64() / c as f64) * 1e9)
     }
+    bench_result
 }
