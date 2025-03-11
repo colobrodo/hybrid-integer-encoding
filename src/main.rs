@@ -112,6 +112,8 @@ enum GraphCommand {
         #[arg(long, default_value = "1")]
         num_rounds: usize,
         /// Creates the offsets file at the end of the conversion.
+        /// This is available only with greedy compressor, if the approximated one is employed, this parameter
+        /// is ignored.
         #[arg(long, default_value = "false")]
         build_offsets: bool,
     },
@@ -513,6 +515,12 @@ fn main() -> Result<()> {
                     min_interval_length,
                     num_rounds,
                 };
+                // the Zuckerli reference selection algorithm don't work in a straming fashion like the BVGraph greedy one.
+                // So, for now, it is not possible to know each time we push a node the amount of bits used to write that node
+                // but only when each chunk is flushed.
+                if build_offsets && !greedy_compressor {
+                    log::warn!("Cannot build offsets during conversion of graph '{}', when compressing it with Zuckerli reference selection algorithm.", basename.display());
+                }
                 match (context_model, greedy_compressor) {
                     (ContextModelArgument::Single, false) => convert_graph::<SingleContextModel>(
                         basename,
