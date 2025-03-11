@@ -5,10 +5,10 @@ use anyhow::Result;
 use webgraph::prelude::Encode;
 
 use crate::graphs::{BvGraphComponent, ContextModel};
-use crate::huffman::{EncodeParams, IntegerHistogram};
+use crate::huffman::{CostModel, EncodeParams, IntegerHistogram};
 
 pub struct HuffmanEstimator<EP: EncodeParams, S: ContextModel> {
-    data: IntegerHistogram<EP>,
+    cost_model: CostModel<EP>,
     context_model: S,
     marker_: core::marker::PhantomData<EP>,
 }
@@ -16,7 +16,7 @@ pub struct HuffmanEstimator<EP: EncodeParams, S: ContextModel> {
 impl<EP: EncodeParams, S: ContextModel> HuffmanEstimator<EP, S> {
     pub fn new(data: IntegerHistogram<EP>, context_model: S) -> Self {
         Self {
-            data,
+            cost_model: data.cost(),
             context_model,
             marker_: core::marker::PhantomData,
         }
@@ -25,7 +25,7 @@ impl<EP: EncodeParams, S: ContextModel> HuffmanEstimator<EP, S> {
     pub fn estimate(&mut self, component: BvGraphComponent, value: u64) -> usize {
         let ctx = self.context_model.choose_context(component);
         self.context_model.update(component, value);
-        self.data.cost(ctx, value)
+        self.cost_model.cost(ctx, value)
     }
 }
 

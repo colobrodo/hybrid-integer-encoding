@@ -10,6 +10,25 @@ use super::common::{
 
 use anyhow::Result;
 
+// Instead of calculating the costs (in bit) to encode each symbol in the estimation round
+// (with Huffman estimators), we precalculate the length of each token and avoid the 
+// expensive divisions
+
+/// Define the cost of encoding each token according to a distribution
+/// defined by `IntegerHistogram`.
+pub struct CostModel<EP: EncodeParams = DefaultEncodeParams> {
+    costs: Vec<Vec<usize>>,
+    _marker: core::marker::PhantomData<EP>,
+}
+
+impl<EP: EncodeParams> CostModel<EP> {
+    /// Returns the estimated cost of encoding the value in the given context.
+    pub fn cost(&self, context: u8, value: u64) -> usize {
+        let (token, nbits, _) = encode::<EP>(value);
+        self.costs[context as usize][token] + nbits
+    }
+}
+
 pub struct HuffmanEncoder<EP: EncodeParams = DefaultEncodeParams> {
     // maximum number of bits per code
     max_bits: usize,
@@ -69,14 +88,27 @@ impl<EP: EncodeParams> IntegerHistogram<EP> {
         self.ctx_histograms
     }
 
-    /// Returns the estimated cost of encoding the value in the given context.
-    pub fn cost(&self, context: u8, value: u64) -> usize {
-        let total_symbols = self.totals[context as usize];
-        let (token, nbits, _) = encode::<EP>(value);
-        let freq = self.ctx_histograms[context as usize][token];
-        let cnt = f64::max(freq as f64, 0.1);
-        let inv_freq = (total_symbols as f64 / cnt) as u64;
-        u64::ilog2(inv_freq.max(2)) as usize + nbits
+    /// Returns the cost model of encoding each value according to the distributions
+    /// defined by this histogram
+    pub fn cost(&self) -> CostModel<EP> {
+        let mut costs = self
+            .ctx_histograms
+            .iter()
+            .map(|histogram| Vec::with_capacity(histogram.len()))
+            .collect::<Vec<_>>();
+        for (ctx, ctx_histogram) in self.ctx_histograms.iter().enumerate() {
+            let total_symbols = self.totals[ctx as usize];
+            for &freq in ctx_histogram.iter() {
+                let cnt = f64::max(freq as f64, 0.1);
+                let inv_freq = (total_symbols as f64 / cnt) as u64;
+                let token_cost = u64::ilog2(inv_freq.max(2)) as usize;
+                costs[ctx].push(token_cost);
+            }
+        }
+        CostModel {
+            costs,
+            _marker: core::marker::PhantomData,
+        }
     }
 
     pub fn number_of_contexts(&self) -> usize {
