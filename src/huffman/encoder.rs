@@ -76,7 +76,7 @@ impl<EP: EncodeParams> IntegerHistogram<EP> {
         let freq = self.ctx_histograms[context as usize][token];
         let cnt = f64::max(freq as f64, 0.1);
         let inv_freq = (total_symbols as f64 / cnt) as u64;
-        u64::ilog2(inv_freq) as usize + nbits
+        u64::ilog2(inv_freq.max(2)) as usize + nbits
     }
 
     pub fn number_of_contexts(&self) -> usize {
