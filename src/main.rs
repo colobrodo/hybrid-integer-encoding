@@ -519,7 +519,6 @@ fn main() -> Result<()> {
                         output_basename,
                         max_bits,
                         compression_parameters,
-                        build_offsets,
                     )?,
                     (ContextModelArgument::Single, true) => {
                         convert_graph_greedy::<SingleContextModel>(
@@ -535,7 +534,6 @@ fn main() -> Result<()> {
                         output_basename,
                         max_bits,
                         compression_parameters,
-                        build_offsets,
                     )?,
                     (ContextModelArgument::Simple, true) => {
                         convert_graph_greedy::<SimpleContextModel>(
@@ -552,7 +550,6 @@ fn main() -> Result<()> {
                             output_basename,
                             max_bits,
                             compression_parameters,
-                            build_offsets,
                         )?
                     }
                     (ContextModelArgument::Zuckerli, true) => {

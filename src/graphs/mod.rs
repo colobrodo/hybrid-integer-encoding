@@ -144,7 +144,6 @@ pub fn convert_graph<C: ContextModel + Default + Copy>(
     output_basename: PathBuf,
     max_bits: usize,
     compression_parameters: CompressionParameters,
-    build_offsets: bool,
 ) -> Result<()> {
     assert!(
         compression_parameters.num_rounds >= 1,
@@ -236,35 +235,13 @@ pub fn convert_graph<C: ContextModel + Default + Copy>(
         .expected_updates(Some(seq_graph.num_nodes()));
     pl.start("Compressing the graph...");
 
-    // final round
-    if build_offsets {
-        let offsets_path = output_basename.with_extension(OFFSETS_EXTENSION);
-        let file = std::fs::File::create(&offsets_path)
-            .with_context(|| format!("Could not create {}", offsets_path.display()))?;
-        // create a bit writer on the file
-        let mut offsets_writer = <BufBitWriter<BE, _>>::new(<WordAdapter<usize, _>>::new(
-            BufWriter::with_capacity(1 << 20, file),
-        ));
-
-        offsets_writer
-            .write_gamma(header_size as _)
-            .context("Could not write initial delta")?;
-
-        // we should also build the offsets: write the number of bits written for each list compression
-        for_! [ (_, successors) in seq_graph {
-            let delta = bvcomp.push(successors).context("Could not push successors")?;
-            offsets_writer.write_gamma(delta).context("Could not write delta")?;
-            pl.update();
-        }];
-    } else {
-        for_![ (_, successors) in seq_graph {
-            bvcomp.push(successors).context("Could not push successors")?;
-            pl.update();
-        }];
-    }
+    for_![ (_, successors) in seq_graph {
+        bvcomp.push(successors).context("Could not push successors")?;
+        pl.update();
+    }];
     bvcomp.flush()?;
     pl.info(format_args!(
-        "After second round with Huffman estimator: Recompressed graph using {} bits ({} bits of header)",
+        "After last round with Huffman estimator: Recompressed graph using {} bits ({} bits of header)",
         writer.bits_written, header_size
     ));
 

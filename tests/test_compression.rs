@@ -42,7 +42,6 @@ mod tests {
                 output_basename.clone(),
                 max_bits,
                 compression_parameters,
-                false,
             )?;
         }
 
