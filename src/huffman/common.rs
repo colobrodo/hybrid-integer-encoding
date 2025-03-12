@@ -34,15 +34,15 @@ impl EncodeParams for DefaultEncodeParams {
 
 // Variable integer encoding scheme that puts bits either in an entropy-coded
 // symbol or as raw bits, depending on the specified configuration.
-#[inline(always)]
+#[inline]
 pub fn encode<EP: EncodeParams>(value: u64) -> (usize, usize, u64) {
-    let split_token: u32 = 1 << EP::LOG2_NUM_EXPLICIT;
-    if value < split_token as u64 {
+    let split_token = 1 << EP::LOG2_NUM_EXPLICIT;
+    if value < split_token {
         (value as usize, 0, 0)
     } else {
-        let n = usize::BITS - 1 - value.leading_zeros();
-        let m = (value - (1 << n)) as u32;
-        let token = split_token
+        let n = value.ilog2();
+        let m = (value & !(1 << n)) as u32;
+        let token = (1 << EP::LOG2_NUM_EXPLICIT)
             + ((n - EP::LOG2_NUM_EXPLICIT) << (EP::MSB_IN_TOKEN + EP::LSB_IN_TOKEN))
             + ((m >> (n - EP::MSB_IN_TOKEN)) << EP::LSB_IN_TOKEN)
             + (m & ((1 << EP::LSB_IN_TOKEN) - 1));
