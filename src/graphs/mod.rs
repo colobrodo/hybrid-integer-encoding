@@ -191,10 +191,10 @@ pub fn convert_graph<C: ContextModel + Default + Copy>(
         huffman_graph_encoder_builder,
         max_bits,
         &compression_parameters,
-        "Pushing symbols into encoder builder on first round...",
+        "Pushing symbols into encoder builder on first round with Huffman estimator...",
         &mut pl,
     )?;
-    for round in 1..compression_parameters.num_rounds {
+    for round in 2..compression_parameters.num_rounds {
         huffman_graph_encoder_builder = reference_selection_round(
             &seq_graph,
             huffman_graph_encoder_builder,
