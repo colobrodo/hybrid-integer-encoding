@@ -204,7 +204,6 @@ where
     fn new_decoder(&self, node: usize) -> anyhow::Result<Self::Decoder<'_>> {
         let mut reader = self.factory.new_reader();
         reader.set_bit_pos(self.offsets.get(node) as u64)?;
-        // TODO: remove the clone of the whole table
         let huffman_reader = HuffmanReader::new(self.table.clone(), reader);
         Ok(HuffmanGraphDecoder::new(huffman_reader, self.model))
     }

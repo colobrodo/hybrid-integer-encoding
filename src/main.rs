@@ -273,7 +273,6 @@ fn encode_file(
     let outfile = File::create(output_path)?;
     let writer = BufBitWriter::<LE, _>::new(WordAdapter::<u32, _>::new(outfile));
     let mut writer = CountBitWriter::<LE, _>::new(writer);
-    // TODO: accept from cli arguments for max bits and for number of contexts
     let encoder = HuffmanEncoder::<DefaultEncodeParams>::new(integer_data, max_bits);
 
     encoder.write_header(&mut writer)?;

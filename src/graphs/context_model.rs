@@ -73,8 +73,6 @@ pub struct ZuckerliContextModel<EP: EncodeParams> {
     outdegree: u64,
     /// Index of the upcoming block
     block_number: u32,
-    // TODO: check if using the remaining number of intervals or node to encode in the intervals
-    //       is more precise
     /// Total number of intervals: used to predict the context of the interval lengths
     total_intervals: u64,
     /// Total number of residuals: used to predict the context of the
@@ -87,7 +85,7 @@ pub struct ZuckerliContextModel<EP: EncodeParams> {
 
 impl<EP: EncodeParams> ZuckerliContextModel<EP> {
     // The original implementation divides the adjacency lists into blocks of 32, then encodes the
-    // outdegree as a delta with the previous (except for the first) and then does the dame with
+    // outdegree as a delta with the previous (except for the first) and then does the same with
     // references.
     // When decoding they use the previous delta as context but when they randomly access a node
     // they first decode the outdegree and reference and the previous element in the block.
@@ -99,7 +97,7 @@ impl<EP: EncodeParams> ZuckerliContextModel<EP> {
     const BASE_FIRST_BLOCK: usize = Self::BASE_BLOCK_COUNT + 1;
     const BASE_EVEN_BLOCK: usize = Self::BASE_FIRST_BLOCK + 1;
     const BASE_ODD_BLOCK: usize = Self::BASE_EVEN_BLOCK + 1;
-    // TODO: zuckerli doesn't use intervals but we can try to figure out a way to assign context to the intervals
+    // Zuckerli doesn't use intervals
     const BASE_INTERVAL_COUNT: usize = Self::BASE_ODD_BLOCK + 1;
     // TODO: Multiple contexts for num interval count doesn't works :/
     const NUM_INTERVAL_COUNT: usize = 1;
