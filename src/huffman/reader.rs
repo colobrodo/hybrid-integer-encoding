@@ -65,7 +65,7 @@ fn decode_symbol_num_bits<R: BitRead<LE>>(
     for info in infos.iter_mut().take(ms + 1) {
         info.present = reader.read_bits(1)? as u8;
         if info.present != 0 {
-            info.nbits = reader.read_bits(symbol_len_bits as usize)? as u8 + 1;
+            info.n_bits = reader.read_bits(symbol_len_bits as usize)? as u8 + 1;
         }
     }
     for info in infos.iter_mut().skip(ms + 1) {
@@ -92,7 +92,7 @@ fn compute_decoder_table(
         .map_or(0, |(i, _)| i);
     if cnt <= 1 {
         for (info, sym_info) in infos.iter_mut().zip(sym_infos) {
-            info.nbits = sym_info.nbits;
+            info.nbits = sym_info.n_bits;
             info.symbol = s as u8;
         }
         return Ok(());
@@ -107,7 +107,7 @@ fn compute_decoder_table(
             // NOTE: in case we want to support both big endian and little endian we should
             // change this condition to create the table looking at the low/top part of the
             // next 'max_bits' bits
-            if (i & ((1 << sym_info.nbits) - 1)) as u16 == sym_info.bits {
+            if (i & ((1 << sym_info.n_bits) - 1)) as u16 == sym_info.bits {
                 s = sym;
                 break;
             }
@@ -115,7 +115,7 @@ fn compute_decoder_table(
         if s == num_symbols {
             return Err(anyhow!("Invalid table"));
         }
-        info.nbits = sym_infos[s].nbits;
+        info.nbits = sym_infos[s].n_bits;
         info.symbol = s as u8;
     }
     Ok(())

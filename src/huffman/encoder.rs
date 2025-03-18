@@ -11,7 +11,7 @@ use super::common::{
 use anyhow::Result;
 
 // Instead of calculating the costs (in bit) to encode each symbol in the estimation round
-// (with Huffman estimators), we precalculate the length of each token and avoid the 
+// (with Huffman estimators), we precalculate the length of each token and avoid the
 // expensive divisions
 
 /// Define the cost of encoding each token according to a distribution
@@ -24,8 +24,8 @@ pub struct CostModel<EP: EncodeParams = DefaultEncodeParams> {
 impl<EP: EncodeParams> CostModel<EP> {
     /// Returns the estimated cost of encoding the value in the given context.
     pub fn cost(&self, context: u8, value: u64) -> usize {
-        let (token, nbits, _) = encode::<EP>(value);
-        self.costs[context as usize][token] + nbits
+        let (token, n_bits, _) = encode::<EP>(value);
+        self.costs[context as usize][token] + n_bits
     }
 }
 
@@ -75,7 +75,7 @@ impl<EP: EncodeParams> IntegerHistogram<EP> {
     pub fn add(&mut self, context: u8, value: u32) {
         debug_assert!(
             (context as usize) < self.num_contexts,
-            "Context out of bounds trying to add symbol {} on context {}, but only {} contexts are availables",
+            "Context out of bounds trying to add symbol {} on context {}, but only {} contexts are available",
             value, context, self.num_contexts
         );
         let (token, _, _) = encode::<EP>(value.into());
@@ -101,7 +101,7 @@ impl<EP: EncodeParams> IntegerHistogram<EP> {
             for &freq in ctx_histogram.iter() {
                 let cnt = f64::max(freq as f64, 0.1);
                 let inv_freq = (total_symbols as f64 / cnt) as u64;
-                let token_cost = u64::ilog2(inv_freq.max(2)) as usize;
+                let token_cost = inv_freq.max(2).ilog2() as usize;
                 costs[ctx].push(token_cost);
             }
         }
@@ -124,18 +124,18 @@ type Bag = (usize, Vec<u8>);
 fn compute_symbol_num_bits(histogram: &[usize], max_bits: usize, infos: &mut [HuffmanSymbolInfo]) {
     assert!(infos.len() == 1 << max_bits);
     // Mark the present/missing symbols.
-    let mut nzsym = 0;
+    let mut non_zero_symbols = 0;
     for (i, freq) in histogram.iter().enumerate() {
         if *freq == 0 {
             continue;
         }
         infos[i].present = 1;
-        nzsym += 1;
+        non_zero_symbols += 1;
     }
-    if nzsym <= 1 {
+    if non_zero_symbols <= 1 {
         for info in infos.iter_mut() {
             if info.present != 0 {
-                info.nbits = 1;
+                info.n_bits = 1;
             }
         }
         return;
@@ -160,9 +160,9 @@ fn compute_symbol_num_bits(histogram: &[usize], max_bits: usize, infos: &mut [Hu
         bags[i].sort();
         for j in (0..bags[i].len() - 1).step_by(2) {
             let nf = bags[i][j].0 + bags[i][j + 1].0;
-            let mut nsym = mem::take(&mut bags[i][j].1);
-            nsym.append(&mut bags[i][j + 1].1);
-            bags[i + 1].push((nf, nsym));
+            let mut n_sym = mem::take(&mut bags[i][j].1);
+            n_sym.append(&mut bags[i][j + 1].1);
+            bags[i + 1].push((nf, n_sym));
         }
     }
     bags[max_bits - 1].sort();
@@ -170,10 +170,10 @@ fn compute_symbol_num_bits(histogram: &[usize], max_bits: usize, infos: &mut [Hu
     // In the groups of symbols for the highest bit length we need to select the
     // last 2*num_symbols-2 groups, and assign to each symbol one bit of cost for
     // each of its occurrences in these groups.
-    for i in 0..2 * nzsym - 2 {
+    for i in 0..2 * non_zero_symbols - 2 {
         let b = &bags[max_bits - 1][i];
         for &x in b.1.iter() {
-            infos[x as usize].nbits += 1;
+            infos[x as usize].n_bits += 1;
         }
     }
 }
@@ -196,7 +196,7 @@ impl<EP: EncodeParams> HuffmanEncoder<EP> {
         }
     }
 
-    /// Write the value into the bit stream, if successfull returns a tuple with the
+    /// Write the value into the bit stream, if successful returns a tuple with the
     /// number of bits written for the symbol and for the trailing bits.
     pub fn write(
         &self,
@@ -204,15 +204,15 @@ impl<EP: EncodeParams> HuffmanEncoder<EP> {
         value: u32,
         writer: &mut impl BitWrite<LE>,
     ) -> Result<(usize, usize)> {
-        let (token, nbits, bits) = encode::<EP>(value as u64);
+        let (token, n_bits, bits) = encode::<EP>(value as u64);
         debug_assert!(
             self.info_[ctx as usize][token].present == 1,
             "Unknown value {value} in context {ctx}"
         );
-        let nbits_per_token = self.info_[ctx as usize][token].nbits as usize;
-        writer.write_bits(self.info_[ctx as usize][token].bits as u64, nbits_per_token)?;
-        writer.write_bits(bits, nbits)?;
-        Ok((nbits_per_token, nbits))
+        let n_bits_per_token = self.info_[ctx as usize][token].n_bits as usize;
+        writer.write_bits(self.info_[ctx as usize][token].bits as u64, n_bits_per_token)?;
+        writer.write_bits(bits, n_bits)?;
+        Ok((n_bits_per_token, n_bits))
     }
 
     // Very simple encoding: number of symbols (16 bits) followed by, for each
@@ -234,7 +234,7 @@ impl<EP: EncodeParams> HuffmanEncoder<EP> {
             for sym_info in info.iter().take(ms + 1) {
                 if sym_info.present != 0 {
                     writer.write_bits(1, 1)?;
-                    writer.write_bits(sym_info.nbits as u64 - 1, symbol_len_bits as usize)?;
+                    writer.write_bits(sym_info.n_bits as u64 - 1, symbol_len_bits as usize)?;
                     total_bits_written += symbol_len_bits as usize + 1;
                 } else {
                     writer.write_bits(0, 1)?;

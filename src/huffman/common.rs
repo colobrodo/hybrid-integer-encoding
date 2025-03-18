@@ -9,7 +9,7 @@ pub const DEFAULT_NUM_CONTEXT: usize = 256;
 #[derive(Clone, Copy, Default, Debug)]
 pub(crate) struct HuffmanSymbolInfo {
     pub(crate) present: u8,
-    pub(crate) nbits: u8,
+    pub(crate) n_bits: u8,
     pub(crate) bits: u16,
 }
 
@@ -46,34 +46,34 @@ pub fn encode<EP: EncodeParams>(value: u64) -> (usize, usize, u64) {
             + ((n - EP::LOG2_NUM_EXPLICIT) << (EP::MSB_IN_TOKEN + EP::LSB_IN_TOKEN))
             + ((m >> (n - EP::MSB_IN_TOKEN)) << EP::LSB_IN_TOKEN)
             + (m & ((1 << EP::LSB_IN_TOKEN) - 1));
-        let nbits = n - EP::MSB_IN_TOKEN - EP::LSB_IN_TOKEN;
-        let bits = (value >> EP::LSB_IN_TOKEN) & ((1 << nbits) - 1);
-        (token as usize, nbits as usize, bits)
+        let n_bits = n - EP::MSB_IN_TOKEN - EP::LSB_IN_TOKEN;
+        let bits = (value >> EP::LSB_IN_TOKEN) & ((1 << n_bits) - 1);
+        (token as usize, n_bits as usize, bits)
     }
 }
 
-// For a given array of HuffmanSymbolInfo, where only the `present` and `nbits`
+// For a given array of HuffmanSymbolInfo, where only the `present` and `n_bits`
 // fields are set, fill up the `bits` field by building a Canonical Huffman code
 // (https://en.wikipedia.org/wiki/Canonical_Huffman_code).
 pub(crate) fn compute_symbol_bits(max_bits: usize, infos: &mut [HuffmanSymbolInfo]) {
     debug_assert!(infos.len() == 1 << max_bits);
-    let mut syms = Vec::new();
+    let mut symbols = Vec::new();
     for (i, info) in infos.iter().enumerate() {
         if info.present == 0 {
             continue;
         }
-        syms.push((info.nbits, i));
+        symbols.push((info.n_bits, i));
     }
-    syms.sort();
-    let present_symbols = syms.len();
+    symbols.sort();
+    let present_symbols = symbols.len();
     let mut x: usize = 0;
-    for (s, sym) in syms.iter().enumerate() {
+    for (s, sym) in symbols.iter().enumerate() {
         infos[sym.1].bits = u16::reverse_bits(x as u16)
             >> (u16::BITS as usize - max_bits)
-            >> (max_bits as u8 - infos[sym.1].nbits);
+            >> (max_bits as u8 - infos[sym.1].n_bits);
         x += 1;
         if s + 1 != present_symbols {
-            x <<= syms[s + 1].0 - sym.0;
+            x <<= symbols[s + 1].0 - sym.0;
         }
     }
 }

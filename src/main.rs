@@ -64,7 +64,7 @@ enum Command {
         #[clap(flatten)]
         huffman_arguments: HuffmanArguments,
         /// The number of integer inside the file (HACK)
-        lenght: u64,
+        length: u64,
         /// The path of the compressed file
         path: PathBuf,
     },
@@ -222,7 +222,7 @@ struct BenchArguments {
 
 #[derive(Debug, clap::Args)]
 struct HuffmanArguments {
-    /// The number of contexts used, choosen based on the previous encoded symbol
+    /// The number of contexts used, chosen based on the previous encoded symbol
     #[arg(short = 'c', long, default_value = "1")]
     contexts: usize,
     /// The maximum number of bits used for each code
@@ -294,7 +294,7 @@ fn encode_file(
     Ok(())
 }
 
-fn decode_file(path: PathBuf, lenght: u64, max_bits: usize, num_context: usize) -> Result<()> {
+fn decode_file(path: PathBuf, length: u64, max_bits: usize, num_context: usize) -> Result<()> {
     let file = File::open(path)?;
     let mut reader = HuffmanReader::from_bitreader(
         BufBitReader::<LE, _>::new(WordAdapter::<u32, _>::new(BufReader::new(file))),
@@ -303,8 +303,8 @@ fn decode_file(path: PathBuf, lenght: u64, max_bits: usize, num_context: usize) 
     )?;
     let mut i = 0;
     while let Ok(value) = reader.read::<DefaultEncodeParams>(0) {
-        // TODO: HACK: reading from mem word, read a 0 at the end of the bitstream but the lenght of the encoded file is not know
-        if i == lenght {
+        // TODO: HACK: reading from mem word, read a 0 at the end of the bitstream but the length of the encoded file is not know
+        if i == length {
             break;
         }
         println!("{}", value);
@@ -345,7 +345,7 @@ fn bench_file<EP: EncodeParams>(
 
 fn bench_random_sample<EP: EncodeParams>(
     repeats: usize,
-    nsamples: u64,
+    n_samples: u64,
     max_bits: usize,
     num_contexts: usize,
     seed: u64,
@@ -357,7 +357,7 @@ fn bench_random_sample<EP: EncodeParams>(
 
     let mut integer_data = IntegerData::<EP>::new(num_contexts, num_symbols);
     let mut last_sample = 0;
-    for _ in 0..nsamples {
+    for _ in 0..n_samples {
         let sample = rng.sample(zipf) as u32;
         let context = choose_context::<EP>(last_sample as u64, num_contexts);
         integer_data.add(context, sample);
@@ -455,12 +455,12 @@ fn main() -> Result<()> {
         }
         Command::Decode {
             path,
-            lenght,
+            length,
             huffman_arguments,
         } => {
             decode_file(
                 path,
-                lenght,
+                length,
                 huffman_arguments.max_bits,
                 huffman_arguments.contexts,
             )?;
@@ -514,7 +514,7 @@ fn main() -> Result<()> {
                     min_interval_length,
                     num_rounds,
                 };
-                // the Zuckerli reference selection algorithm don't work in a straming fashion like the BVGraph greedy one.
+                // the Zuckerli reference selection algorithm don't work in a streaming fashion like the BVGraph greedy one.
                 // So, for now, it is not possible to know each time we push a node the amount of bits used to write that node
                 // but only when each chunk is flushed.
                 if build_offsets && !greedy_compressor {
