@@ -149,9 +149,10 @@ pub fn convert_graph<C: ContextModel + Default + Copy>(
         compression_parameters.num_rounds >= 1,
         "num_rounds must be at least 1"
     );
-    let mut pl = ProgressLogger::default();
-    // log every five minutes
-    pl.log_interval(Duration::from_secs(5 * 60));
+    let mut pl = progress_logger!(
+        display_memory = true,
+        log_interval = Duration::from_secs(5 * 60)
+    );
     let num_symbols = 1 << max_bits;
 
     let seq_graph = BvGraphSeq::with_basename(&basename)
