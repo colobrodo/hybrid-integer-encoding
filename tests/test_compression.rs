@@ -2,7 +2,7 @@ mod tests {
     use dsi_bitstream::traits::BE;
     use hybrid_integer_encoding::{
         graphs::{
-            convert_graph, convert_graph_greedy, load_graph_seq, CompressionParameters,
+            convert_graph, load_graph_seq, BvCompCreate, BvCompZCreate, CompressionParameters,
             ContextModel, SimpleContextModel, ZuckerliContextModel,
         },
         huffman::DefaultEncodeParams,
@@ -15,7 +15,7 @@ mod tests {
     fn compress_graph<C: ContextModel + Default + Copy>(
         compression_parameters: CompressionParameters,
         max_bits: usize,
-        greedly: bool,
+        greedily: bool,
     ) -> anyhow::Result<()> {
         let basename = PathBuf::from_str("tests/data/cnr-2000")?;
 
@@ -28,19 +28,20 @@ mod tests {
         // Get output basename with the same full path as the but in the temp folder
         let output_basename = temp_dir.path().join(basename.file_name().unwrap());
 
-        if greedly {
-            convert_graph_greedy::<C>(
+        if greedily {
+            convert_graph::<C>(
                 basename.clone(),
                 output_basename.clone(),
                 max_bits,
+                BvCompCreate,
                 compression_parameters,
-                false,
             )?;
         } else {
             convert_graph::<C>(
                 basename.clone(),
                 output_basename.clone(),
                 max_bits,
+                BvCompZCreate::with_chunk_size(10000),
                 compression_parameters,
             )?;
         }
@@ -118,7 +119,7 @@ mod tests {
     }
 
     #[test]
-    fn compress_and_decompress_greedly() {
+    fn compress_and_decompress_greedily() {
         let compression_parameters = CompressionParameters {
             compression_window: 32,
             max_ref_count: 3,

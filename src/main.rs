@@ -22,7 +22,7 @@ use rand::prelude::*;
 use rand_distr::Zipf;
 
 use hybrid_integer_encoding::{
-    graphs::{build_offsets, convert_graph_greedy},
+    graphs::{build_offsets, BvCompCreate, BvCompZCreate},
     utils::IntegerData,
 };
 use hybrid_integer_encoding::{
@@ -525,47 +525,47 @@ fn main() -> Result<()> {
                         basename,
                         output_basename,
                         max_bits,
+                        BvCompZCreate::with_chunk_size(10000),
                         compression_parameters,
                     )?,
-                    (ContextModelArgument::Single, true) => {
-                        convert_graph_greedy::<SingleContextModel>(
-                            basename,
-                            output_basename,
-                            max_bits,
-                            compression_parameters,
-                            build_offsets,
-                        )?
-                    }
+                    (ContextModelArgument::Single, true) => convert_graph::<SingleContextModel>(
+                        basename,
+                        output_basename,
+                        max_bits,
+                        BvCompCreate,
+                        compression_parameters,
+                    )?,
+
                     (ContextModelArgument::Simple, false) => convert_graph::<SimpleContextModel>(
                         basename,
                         output_basename,
                         max_bits,
+                        BvCompZCreate::with_chunk_size(10000),
                         compression_parameters,
                     )?,
-                    (ContextModelArgument::Simple, true) => {
-                        convert_graph_greedy::<SimpleContextModel>(
-                            basename,
-                            output_basename,
-                            max_bits,
-                            compression_parameters,
-                            build_offsets,
-                        )?
-                    }
+                    (ContextModelArgument::Simple, true) => convert_graph::<SimpleContextModel>(
+                        basename,
+                        output_basename,
+                        max_bits,
+                        BvCompCreate,
+                        compression_parameters,
+                    )?,
                     (ContextModelArgument::Zuckerli, false) => {
                         convert_graph::<ZuckerliContextModel<DefaultEncodeParams>>(
                             basename,
                             output_basename,
                             max_bits,
+                            BvCompZCreate::with_chunk_size(10000),
                             compression_parameters,
                         )?
                     }
                     (ContextModelArgument::Zuckerli, true) => {
-                        convert_graph_greedy::<ZuckerliContextModel<DefaultEncodeParams>>(
+                        convert_graph::<ZuckerliContextModel<DefaultEncodeParams>>(
                             basename,
                             output_basename,
                             max_bits,
+                            BvCompCreate,
                             compression_parameters,
-                            build_offsets,
                         )?
                     }
                 }
