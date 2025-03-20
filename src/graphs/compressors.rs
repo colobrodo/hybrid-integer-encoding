@@ -1,16 +1,14 @@
 use webgraph::prelude::{BvComp, BvCompZ, EncodeAndEstimate, GraphCompressor};
 
 /// Parameters used to configure the compression process.
-///
-/// # Fields
-/// - `compression_window`: The size of the sliding window used during compression.
-/// - `max_ref_count`: The maximum number of references allowed during compression.
-/// - `min_interval_length`: The minimum length of intervals to be considered for compression.
-/// - `num_rounds`: The number of compression rounds to perform.
 pub struct CompressionParameters {
+    /// The window size in which chose the next reference.
     pub compression_window: usize,
+    /// The maximum length of references' chain allowed during compression.
     pub max_ref_count: usize,
+    /// The minimum length of consecutive items to be encoded as intervals during compression.
     pub min_interval_length: usize,
+    /// The number of compression rounds to perform.
     pub num_rounds: usize,
 }
 
@@ -21,15 +19,6 @@ pub struct CompressionParameters {
 /// (which implements `EncodeAndEstimate`) and a set of compression parameters.
 pub trait CompressorFromEncoder {
     /// Creates a new compressor instance using the provided encoder and compression parameters.
-    ///
-    /// # Arguments
-    /// - `encoder`: An object implementing the `EncodeAndEstimate` trait, used for encoding
-    ///   and estimating compression efficiency.
-    /// - `parameters`: A reference to the `CompressionParameters` struct, which provides
-    ///   configuration for the compression process.
-    ///
-    /// # Returns
-    /// An object implementing the `GraphCompressor` trait.
     fn from_encoder(
         &self,
         encoder: impl EncodeAndEstimate,
@@ -45,13 +34,6 @@ pub struct BvCompCreate;
 
 impl CompressorFromEncoder for BvCompCreate {
     /// Creates a new `BvComp` compressor using the provided encoder and parameters.
-    ///
-    /// # Arguments
-    /// - `encoder`: An object implementing the `EncodeAndEstimate` trait.
-    /// - `parameters`: A reference to the `CompressionParameters` struct.
-    ///
-    /// # Returns
-    /// A `BvComp` instance configured with the provided encoder and parameters.
     fn from_encoder(
         &self,
         encoder: impl EncodeAndEstimate,
@@ -80,12 +62,6 @@ pub struct BvCompZCreate {
 
 impl BvCompZCreate {
     /// Creates a new `BvCompZCreate` instance with the specified chunk size.
-    ///
-    /// # Arguments
-    /// - `chunk_size`: The size of chunks to be used during compression.
-    ///
-    /// # Returns
-    /// A new `BvCompZCreate` instance.
     pub fn with_chunk_size(chunk_size: usize) -> BvCompZCreate {
         BvCompZCreate { chunk_size }
     }
@@ -93,13 +69,6 @@ impl BvCompZCreate {
 
 impl CompressorFromEncoder for BvCompZCreate {
     /// Creates a new `BvCompZ` compressor using the provided encoder and parameters.
-    ///
-    /// # Arguments
-    /// - `encoder`: An object implementing the `EncodeAndEstimate` trait.
-    /// - `parameters`: A reference to the `CompressionParameters` struct.
-    ///
-    /// # Returns
-    /// A `BvCompZ` instance configured with the provided encoder, parameters, and chunk size.
     fn from_encoder(
         &self,
         encoder: impl EncodeAndEstimate,
