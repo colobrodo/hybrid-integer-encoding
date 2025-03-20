@@ -30,9 +30,9 @@ pub trait CompressorFromEncoder {
 ///
 /// This struct provides an implementation of the `CompressorFromEncoder` trait
 /// for creating `BvComp` instances, which are used for basic compression.
-pub struct BvCompCreate;
+pub struct CreateBvComp;
 
-impl CompressorFromEncoder for BvCompCreate {
+impl CompressorFromEncoder for CreateBvComp {
     /// Creates a new `BvComp` compressor using the provided encoder and parameters.
     fn from_encoder(
         &self,
@@ -53,21 +53,21 @@ impl CompressorFromEncoder for BvCompCreate {
 /// A factory for creating `BvCompZ` compressors with configurable chunk sizes.
 ///
 /// This struct provides an implementation of the `CompressorFromEncoder` trait
-/// for creating `BvCompZ` instances, approximated reference selection algorithm, as 
+/// for creating `BvCompZ` instances, approximated reference selection algorithm, as
 /// described in Zuckerli, which works with chunk-based compression.
-pub struct BvCompZCreate {
+pub struct CreateBvCompZ {
     // The size of chunks used during compression.
-    chunk_size: usize, 
+    chunk_size: usize,
 }
 
-impl BvCompZCreate {
+impl CreateBvCompZ {
     /// Creates a new `BvCompZCreate` instance with the specified chunk size.
-    pub fn with_chunk_size(chunk_size: usize) -> BvCompZCreate {
-        BvCompZCreate { chunk_size }
+    pub fn with_chunk_size(chunk_size: usize) -> CreateBvCompZ {
+        CreateBvCompZ { chunk_size }
     }
 }
 
-impl CompressorFromEncoder for BvCompZCreate {
+impl CompressorFromEncoder for CreateBvCompZ {
     /// Creates a new `BvCompZ` compressor using the provided encoder and parameters.
     fn from_encoder(
         &self,

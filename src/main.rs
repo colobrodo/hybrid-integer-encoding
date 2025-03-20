@@ -22,7 +22,7 @@ use rand::prelude::*;
 use rand_distr::Zipf;
 
 use hybrid_integer_encoding::{
-    graphs::{build_offsets, BvCompCreate, BvCompZCreate},
+    graphs::{build_offsets, CreateBvComp, CreateBvCompZ},
     utils::IntegerData,
 };
 use hybrid_integer_encoding::{
@@ -525,14 +525,14 @@ fn main() -> Result<()> {
                         basename,
                         output_basename,
                         max_bits,
-                        BvCompZCreate::with_chunk_size(10000),
+                        CreateBvCompZ::with_chunk_size(10000),
                         compression_parameters,
                     )?,
                     (ContextModelArgument::Single, true) => convert_graph::<SingleContextModel>(
                         basename,
                         output_basename,
                         max_bits,
-                        BvCompCreate,
+                        CreateBvComp,
                         compression_parameters,
                     )?,
 
@@ -540,14 +540,14 @@ fn main() -> Result<()> {
                         basename,
                         output_basename,
                         max_bits,
-                        BvCompZCreate::with_chunk_size(10000),
+                        CreateBvCompZ::with_chunk_size(10000),
                         compression_parameters,
                     )?,
                     (ContextModelArgument::Simple, true) => convert_graph::<SimpleContextModel>(
                         basename,
                         output_basename,
                         max_bits,
-                        BvCompCreate,
+                        CreateBvComp,
                         compression_parameters,
                     )?,
                     (ContextModelArgument::Zuckerli, false) => {
@@ -555,7 +555,7 @@ fn main() -> Result<()> {
                             basename,
                             output_basename,
                             max_bits,
-                            BvCompZCreate::with_chunk_size(10000),
+                            CreateBvCompZ::with_chunk_size(10000),
                             compression_parameters,
                         )?
                     }
@@ -564,7 +564,7 @@ fn main() -> Result<()> {
                             basename,
                             output_basename,
                             max_bits,
-                            BvCompCreate,
+                            CreateBvComp,
                             compression_parameters,
                         )?
                     }
