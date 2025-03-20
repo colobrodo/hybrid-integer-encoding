@@ -43,9 +43,9 @@ impl ContextModel for SimpleContextModel {
 
 /// A model with only one fixed context.
 #[derive(Default, Clone, Copy)]
-pub struct SingleContextModel;
+pub struct ConstantContextModel;
 
-impl ContextModel for SingleContextModel {
+impl ContextModel for ConstantContextModel {
     const NAME: &str = "single";
 
     #[inline(always)]

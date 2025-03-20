@@ -129,9 +129,10 @@ impl<EP: EncodeParams, E: Encode, W: BitWrite<LE>, S: ContextModel> EncodeAndEst
     }
 }
 
-/// Builder to construct a HuffmanGraphEncoder, it requires an estimator that implements the Encode
-/// trait and is used for estimating the adjacency list size of each node during the process of
-/// reference selection.
+/// Encoder to construct a `HuffmanGraphEncoder` or a `HuffmanEstimator` from the frequencies
+/// of the symbols encountered during encoding.
+/// It requires an estimator that implements the `Encode` trait and is used for estimating the
+/// adjacency list size of each node during the process of reference selection.
 pub struct HuffmanGraphEncoderBuilder<EP: EncodeParams, E: Encode, C: ContextModel> {
     estimator: E,
     context_model: C,

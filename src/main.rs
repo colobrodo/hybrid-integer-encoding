@@ -28,7 +28,7 @@ use hybrid_integer_encoding::{
 use hybrid_integer_encoding::{
     graphs::{
         compressors::CompressionParameters, convert_graph, load_graph, load_graph_seq,
-        SimpleContextModel, SingleContextModel, ZuckerliContextModel,
+        ConstantContextModel, SimpleContextModel, ZuckerliContextModel,
     },
     huffman::{
         encode, DefaultEncodeParams, EncodeParams, EntropyCoder, HuffmanEncoder, HuffmanReader,
@@ -521,14 +521,14 @@ fn main() -> Result<()> {
                     log::warn!("Cannot build offsets during conversion of graph '{}', when compressing it with Zuckerli reference selection algorithm.", basename.display());
                 }
                 match (context_model, greedy_compressor) {
-                    (ContextModelArgument::Single, false) => convert_graph::<SingleContextModel>(
+                    (ContextModelArgument::Single, false) => convert_graph::<ConstantContextModel>(
                         basename,
                         output_basename,
                         max_bits,
                         CreateBvCompZ::with_chunk_size(10000),
                         compression_parameters,
                     )?,
-                    (ContextModelArgument::Single, true) => convert_graph::<SingleContextModel>(
+                    (ContextModelArgument::Single, true) => convert_graph::<ConstantContextModel>(
                         basename,
                         output_basename,
                         max_bits,
@@ -577,7 +577,7 @@ fn main() -> Result<()> {
                 context_model,
             } => match context_model {
                 ContextModelArgument::Single => {
-                    let graph = load_graph_seq::<SingleContextModel>(basename, max_bits)?;
+                    let graph = load_graph_seq::<ConstantContextModel>(basename, max_bits)?;
                     for_!((src, succ) in graph {
                         for dst in succ {
                             println!("{}{}{}", src, separator, dst);
@@ -612,7 +612,7 @@ fn main() -> Result<()> {
             } => {
                 let bench_result = match context_model {
                     ContextModelArgument::Single => {
-                        let graph = load_graph_seq::<SingleContextModel>(basename, max_bits)?;
+                        let graph = load_graph_seq::<ConstantContextModel>(basename, max_bits)?;
                         bench_seq(graph, repeats)
                     }
                     ContextModelArgument::Simple => {
@@ -643,7 +643,7 @@ fn main() -> Result<()> {
             } => {
                 let bench_result = match context_model {
                     ContextModelArgument::Single => {
-                        let graph = load_graph::<SingleContextModel>(basename, max_bits)?;
+                        let graph = load_graph::<ConstantContextModel>(basename, max_bits)?;
                         bench_random_graph(graph, seed, random, repeats)
                     }
                     ContextModelArgument::Simple => {
@@ -669,7 +669,7 @@ fn main() -> Result<()> {
                 context_model,
             } => match context_model {
                 ContextModelArgument::Single => {
-                    let graph = load_graph_seq::<SingleContextModel>(basename.clone(), max_bits)?;
+                    let graph = load_graph_seq::<ConstantContextModel>(basename.clone(), max_bits)?;
                     build_offsets(graph, basename)?;
                 }
                 ContextModelArgument::Simple => {
