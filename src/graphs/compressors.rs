@@ -45,7 +45,7 @@ impl CompressorFromEncoder for CreateBvComp {
             parameters.compression_window,
             parameters.max_ref_count,
             parameters.min_interval_length,
-            0, // Default value for an additional parameter (e.g., offset).
+            0,
         )
     }
 }
@@ -81,7 +81,7 @@ impl CompressorFromEncoder for CreateBvCompZ {
             self.chunk_size,
             parameters.max_ref_count,
             parameters.min_interval_length,
-            0, // Default value for an additional parameter (e.g., offset).
+            0,
         )
     }
 }
