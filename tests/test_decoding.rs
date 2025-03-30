@@ -5,7 +5,7 @@ mod tests {
         traits::{BitWrite, LE},
     };
     use hybrid_integer_encoding::huffman::{
-        DefaultEncodeParams, EntropyCoder, HuffmanEncoder, HuffmanReader, IntegerHistogram,
+        encode, DefaultEncodeParams, EntropyCoder, HuffmanEncoder, HuffmanReader, IntegerHistogram,
         DEFAULT_MAX_HUFFMAN_BITS, DEFAULT_NUM_SYMBOLS,
     };
     use rand::prelude::*;
@@ -79,5 +79,12 @@ mod tests {
     fn encode_and_decode_with_multiple_contexts() {
         const MAX_BITS: usize = 10;
         encode_and_decode::<4, MAX_BITS, { 1 << MAX_BITS }>(0);
+    }
+
+    #[test]
+    fn encode_big_num() {
+        let (token, n_bits, _) = encode::<DefaultEncodeParams>(17179902313);
+        assert_eq!(n_bits, 31);
+        assert_eq!(token, 257);
     }
 }

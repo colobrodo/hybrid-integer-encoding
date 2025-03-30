@@ -20,7 +20,7 @@ pub trait EntropyCoder {
             return Ok(token);
         }
         let nbits = EP::LOG2_NUM_EXPLICIT - (EP::MSB_IN_TOKEN + EP::LSB_IN_TOKEN)
-            + ((token - split_token) as u32 >> (EP::MSB_IN_TOKEN + EP::LSB_IN_TOKEN));
+            + ((token - split_token) as u64 >> (EP::MSB_IN_TOKEN + EP::LSB_IN_TOKEN));
         let low = token & ((1 << EP::LSB_IN_TOKEN) - 1);
         token >>= EP::LSB_IN_TOKEN;
         let bits = self.read_bits(nbits as usize)? as usize;

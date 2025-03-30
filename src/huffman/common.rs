@@ -16,20 +16,20 @@ pub(crate) struct HuffmanSymbolInfo {
 /// Parameters for the variable integer encoding scheme.
 pub trait EncodeParams {
     // log2 of the number of explicit tokens (referred as k in the paper)
-    const LOG2_NUM_EXPLICIT: u32;
+    const LOG2_NUM_EXPLICIT: u64;
     // number of less significant bit in token (referred as i in the paper)
-    const MSB_IN_TOKEN: u32;
+    const MSB_IN_TOKEN: u64;
     // number of most significant bit in token (referred as j in the paper)
-    const LSB_IN_TOKEN: u32;
+    const LSB_IN_TOKEN: u64;
 }
 
 #[derive(Default, Clone, Copy)]
 pub struct DefaultEncodeParams;
 
 impl EncodeParams for DefaultEncodeParams {
-    const LOG2_NUM_EXPLICIT: u32 = 4;
-    const MSB_IN_TOKEN: u32 = 2;
-    const LSB_IN_TOKEN: u32 = 1;
+    const LOG2_NUM_EXPLICIT: u64 = 4;
+    const MSB_IN_TOKEN: u64 = 2;
+    const LSB_IN_TOKEN: u64 = 1;
 }
 
 // Variable integer encoding scheme that puts bits either in an entropy-coded
@@ -40,8 +40,8 @@ pub fn encode<EP: EncodeParams>(value: u64) -> (usize, usize, u64) {
     if value < split_token {
         (value as usize, 0, 0)
     } else {
-        let n = value.ilog2();
-        let m = (value & !(1 << n)) as u32;
+        let n = value.ilog2() as u64;
+        let m = value & !(1 << n);
         let token = (1 << EP::LOG2_NUM_EXPLICIT)
             + ((n - EP::LOG2_NUM_EXPLICIT) << (EP::MSB_IN_TOKEN + EP::LSB_IN_TOKEN))
             + ((m >> (n - EP::MSB_IN_TOKEN)) << EP::LSB_IN_TOKEN)
