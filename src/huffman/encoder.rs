@@ -100,7 +100,7 @@ impl<EP: EncodeParams> IntegerHistogram<EP> {
             .map(|histogram| Vec::with_capacity(histogram.len()))
             .collect::<Vec<_>>();
         for (ctx, ctx_histogram) in self.ctx_histograms.iter().enumerate() {
-            let total_symbols = self.totals[ctx as usize];
+            let total_symbols = self.totals[ctx];
             for &freq in ctx_histogram.iter() {
                 let cnt = f64::max(freq as f64, 0.1);
                 let inv_freq = (total_symbols as f64 / cnt) as u64;

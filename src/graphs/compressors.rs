@@ -19,7 +19,7 @@ pub struct CompressionParameters {
 /// (which implements `EncodeAndEstimate`) and a set of compression parameters.
 pub trait CompressorFromEncoder {
     /// Creates a new compressor instance using the provided encoder and compression parameters.
-    fn from_encoder(
+    fn create_compressor(
         &self,
         encoder: impl EncodeAndEstimate,
         parameters: &CompressionParameters,
@@ -34,7 +34,7 @@ pub struct CreateBvComp;
 
 impl CompressorFromEncoder for CreateBvComp {
     /// Creates a new `BvComp` compressor using the provided encoder and parameters.
-    fn from_encoder(
+    fn create_compressor(
         &self,
         encoder: impl EncodeAndEstimate,
         parameters: &CompressionParameters,
@@ -69,7 +69,7 @@ impl CreateBvCompZ {
 
 impl CompressorFromEncoder for CreateBvCompZ {
     /// Creates a new `BvCompZ` compressor using the provided encoder and parameters.
-    fn from_encoder(
+    fn create_compressor(
         &self,
         encoder: impl EncodeAndEstimate,
         parameters: &CompressionParameters,
