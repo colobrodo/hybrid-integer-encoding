@@ -25,9 +25,6 @@ impl<EP: EncodeParams> CostModel<EP> {
     /// Returns the estimated cost of encoding the value in the given context.
     pub fn cost(&self, context: u8, value: u64) -> usize {
         let (token, n_bits, _) = encode::<EP>(value);
-        if token >= self.costs[context as usize].len() {
-            eprintln!("Token {} exceed the codeword limit, trying to encode {} (with {} remaining bits) in context {}", token, value, n_bits, context);
-        }
         self.costs[context as usize][token] + n_bits
     }
 }
