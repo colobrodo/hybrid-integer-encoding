@@ -12,7 +12,7 @@ use epserde::deser::{Deserialize, MemCase};
 use lender::for_;
 use std::io::{BufReader, BufWriter};
 use std::path::Path;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use std::{fs::File, path::PathBuf};
 use webgraph::cli::build::ef::{build_eliasfano, CliArgs};
 use webgraph::prelude::{SequentialLabeling, *};
@@ -25,6 +25,48 @@ pub use huffman_graph_decoder::*;
 use huffman_graph_encoder::*;
 
 use crate::huffman::{DefaultEncodeParams, EncodeParams};
+
+struct Measure {
+    name: String,
+    duration: f64,
+}
+
+struct SectionProfiler {
+    measures: Vec<Measure>,
+    last_time: Instant,
+}
+
+impl SectionProfiler {
+    fn new() -> Self {
+        SectionProfiler {
+            measures: Vec::new(),
+            last_time: std::time::Instant::now(),
+        }
+    }
+
+    fn end_section(&mut self, name: &str) {
+        self.measures.push(Measure {
+            name: name.to_string(),
+            duration: self.last_time.elapsed().as_secs_f64(),
+        });
+        self.last_time = std::time::Instant::now();
+    }
+
+    fn print_all(&self) {
+        let total_duration = self
+            .measures
+            .iter()
+            .map(|measure| measure.duration)
+            .sum::<f64>();
+        for measure in self.measures.iter() {
+            let percentage = measure.duration / total_duration * 100.0;
+            eprintln!(
+                "{}: {:.3}s ({:.2} %)",
+                measure.name, measure.duration, percentage
+            );
+        }
+    }
+}
 
 #[allow(clippy::too_many_arguments)]
 fn reference_selection_round<
@@ -111,9 +153,11 @@ pub fn convert_graph<C: ContextModel + Default + Copy>(
     );
     let num_symbols = 1 << max_bits;
 
+    let mut profiler = SectionProfiler::new();
     let seq_graph = BvGraphSeq::with_basename(&basename)
         .endianness::<BE>()
         .load()?;
+    profiler.end_section("Loading sequential graph");
 
     // setup for the first iteration with Log2Estimator
     let mut huffman_graph_encoder_builder =
@@ -124,6 +168,7 @@ pub fn convert_graph<C: ContextModel + Default + Copy>(
         );
     let mut compressor = create_compressor
         .create_from_encoder(&mut huffman_graph_encoder_builder, &compression_parameters);
+    profiler.end_section("Creating compressor");
 
     pl.item_name("node")
         .expected_updates(Some(seq_graph.num_nodes()));
@@ -136,6 +181,7 @@ pub fn convert_graph<C: ContextModel + Default + Copy>(
     }];
     compressor.flush()?;
     pl.done();
+    profiler.end_section("First round with Log2Estimator");
 
     let mut huffman_graph_encoder_builder = reference_selection_round(
         &seq_graph,
@@ -146,6 +192,7 @@ pub fn convert_graph<C: ContextModel + Default + Copy>(
         &create_compressor,
         &mut pl,
     )?;
+    profiler.end_section("Second round with Huffman estimator");
     for round in 2..compression_parameters.num_rounds {
         huffman_graph_encoder_builder = reference_selection_round(
             &seq_graph,
@@ -160,6 +207,7 @@ pub fn convert_graph<C: ContextModel + Default + Copy>(
             &create_compressor,
             &mut pl,
         )?;
+        profiler.end_section(format!("Round {} with Huffman estimator", round).as_str());
     }
 
     pl.start("Building the encoder after estimation rounds...");
@@ -170,10 +218,12 @@ pub fn convert_graph<C: ContextModel + Default + Copy>(
     let mut writer = CountBitWriter::<LE, _>::new(writer);
     let mut huffman_graph_encoder = huffman_graph_encoder_builder.build(&mut writer, max_bits);
 
+    profiler.end_section("Building the encoder");
     pl.done();
 
     pl.info(format_args!("Writing header for the graph..."));
     let header_size = huffman_graph_encoder.write_header()?;
+    profiler.end_section("Writing headers");
 
     let mut compressor =
         create_compressor.create_from_encoder(&mut huffman_graph_encoder, &compression_parameters);
@@ -181,12 +231,16 @@ pub fn convert_graph<C: ContextModel + Default + Copy>(
     pl.item_name("node")
         .expected_updates(Some(seq_graph.num_nodes()));
     pl.start("Compressing the graph...");
+    profiler.end_section("Created compressor before compressing the Graph");
 
     for_![ (_, successors) in seq_graph {
         compressor.push(successors).context("Could not push successors")?;
         pl.update();
     }];
     compressor.flush()?;
+    profiler.end_section("Pushed all nodes in the last compressor");
+    profiler.print_all();
+
     pl.info(format_args!(
         "After last round with Huffman estimator: Recompressed graph using {} bits ({} bits of header)",
         writer.bits_written, header_size

@@ -2004,7 +2004,7 @@ dependencies = [
 [[package]]
 name = "webgraph"
 version = "0.2.0"
-source = "git+https://github.com/colobrodo/webgraph-rs.git?branch=bvgraphz#4aa3cc3e8e2d961e05e1d103f40ebbd0cc42ef9a"
+source = "git+https://github.com/colobrodo/webgraph-rs.git?branch=time-logs#a6c6743ef2b820c19cdda71464ac57e9ae1d838d"
 dependencies = [
  "anyhow",
  "bitflags 2.9.0",
