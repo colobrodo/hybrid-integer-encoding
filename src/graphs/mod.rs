@@ -47,7 +47,7 @@ fn reference_selection_round<
     let mut huffman_graph_encoder_builder =
         HuffmanGraphEncoderBuilder::<EP, _, _>::new(num_symbols, huffman_estimator, C::default());
     let mut compressor = create_compressor
-        .create_compressor(&mut huffman_graph_encoder_builder, compression_parameters);
+        .create_from_encoder(&mut huffman_graph_encoder_builder, compression_parameters);
 
     pl.item_name("node")
         .expected_updates(Some(graph.num_nodes()));
@@ -123,7 +123,7 @@ pub fn convert_graph<C: ContextModel + Default + Copy>(
             C::default(),
         );
     let mut compressor = create_compressor
-        .create_compressor(&mut huffman_graph_encoder_builder, &compression_parameters);
+        .create_from_encoder(&mut huffman_graph_encoder_builder, &compression_parameters);
 
     pl.item_name("node")
         .expected_updates(Some(seq_graph.num_nodes()));
@@ -176,7 +176,7 @@ pub fn convert_graph<C: ContextModel + Default + Copy>(
     let header_size = huffman_graph_encoder.write_header()?;
 
     let mut compressor =
-        create_compressor.create_compressor(&mut huffman_graph_encoder, &compression_parameters);
+        create_compressor.create_from_encoder(&mut huffman_graph_encoder, &compression_parameters);
 
     pl.item_name("node")
         .expected_updates(Some(seq_graph.num_nodes()));
