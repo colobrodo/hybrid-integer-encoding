@@ -380,6 +380,8 @@ pub fn compare_graphs<C: ContextModel + Default + Copy>(
 
     let mut original_iter = second_graph.iter().enumerate();
     let mut iter = first_graph.iter();
+
+    pl.start("Start comparing the graphs...");
     while let Some((i, (true_node_id, true_succ))) = original_iter.next() {
         let (node_id, succ) = iter.next().unwrap();
 
