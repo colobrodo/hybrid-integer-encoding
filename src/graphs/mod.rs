@@ -367,13 +367,19 @@ pub fn compare_graphs<C: ContextModel + Default + Copy>(
     second_basename: PathBuf,
     max_bits: usize,
 ) -> Result<ComparisonResult> {
-    let graph = load_graph_seq::<C>(first_basename, max_bits)?;
-    let original_graph = BvGraphSeq::with_basename(second_basename.clone())
+    // first the Huffman-encoded graph and then the one in BvGraph format
+    let first_graph = load_graph_seq::<C>(first_basename, max_bits)?;
+    let second_graph = BvGraphSeq::with_basename(second_basename.clone())
         .endianness::<BE>()
         .load()?;
 
-    let mut original_iter = original_graph.iter().enumerate();
-    let mut iter = graph.iter();
+    let mut pl = ProgressLogger::default();
+    pl.display_memory(true)
+        .item_name("compare graphs")
+        .expected_updates(Some(second_graph.num_nodes()));
+
+    let mut original_iter = second_graph.iter().enumerate();
+    let mut iter = first_graph.iter();
     while let Some((i, (true_node_id, true_succ))) = original_iter.next() {
         let (node_id, succ) = iter.next().unwrap();
 
@@ -388,6 +394,8 @@ pub fn compare_graphs<C: ContextModel + Default + Copy>(
                 left_succs: succs,
             });
         }
+        pl.light_update();
     }
+    pl.done();
     Ok(ComparisonResult::Equal)
 }
