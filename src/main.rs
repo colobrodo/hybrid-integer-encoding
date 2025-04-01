@@ -4,6 +4,7 @@ use std::{
     hint::black_box,
     io::{BufRead, BufReader},
     path::PathBuf,
+    process::exit,
     str::FromStr,
 };
 
@@ -22,7 +23,7 @@ use rand::prelude::*;
 use rand_distr::Zipf;
 
 use hybrid_integer_encoding::{
-    graphs::{build_offsets, CreateBvComp, CreateBvCompZ},
+    graphs::{build_offsets, compare_graphs, ComparisonResult, CreateBvComp, CreateBvCompZ},
     utils::IntegerData,
 };
 use hybrid_integer_encoding::{
@@ -116,6 +117,21 @@ enum GraphCommand {
         /// is ignored.
         #[arg(long, default_value = "false")]
         build_offsets: bool,
+    },
+    /// Compare a Huffman graph and a graph in BvGraph format and checks that all the successor lists are equal.
+    /// It returns a 0 exit code if the graphs are the same, otherwise it prints the first node that is different
+    /// and exits with a non-zero code.
+    Eq {
+        /// The basename of the Huffman graph to read and compare
+        first_basename: PathBuf,
+        /// The basename of the BvGraph to read and compare
+        second_basename: PathBuf,
+        /// The maximum number of bits for each word of the huffman code used to compress the first graph.
+        #[arg(short = 'b', long, default_value = "8")]
+        max_bits: usize,
+        /// The type of context model used to encode the Huffman graph.
+        #[arg(long, default_value = "simple")]
+        context_model: ContextModelArgument,
     },
     /// Prints the edges of huffman-compressed graph in csv format
     Read {
@@ -567,6 +583,42 @@ fn main() -> Result<()> {
                             CreateBvComp,
                             compression_parameters,
                         )?
+                    }
+                }
+            }
+            GraphCommand::Eq {
+                first_basename,
+                second_basename,
+                max_bits,
+                context_model,
+            } => {
+                let result = match context_model {
+                    ContextModelArgument::Single => compare_graphs::<ConstantContextModel>(
+                        first_basename,
+                        second_basename,
+                        max_bits,
+                    )?,
+                    ContextModelArgument::Simple => compare_graphs::<SimpleContextModel>(
+                        first_basename,
+                        second_basename,
+                        max_bits,
+                    )?,
+                    ContextModelArgument::Zuckerli => compare_graphs::<ConstantContextModel>(
+                        first_basename,
+                        second_basename,
+                        max_bits,
+                    )?,
+                };
+                // print the result of a comparison between two graphs, and exit if it is not successful.
+                match result {
+                    ComparisonResult::Equal => {}
+                    ComparisonResult::Different {
+                        node_id,
+                        left_succs: _,
+                        right_succs: _,
+                    } => {
+                        eprintln!("Found different node {}", node_id);
+                        exit(1);
                     }
                 }
             }

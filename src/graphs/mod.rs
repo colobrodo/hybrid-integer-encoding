@@ -10,6 +10,7 @@ use dsi_bitstream::prelude::*;
 use dsi_progress_logger::prelude::*;
 use epserde::deser::{Deserialize, MemCase};
 use lender::for_;
+use lender::Lender;
 use std::io::{BufReader, BufWriter};
 use std::path::Path;
 use std::time::Duration;
@@ -347,4 +348,46 @@ where
     pl.light_update();
     pl.start("Done!");
     Ok(())
+}
+
+pub enum ComparisonResult {
+    Equal,
+    Different {
+        node_id: usize,
+        right_succs: Vec<usize>,
+        left_succs: Vec<usize>,
+    },
+}
+
+/// Compare two graphs, the first encoded using Huffman while the second is expected in the BvGraph format.
+/// It returns a `ComparisonResult` that is Equal if both the graphs are equals otherwise returns which
+/// is the first different node with the two different successors lists
+pub fn compare_graphs<C: ContextModel + Default + Copy>(
+    first_basename: PathBuf,
+    second_basename: PathBuf,
+    max_bits: usize,
+) -> Result<ComparisonResult> {
+    let graph = load_graph_seq::<C>(first_basename, max_bits)?;
+    let original_graph = BvGraphSeq::with_basename(second_basename.clone())
+        .endianness::<BE>()
+        .load()?;
+
+    let mut original_iter = original_graph.iter().enumerate();
+    let mut iter = graph.iter();
+    while let Some((i, (true_node_id, true_succ))) = original_iter.next() {
+        let (node_id, succ) = iter.next().unwrap();
+
+        assert_eq!(true_node_id, i);
+        assert_eq!(true_node_id, node_id);
+        let true_succs = true_succ.into_iter().collect::<Vec<_>>();
+        let succs = succ.into_iter().collect::<Vec<_>>();
+        if true_succs != succs {
+            return Ok(ComparisonResult::Different {
+                node_id,
+                right_succs: true_succs,
+                left_succs: succs,
+            });
+        }
+    }
+    Ok(ComparisonResult::Equal)
 }
