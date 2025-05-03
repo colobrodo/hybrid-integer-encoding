@@ -7,7 +7,7 @@ pub trait ContextModel {
     /// The name of the context model to be readed and written on the properties file
     const NAME: &str;
     /// Returns the number of contexts available.
-    fn num_contexts() -> usize;
+    fn num_contexts(&self) -> usize;
     /// Choose the context based on the current component that should be encoded.
     fn choose_context(&mut self, component: BvGraphComponent) -> u8;
     /// Update the model with the last value seen, for stateful model (like the one described in zuckerli).
@@ -26,7 +26,7 @@ impl ContextModel for SimpleContextModel {
     const NAME: &str = "simple";
 
     #[inline(always)]
-    fn num_contexts() -> usize {
+    fn num_contexts(&self) -> usize {
         BvGraphComponent::COMPONENTS
     }
 
@@ -49,7 +49,7 @@ impl ContextModel for ConstantContextModel {
     const NAME: &str = "single";
 
     #[inline(always)]
-    fn num_contexts() -> usize {
+    fn num_contexts(&self) -> usize {
         1
     }
 
@@ -120,7 +120,7 @@ impl<EP: EncodeParams> ZuckerliContextModel<EP> {
 impl<EP: EncodeParams> ContextModel for ZuckerliContextModel<EP> {
     const NAME: &str = "zuckerli";
 
-    fn num_contexts() -> usize {
+    fn num_contexts(&self) -> usize {
         Self::NUM_CONTEXTS
     }
 
@@ -197,8 +197,8 @@ pub struct DebugContextModel<C: ContextModel> {
 impl<C: ContextModel> ContextModel for DebugContextModel<C> {
     const NAME: &str = C::NAME;
 
-    fn num_contexts() -> usize {
-        C::num_contexts()
+    fn num_contexts(&self) -> usize {
+        self.model.num_contexts()
     }
 
     fn choose_context(&mut self, component: BvGraphComponent) -> u8 {

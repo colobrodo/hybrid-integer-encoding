@@ -138,9 +138,9 @@ where
 
     fn new_decoder(&self) -> anyhow::Result<Self::Decoder<'_>> {
         let reader = self.factory.new_reader();
-        let huffman_reader =
-            HuffmanReader::from_bitreader(reader, self.max_bits, C::num_contexts())?;
         let model = C::default();
+        let huffman_reader =
+            HuffmanReader::from_bitreader(reader, self.max_bits, model.num_contexts())?;
         Ok(HuffmanGraphDecoder::new(huffman_reader, model))
     }
 }
@@ -175,7 +175,7 @@ where
         max_bits: usize,
     ) -> anyhow::Result<Self> {
         let mut reader = factory.new_reader();
-        let table = HuffmanReader::decode_table(&mut reader, max_bits, C::num_contexts())?;
+        let table = HuffmanReader::decode_table(&mut reader, max_bits, model.num_contexts())?;
         drop(reader);
         Ok(RandomAccessHuffmanDecoderFactory {
             offsets,

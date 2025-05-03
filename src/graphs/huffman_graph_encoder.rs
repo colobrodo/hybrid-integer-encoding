@@ -141,7 +141,7 @@ pub struct HuffmanGraphEncoderBuilder<EP: EncodeParams, E: Encode, C: ContextMod
 
 impl<EP: EncodeParams, E: Encode, C: ContextModel> HuffmanGraphEncoderBuilder<EP, E, C> {
     pub fn new(num_symbols: usize, estimator: E, context_model: C) -> Self {
-        let contexts = C::num_contexts();
+        let contexts = context_model.num_contexts();
         Self {
             estimator,
             context_model,
