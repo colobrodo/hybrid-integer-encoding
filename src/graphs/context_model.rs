@@ -1,11 +1,15 @@
 use crate::huffman::{encode, EncodeParams};
 
+use super::partition::GraphPartition;
+
 use super::BvGraphComponent;
 
 /// A model defines how the context of each encoded or estimated value is chosen during graph compression.
 pub trait ContextModel {
     /// The name of the context model to be readed and written on the properties file
     const NAME: &str;
+    /// Callback called at the start of the node
+    fn start_node(&mut self, _node_id: usize) {}
     /// Returns the number of contexts available.
     fn num_contexts(&self) -> usize;
     /// Choose the context based on the current component that should be encoded.
@@ -188,7 +192,47 @@ impl<EP: EncodeParams> ContextModel for ZuckerliContextModel<EP> {
     }
 }
 
-/// A debug decorator for context models usefull for debugging purpose:
+pub struct PartitionedContextModel<P: GraphPartition, C: ContextModel> {
+    partitions: P,
+    model: C,
+    current_partition: Option<usize>,
+}
+
+impl<P: GraphPartition, C: ContextModel> ContextModel for PartitionedContextModel<P, C> {
+    const NAME: &str = C::NAME;
+
+    fn start_node(&mut self, node_id: usize) {
+        debug_assert!(
+            self.current_partition.is_none(),
+            "Expected reset to be called before start node"
+        );
+        let current_partition = self.partitions.partition_of_node(node_id);
+        self.current_partition = Some(current_partition);
+    }
+
+    fn num_contexts(&self) -> usize {
+        self.model.num_contexts() * self.partitions.num_partitions()
+    }
+
+    fn choose_context(&mut self, component: BvGraphComponent) -> u8 {
+        let current_partition = self
+            .current_partition
+            .expect("Not set any partition for the current node in the block context");
+        let base_partition_context = current_partition * self.model.num_contexts();
+        base_partition_context as u8 + self.model.choose_context(component)
+    }
+
+    fn update(&mut self, component: BvGraphComponent, value: u64) {
+        self.model.update(component, value);
+    }
+
+    fn reset(&mut self) {
+        self.model.reset();
+        self.current_partition = None;
+    }
+}
+
+/// A debug decorator for context models useful for debugging purpose:
 /// It wraps an existing context model and log each operation before executing it.
 pub struct DebugContextModel<C: ContextModel> {
     model: C,

@@ -50,8 +50,9 @@ impl<EP: EncodeParams, E: Encode, W: BitWrite<LE>, S: ContextModel> Encode
 {
     type Error = Infallible;
 
-    fn start_node(&mut self, _node_id: usize) -> Result<usize, Self::Error> {
+    fn start_node(&mut self, node_id: usize) -> Result<usize, Self::Error> {
         self.context_model.reset();
+        self.context_model.start_node(node_id);
         Ok(0)
     }
 
@@ -175,6 +176,7 @@ impl<EP: EncodeParams, E: Encode, S: ContextModel> Encode for HuffmanGraphEncode
     fn start_node(&mut self, node: usize) -> Result<usize, Self::Error> {
         let result = self.estimator.start_node(node)?;
         self.context_model.reset();
+        self.context_model.start_node(node);
         Ok(result)
     }
 

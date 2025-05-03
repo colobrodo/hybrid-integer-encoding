@@ -4,6 +4,7 @@ mod context_model;
 pub mod estimator;
 mod huffman_graph_decoder;
 mod huffman_graph_encoder;
+mod partition;
 
 use anyhow::{Context, Result};
 use dsi_bitstream::prelude::*;
