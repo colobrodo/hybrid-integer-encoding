@@ -15,8 +15,8 @@ pub struct HuffmanGraphDecoder<EP: EncodeParams, R: BitRead<LE>, M: ContextModel
     _marker: core::marker::PhantomData<EP>,
 }
 
-impl<EP: EncodeParams, R: BitRead<LE>, S: ContextModel> HuffmanGraphDecoder<EP, R, S> {
-    pub fn new(reader: HuffmanReader<R>, model: S) -> Self {
+impl<EP: EncodeParams, R: BitRead<LE>, C: ContextModel> HuffmanGraphDecoder<EP, R, C> {
+    pub fn new(reader: HuffmanReader<R>, model: C) -> Self {
         HuffmanGraphDecoder {
             reader,
             context_model: model,
@@ -107,19 +107,21 @@ impl<EP: EncodeParams, R: BitRead<LE> + BitSeek, S: ContextModel> BitSeek
 pub struct SequentialHuffmanDecoderFactory<
     EP: EncodeParams,
     F: BitReaderFactory<LE>,
-    S: ContextModel,
+    C: ContextModel,
 > {
-    _marker: core::marker::PhantomData<(EP, S)>,
+    _marker: core::marker::PhantomData<EP>,
     factory: F,
+    create_context: fn() -> C,
     max_bits: usize,
 }
 
 impl<EP: EncodeParams, F: BitReaderFactory<LE>, C: ContextModel>
     SequentialHuffmanDecoderFactory<EP, F, C>
 {
-    pub fn new(factory: F, max_bits: usize) -> Self {
+    pub fn new(factory: F, create_context: fn() -> C, max_bits: usize) -> Self {
         SequentialHuffmanDecoderFactory {
             factory,
+            create_context,
             max_bits,
             _marker: std::marker::PhantomData,
         }
@@ -138,7 +140,7 @@ where
 
     fn new_decoder(&self) -> anyhow::Result<Self::Decoder<'_>> {
         let reader = self.factory.new_reader();
-        let model = C::default();
+        let model = (self.create_context)();
         let huffman_reader =
             HuffmanReader::from_bitreader(reader, self.max_bits, model.num_contexts())?;
         Ok(HuffmanGraphDecoder::new(huffman_reader, model))
@@ -205,6 +207,7 @@ where
         let mut reader = self.factory.new_reader();
         reader.set_bit_pos(self.offsets.get(node) as u64)?;
         let huffman_reader = HuffmanReader::new(self.table.clone(), reader);
+        // TODO: here we copy the context model should we pass a lambda as for the sequential decoder (?)
         Ok(HuffmanGraphDecoder::new(huffman_reader, self.model))
     }
 }

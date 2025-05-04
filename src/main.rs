@@ -1,4 +1,5 @@
 use std::{
+    default,
     fmt::Debug,
     fs::File,
     hint::black_box,
@@ -76,7 +77,7 @@ enum Command {
         command: BenchCommand,
     },
 
-    /// Recompress a graph using the Huffman encoder
+    /// Commands to read and convert Web graphs to Huffman-based representation.
     Graph {
         #[clap(subcommand)]
         command: GraphCommand,
@@ -695,16 +696,18 @@ fn main() -> Result<()> {
             } => {
                 let bench_result = match context_model {
                     ContextModelArgument::Single => {
-                        let graph = load_graph::<ConstantContextModel>(basename, max_bits)?;
+                        let graph = load_graph(basename, ConstantContextModel, max_bits)?;
                         bench_random_graph(graph, seed, random, repeats)
                     }
                     ContextModelArgument::Simple => {
-                        let graph = load_graph::<SimpleContextModel>(basename, max_bits)?;
+                        let graph = load_graph(basename, SimpleContextModel, max_bits)?;
                         bench_random_graph(graph, seed, random, repeats)
                     }
                     ContextModelArgument::Zuckerli => {
-                        let graph = load_graph::<ZuckerliContextModel<DefaultEncodeParams>>(
-                            basename, max_bits,
+                        let graph = load_graph(
+                            basename,
+                            ZuckerliContextModel::<DefaultEncodeParams>::default(),
+                            max_bits,
                         )?;
                         bench_random_graph(graph, seed, random, repeats)
                     }

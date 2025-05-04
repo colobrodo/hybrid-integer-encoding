@@ -96,7 +96,7 @@ fn copy_properties_file(
     Ok(())
 }
 
-pub fn convert_graph<C: ContextModel + Default + Copy>(
+pub fn convert_graph<C: ContextModel + Default>(
     basename: PathBuf,
     output_basename: PathBuf,
     max_bits: usize,
@@ -219,8 +219,11 @@ pub fn load_graph_seq<C: ContextModel + Default + Copy>(
     let graph_path = basename.with_extension(GRAPH_EXTENSION);
     let flags = MemoryFlags::TRANSPARENT_HUGE_PAGES | MemoryFlags::SEQUENTIAL;
     let mmap_factory = MmapHelper::mmap(&graph_path, flags.into())?;
-    let factory =
-        SequentialHuffmanDecoderFactory::<DefaultEncodeParams, _, _>::new(mmap_factory, max_bits);
+    let factory = SequentialHuffmanDecoderFactory::<DefaultEncodeParams, _, _>::new(
+        mmap_factory,
+        C::default,
+        max_bits,
+    );
     let graph = BvGraphSeq::new(
         factory,
         num_nodes,
@@ -270,6 +273,7 @@ fn check_compression_parameters(
 /// Load an Huffman-encoded graph to be accessed in random order
 pub fn load_graph<C: ContextModel + Default + Copy>(
     basename: PathBuf,
+    context_model: C,
     max_bits: usize,
 ) -> Result<BvGraph<RandomAccessHuffmanDecoderFactory<MmapHelper<u32>, EF, C>>> {
     let properties_path = basename.with_extension(PROPERTIES_EXTENSION);
@@ -295,7 +299,7 @@ pub fn load_graph<C: ContextModel + Default + Copy>(
     let ef = EF::load_full(eliasfano_path)?;
     let factory = RandomAccessHuffmanDecoderFactory::<_, _, _, DefaultEncodeParams>::new(
         mmap_factory,
-        C::default(),
+        context_model,
         MemCase::encase(ef),
         max_bits,
     )?;
