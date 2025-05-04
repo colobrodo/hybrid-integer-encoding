@@ -4,7 +4,7 @@ mod context_model;
 pub mod estimator;
 mod huffman_graph_decoder;
 mod huffman_graph_encoder;
-mod partition;
+pub mod partition;
 
 use anyhow::{Context, Result};
 use dsi_bitstream::prelude::*;
@@ -33,11 +33,12 @@ fn reference_selection_round<
     F: SequentialDecoderFactory,
     EP: EncodeParams,
     E: Encode,
-    C: ContextModel + Default,
+    C: ContextModel,
 >(
     graph: &BvGraphSeq<F>,
     huffman_graph_encoder_builder: HuffmanGraphEncoderBuilder<EP, E, C>,
     max_bits: usize,
+    create_context_model: fn() -> C,
     compression_parameters: &CompressionParameters,
     msg: &str,
     create_compressor: &impl CompressorFromEncoder,
@@ -46,8 +47,11 @@ fn reference_selection_round<
     let num_symbols = 1 << max_bits;
     let huffman_estimator = huffman_graph_encoder_builder.build_estimator();
     // setup for the new iteration with huffman estimator
-    let mut huffman_graph_encoder_builder =
-        HuffmanGraphEncoderBuilder::<EP, _, _>::new(num_symbols, huffman_estimator, C::default());
+    let mut huffman_graph_encoder_builder = HuffmanGraphEncoderBuilder::<EP, _, _>::new(
+        num_symbols,
+        huffman_estimator,
+        create_context_model(),
+    );
     let mut compressor = create_compressor
         .create_from_encoder(&mut huffman_graph_encoder_builder, compression_parameters);
 
@@ -96,11 +100,12 @@ fn copy_properties_file(
     Ok(())
 }
 
-pub fn convert_graph<C: ContextModel + Default>(
+pub fn convert_graph<C: ContextModel>(
     basename: PathBuf,
     output_basename: PathBuf,
     max_bits: usize,
     create_compressor: impl CompressorFromEncoder,
+    create_context_model: fn() -> C,
     compression_parameters: CompressionParameters,
 ) -> Result<()> {
     assert!(
@@ -122,7 +127,7 @@ pub fn convert_graph<C: ContextModel + Default>(
         HuffmanGraphEncoderBuilder::<DefaultEncodeParams, _, _>::new(
             num_symbols,
             Log2Estimator,
-            C::default(),
+            create_context_model(),
         );
     let mut compressor = create_compressor
         .create_from_encoder(&mut huffman_graph_encoder_builder, &compression_parameters);
@@ -143,6 +148,7 @@ pub fn convert_graph<C: ContextModel + Default>(
         &seq_graph,
         huffman_graph_encoder_builder,
         max_bits,
+        create_context_model,
         &compression_parameters,
         "Pushing symbols into encoder builder on first round with Huffman estimator...",
         &create_compressor,
@@ -153,6 +159,7 @@ pub fn convert_graph<C: ContextModel + Default>(
             &seq_graph,
             huffman_graph_encoder_builder,
             max_bits,
+            create_context_model,
             &compression_parameters,
             format!(
                 "Pushing symbols into encoder builder with Huffman estimator for round {}...",

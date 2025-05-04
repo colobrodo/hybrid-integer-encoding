@@ -2,8 +2,8 @@ mod tests {
     use dsi_bitstream::traits::BE;
     use hybrid_integer_encoding::{
         graphs::{
-            convert_graph, load_graph_seq, CreateBvComp, CreateBvCompZ, CompressionParameters,
-            ContextModel, SimpleContextModel, ZuckerliContextModel,
+            convert_graph, load_graph_seq, CompressionParameters, ContextModel, CreateBvComp,
+            CreateBvCompZ, SimpleContextModel, ZuckerliContextModel,
         },
         huffman::DefaultEncodeParams,
     };
@@ -34,6 +34,7 @@ mod tests {
                 output_basename.clone(),
                 max_bits,
                 CreateBvComp,
+                C::default,
                 compression_parameters,
             )?;
         } else {
@@ -42,6 +43,7 @@ mod tests {
                 output_basename.clone(),
                 max_bits,
                 CreateBvCompZ::with_chunk_size(10000),
+                C::default,
                 compression_parameters,
             )?;
         }

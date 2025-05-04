@@ -1,5 +1,4 @@
 use std::{
-    default,
     fmt::Debug,
     fs::File,
     hint::black_box,
@@ -538,53 +537,55 @@ fn main() -> Result<()> {
                     log::warn!("Cannot build offsets during conversion of graph '{}', when compressing it with Zuckerli reference selection algorithm.", basename.display());
                 }
                 match (context_model, greedy_compressor) {
-                    (ContextModelArgument::Single, false) => convert_graph::<ConstantContextModel>(
+                    (ContextModelArgument::Single, false) => convert_graph(
                         basename,
                         output_basename,
                         max_bits,
                         CreateBvCompZ::with_chunk_size(10000),
+                        ConstantContextModel::default,
                         compression_parameters,
                     )?,
-                    (ContextModelArgument::Single, true) => convert_graph::<ConstantContextModel>(
+                    (ContextModelArgument::Single, true) => convert_graph(
                         basename,
                         output_basename,
                         max_bits,
                         CreateBvComp,
+                        ConstantContextModel::default,
                         compression_parameters,
                     )?,
 
-                    (ContextModelArgument::Simple, false) => convert_graph::<SimpleContextModel>(
+                    (ContextModelArgument::Simple, false) => convert_graph(
                         basename,
                         output_basename,
                         max_bits,
                         CreateBvCompZ::with_chunk_size(10000),
+                        SimpleContextModel::default,
                         compression_parameters,
                     )?,
-                    (ContextModelArgument::Simple, true) => convert_graph::<SimpleContextModel>(
+                    (ContextModelArgument::Simple, true) => convert_graph(
                         basename,
                         output_basename,
                         max_bits,
                         CreateBvComp,
+                        SimpleContextModel::default,
                         compression_parameters,
                     )?,
-                    (ContextModelArgument::Zuckerli, false) => {
-                        convert_graph::<ZuckerliContextModel<DefaultEncodeParams>>(
-                            basename,
-                            output_basename,
-                            max_bits,
-                            CreateBvCompZ::with_chunk_size(10000),
-                            compression_parameters,
-                        )?
-                    }
-                    (ContextModelArgument::Zuckerli, true) => {
-                        convert_graph::<ZuckerliContextModel<DefaultEncodeParams>>(
-                            basename,
-                            output_basename,
-                            max_bits,
-                            CreateBvComp,
-                            compression_parameters,
-                        )?
-                    }
+                    (ContextModelArgument::Zuckerli, false) => convert_graph(
+                        basename,
+                        output_basename,
+                        max_bits,
+                        CreateBvCompZ::with_chunk_size(10000),
+                        ZuckerliContextModel::<DefaultEncodeParams>::default,
+                        compression_parameters,
+                    )?,
+                    (ContextModelArgument::Zuckerli, true) => convert_graph(
+                        basename,
+                        output_basename,
+                        max_bits,
+                        CreateBvComp,
+                        ZuckerliContextModel::<DefaultEncodeParams>::default,
+                        compression_parameters,
+                    )?,
                 }
             }
             GraphCommand::Eq {

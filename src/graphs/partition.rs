@@ -1,10 +1,10 @@
 use sux::{dict::elias_fano::EfSeqDict, prelude::*};
 
-pub(crate) trait GraphPartition {
+pub trait GraphPartition {
     fn partition_of_node(&self, node_id: usize) -> usize;
     fn num_partitions(&self) -> usize;
 }
-pub(crate) struct BlockPartition {
+pub struct BlockPartition {
     partitions: EfSeqDict,
 }
 
@@ -21,16 +21,16 @@ impl GraphPartition for BlockPartition {
     }
 }
 
-pub(crate) struct FixedSizePartition {
+pub struct FixedSizePartition {
     partition_size: usize,
     num_partitions: usize,
 }
 
 impl FixedSizePartition {
-    fn new(partition_size: usize, num_nodes: usize) -> Self {
+    pub fn new(partition_size: usize, num_nodes: usize) -> Self {
         FixedSizePartition {
             partition_size,
-            num_partitions: num_nodes.div_ceil(num_nodes),
+            num_partitions: num_nodes.div_ceil(partition_size),
         }
     }
 }

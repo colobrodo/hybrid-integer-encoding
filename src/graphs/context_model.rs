@@ -198,6 +198,16 @@ pub struct PartitionedContextModel<P: GraphPartition, C: ContextModel> {
     current_partition: Option<usize>,
 }
 
+impl<P: GraphPartition, C: ContextModel> PartitionedContextModel<P, C> {
+    pub fn new(partitions: P, model: C) -> Self {
+        PartitionedContextModel {
+            partitions,
+            model,
+            current_partition: None,
+        }
+    }
+}
+
 impl<P: GraphPartition, C: ContextModel> ContextModel for PartitionedContextModel<P, C> {
     const NAME: &str = C::NAME;
 
