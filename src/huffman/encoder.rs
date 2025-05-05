@@ -37,13 +37,57 @@ pub struct HuffmanEncoder<EP: EncodeParams = DefaultEncodeParams> {
     _marker: core::marker::PhantomData<EP>,
 }
 
+pub struct Histogram {
+    frequencies: Vec<usize>,
+    /// Total number of symbols
+    total: usize,
+}
+
+impl Histogram {
+    fn from_vec(freqs: Vec<usize>) -> Self {
+        let total = freqs.iter().sum();
+        Histogram {
+            frequencies: freqs,
+            total,
+        }
+    }
+
+    fn empty() -> Self {
+        Histogram {
+            frequencies: Vec::new(),
+            total: 0,
+        }
+    }
+
+    fn empty_with_known_size(number_of_elements: usize) -> Self {
+        Histogram {
+            frequencies: vec![0; number_of_elements],
+            total: 0,
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.total == 0
+    }
+
+    fn add(&mut self, symbol: usize) {
+        if self.frequencies.len() < symbol {
+            self.frequencies.resize(symbol + 1, 0);
+        }
+        self.frequencies[symbol] += 1;
+        self.total += 1;
+    }
+
+    fn symbols(&self) -> usize {
+        self.frequencies.len()
+    }
+}
+
 /// Compute the histogram of the each token frequency for each context.
 /// An histogram is a vector of length `num_symbols` where each index represents a symbol,
 /// and the value at each index represents the frequency of the symbol.
 pub struct IntegerHistograms<EP: EncodeParams> {
-    ctx_histograms: Vec<Vec<usize>>,
-    /// Total number of symbols for each context.
-    totals: Vec<usize>,
+    ctx_histograms: Vec<Histogram>,
     num_contexts: usize,
     _marker: core::marker::PhantomData<EP>,
 }
@@ -51,25 +95,26 @@ pub struct IntegerHistograms<EP: EncodeParams> {
 impl<EP: EncodeParams> IntegerHistograms<EP> {
     pub fn new(num_contexts: usize, num_symbols: usize) -> Self {
         let mut histograms = Vec::with_capacity(num_contexts);
-        histograms.resize(num_contexts, vec![0; num_symbols]);
+        histograms.resize_with(num_contexts, || {
+            Histogram::empty_with_known_size(num_symbols)
+        });
         Self {
             ctx_histograms: histograms,
-            totals: vec![0; num_contexts],
             num_contexts,
             _marker: core::marker::PhantomData,
         }
     }
 
     pub fn context_count(&self, context: u8) -> usize {
-        self.totals[context as usize]
+        self.ctx_histograms[context as usize].total
     }
 
     pub fn count(&self) -> usize {
-        self.totals.iter().sum()
+        self.ctx_histograms.iter().map(|h| h.total).sum()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.count() == 0
+        self.ctx_histograms.iter().all(|h| h.is_empty())
     }
 
     pub fn add(&mut self, context: u8, value: u32) {
@@ -79,13 +124,7 @@ impl<EP: EncodeParams> IntegerHistograms<EP> {
             value, context, self.num_contexts
         );
         let (token, _, _) = encode::<EP>(value.into());
-        self.ctx_histograms[context as usize][token] += 1;
-        self.totals[context as usize] += 1;
-    }
-
-    /// Returns the histogram as his underlying vector.
-    pub fn as_vec(self) -> Vec<Vec<usize>> {
-        self.ctx_histograms
+        self.ctx_histograms[context as usize].add(token);
     }
 
     /// Returns the cost model of encoding each value according to the distributions
@@ -94,11 +133,11 @@ impl<EP: EncodeParams> IntegerHistograms<EP> {
         let mut costs = self
             .ctx_histograms
             .iter()
-            .map(|histogram| Vec::with_capacity(histogram.len()))
+            .map(|histogram| Vec::with_capacity(histogram.symbols()))
             .collect::<Vec<_>>();
         for (ctx, ctx_histogram) in self.ctx_histograms.iter().enumerate() {
-            let total_symbols = self.totals[ctx];
-            for &freq in ctx_histogram.iter() {
+            let total_symbols = self.ctx_histograms[ctx].total;
+            for &freq in ctx_histogram.frequencies.iter() {
                 let cnt = f64::max(freq as f64, 0.1);
                 let inv_freq = (total_symbols as f64 / cnt) as u64;
                 let token_cost = inv_freq.max(2).ilog2() as usize;
@@ -121,11 +160,15 @@ type Bag = (usize, Vec<u8>);
 // Compute the optimal number of bits for each symbol given the input
 // distribution. Uses a (quadratic version) of the package-merge/coin-collector
 // algorithm.
-fn compute_symbol_num_bits(histogram: &[usize], max_bits: usize, infos: &mut [HuffmanSymbolInfo]) {
+fn compute_symbol_num_bits(
+    histogram: &Histogram,
+    max_bits: usize,
+    infos: &mut [HuffmanSymbolInfo],
+) {
     assert!(infos.len() == 1 << max_bits);
     // Mark the present/missing symbols.
     let mut non_zero_symbols = 0;
-    for (i, freq) in histogram.iter().enumerate() {
+    for (i, freq) in histogram.frequencies.iter().enumerate() {
         if *freq == 0 {
             continue;
         }
@@ -149,7 +192,7 @@ fn compute_symbol_num_bits(histogram: &[usize], max_bits: usize, infos: &mut [Hu
                 continue;
             }
             let sym = vec![s as u8];
-            bag.push((histogram[s], sym));
+            bag.push((histogram.frequencies[s], sym));
         }
     }
 
@@ -179,11 +222,10 @@ fn compute_symbol_num_bits(histogram: &[usize], max_bits: usize, infos: &mut [Hu
 }
 
 impl<EP: EncodeParams> HuffmanEncoder<EP> {
-    pub fn new(data: IntegerHistograms<EP>, max_bits: usize) -> Self {
+    pub fn new(histograms: IntegerHistograms<EP>, max_bits: usize) -> Self {
         let num_symbols = 1 << max_bits;
-        let histograms = data.as_vec();
         let mut info = Vec::new();
-        for histogram in &histograms {
+        for histogram in &histograms.ctx_histograms {
             let mut ctx_info = vec![HuffmanSymbolInfo::default(); num_symbols];
             compute_symbol_num_bits(histogram, max_bits, &mut ctx_info);
             compute_symbol_bits(max_bits, &mut ctx_info);
