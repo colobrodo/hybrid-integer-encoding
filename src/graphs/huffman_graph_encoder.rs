@@ -1,6 +1,6 @@
 use std::convert::Infallible;
 
-use crate::huffman::{EncodeParams, HuffmanEncoder, IntegerHistogram};
+use crate::huffman::{EncodeParams, HuffmanEncoder, IntegerHistograms};
 
 use anyhow::Result;
 use dsi_bitstream::traits::{BitWrite, LE};
@@ -137,7 +137,7 @@ impl<EP: EncodeParams, E: Encode, W: BitWrite<LE>, S: ContextModel> EncodeAndEst
 pub struct HuffmanGraphEncoderBuilder<EP: EncodeParams, E: Encode, C: ContextModel> {
     estimator: E,
     context_model: C,
-    data: IntegerHistogram<EP>,
+    data: IntegerHistograms<EP>,
 }
 
 impl<EP: EncodeParams, E: Encode, C: ContextModel> HuffmanGraphEncoderBuilder<EP, E, C> {
@@ -146,7 +146,7 @@ impl<EP: EncodeParams, E: Encode, C: ContextModel> HuffmanGraphEncoderBuilder<EP
         Self {
             estimator,
             context_model,
-            data: IntegerHistogram::new(contexts, num_symbols),
+            data: IntegerHistograms::new(contexts, num_symbols),
         }
     }
 

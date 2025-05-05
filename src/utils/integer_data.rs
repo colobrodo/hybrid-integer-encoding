@@ -1,11 +1,11 @@
 use std::marker::PhantomData;
 
-use crate::huffman::{EncodeParams, IntegerHistogram};
+use crate::huffman::{EncodeParams, IntegerHistograms};
 
 pub struct IntegerData<EP: EncodeParams> {
     values: Vec<u32>,
     contexts: Vec<u8>,
-    histograms: IntegerHistogram<EP>,
+    histograms: IntegerHistograms<EP>,
     _marker: PhantomData<EP>,
 }
 
@@ -14,7 +14,7 @@ impl<EP: EncodeParams> IntegerData<EP> {
         Self {
             values: Vec::new(),
             contexts: Vec::new(),
-            histograms: IntegerHistogram::new(num_contexts, num_symbols),
+            histograms: IntegerHistograms::new(num_contexts, num_symbols),
             _marker: PhantomData,
         }
     }
@@ -39,7 +39,7 @@ impl<EP: EncodeParams> IntegerData<EP> {
         self.values.is_empty()
     }
 
-    pub fn histograms(self) -> IntegerHistogram<EP> {
+    pub fn histograms(self) -> IntegerHistograms<EP> {
         self.histograms
     }
 }

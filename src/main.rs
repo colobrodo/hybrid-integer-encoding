@@ -33,7 +33,7 @@ use hybrid_integer_encoding::{
     },
     huffman::{
         encode, DefaultEncodeParams, EncodeParams, EntropyCoder, HuffmanEncoder, HuffmanReader,
-        IntegerHistogram,
+        IntegerHistograms,
     },
     utils::StatBitWriter,
 };
@@ -269,7 +269,7 @@ fn encode_file(
     let reader = BufReader::new(file);
 
     let mut integers = Vec::new();
-    let mut integer_data = IntegerHistogram::new(num_contexts, 0);
+    let mut integer_data = IntegerHistograms::new(num_contexts, 0);
     let mut last_sample = 0;
     for line in reader.lines().map_while(Result::ok) {
         // Split the line by whitespace and parse each number as u8
