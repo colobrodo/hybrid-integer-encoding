@@ -562,6 +562,7 @@ fn main() -> Result<()> {
                         output_basename,
                         max_bits,
                         CreateBvCompZ::with_chunk_size(10000),
+                        // TODO: fix this shit
                         || {
                             PartitionedContextModel::new(
                                 FixedSizePartition::new(50000, 325557),

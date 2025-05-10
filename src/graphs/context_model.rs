@@ -242,6 +242,33 @@ impl<P: GraphPartition, C: ContextModel> ContextModel for PartitionedContextMode
     }
 }
 
+pub struct ClusteredContextMap<C: ContextModel> {
+    model: C,
+    clusters_map: Box<[u8]>,
+    num_clusters: usize,
+}
+
+impl<C: ContextModel> ContextModel for ClusteredContextMap<C> {
+    const NAME: &str = C::NAME;
+
+    fn num_contexts(&self) -> usize {
+        self.num_clusters
+    }
+
+    fn choose_context(&mut self, component: BvGraphComponent) -> u8 {
+        let context = self.model.choose_context(component);
+        self.clusters_map[context as usize]
+    }
+
+    fn update(&mut self, component: BvGraphComponent, value: u64) {
+        self.model.update(component, value);
+    }
+
+    fn reset(&mut self) {
+        self.model.reset();
+    }
+}
+
 /// A debug decorator for context models useful for debugging purpose:
 /// It wraps an existing context model and log each operation before executing it.
 pub struct DebugContextModel<C: ContextModel> {
