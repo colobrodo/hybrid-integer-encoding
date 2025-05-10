@@ -1,3 +1,4 @@
+use core::f32;
 use std::mem;
 
 use dsi_bitstream::traits::{BitWrite, Endianness, LE};
@@ -70,7 +71,7 @@ impl Histogram {
         self.total == 0
     }
 
-    fn add(&mut self, symbol: usize) {
+    fn push(&mut self, symbol: usize) {
         if self.frequencies.len() < symbol {
             self.frequencies.resize(symbol + 1, 0);
         }
@@ -80,6 +81,35 @@ impl Histogram {
 
     fn symbols(&self) -> usize {
         self.frequencies.len()
+    }
+
+    fn entropy(&self) -> f32 {
+        let mut entropy = 0.0;
+        for &freq in self.frequencies.iter() {
+            if freq == 0 {
+                continue;
+            }
+            entropy += freq as f32 * f32::log2(self.total as f32 / freq as f32)
+        }
+        entropy
+    }
+
+    fn add(&self, other: &Histogram) -> Histogram {
+        let size = self.symbols();
+        let other_size = other.symbols();
+        let new_size = size.max(other_size);
+        let mut new_freqs = vec![0; new_size];
+        for i in 0..new_size {
+            let freq = *self.frequencies.get(i).unwrap_or(&0);
+            let other_freq = *other.frequencies.get(i).unwrap_or(&0);
+            new_freqs[i] = freq + other_freq;
+        }
+        Histogram::from_vec(new_freqs)
+    }
+
+    fn distance(&self, other: &Histogram) -> f32 {
+        let union = self.add(other);
+        union.entropy() - self.entropy() - other.entropy()
     }
 }
 
@@ -124,7 +154,7 @@ impl<EP: EncodeParams> IntegerHistograms<EP> {
             value, context, self.num_contexts
         );
         let (token, _, _) = encode::<EP>(value.into());
-        self.ctx_histograms[context as usize].add(token);
+        self.ctx_histograms[context as usize].push(token);
     }
 
     /// Returns the cost model of encoding each value according to the distributions
@@ -148,6 +178,82 @@ impl<EP: EncodeParams> IntegerHistograms<EP> {
             costs,
             _marker: core::marker::PhantomData,
         }
+    }
+
+    pub fn print_entropies(&self) {
+        for (ctx, histogram) in self.ctx_histograms.iter().enumerate() {
+            let entropy = histogram.entropy();
+            println!("Entropy for distribution in context {}: {}", ctx, entropy);
+        }
+        let clusters_map = self.cluster(20);
+        // print all the clusters
+        for (index, &cluster) in clusters_map.iter().enumerate() {
+            println!(
+                "cluster {} -> {} (type: {}, cluster type: {})",
+                index,
+                cluster,
+                index % 9,
+                cluster % 9
+            );
+        }
+    }
+
+    pub fn cluster(&self, num_clusters: usize) -> Vec<usize> {
+        // find the histogram with maximal entropy
+        let (max_entropy_index, _) = self
+            .ctx_histograms
+            .iter()
+            .enumerate()
+            .max_by(|(_, a), (_, b)| a.entropy().partial_cmp(&b.entropy()).unwrap())
+            .unwrap();
+        let num_distributions = self.number_of_contexts();
+        let mut clusters = Vec::new();
+        let mut last_cluster_index = max_entropy_index;
+        let mut chosen = vec![false; num_distributions];
+        // contains the distance to the closer center
+        let mut distances = vec![f32::INFINITY; num_distributions];
+        while clusters.len() < num_clusters.min(self.ctx_histograms.len()) {
+            clusters.push(last_cluster_index);
+            chosen[last_cluster_index] = true;
+            let mut farthest_histogram_distance = 0.0;
+            let mut farthest_histogram_index = 0;
+            let center_histogram = &self.ctx_histograms[last_cluster_index];
+            // find the next cluster: the one farthest away from all the existing clusters
+            for (index, histogram) in self.ctx_histograms.iter().enumerate() {
+                let distance_to_last_center = histogram.distance(center_histogram);
+                // avoid consider elements that are already centers
+                if chosen[index] {
+                    continue;
+                }
+                if distance_to_last_center < distances[index] {
+                    distances[index] = distance_to_last_center;
+                }
+                if distances[index] > farthest_histogram_distance {
+                    farthest_histogram_distance = distances[index];
+                    farthest_histogram_index = index;
+                }
+            }
+            last_cluster_index = farthest_histogram_index;
+        }
+        let mut clusters_map = vec![0; num_distributions];
+        // choose the center of each point
+        for (index, histogram) in self.ctx_histograms.iter().enumerate() {
+            if chosen[index] {
+                continue;
+            }
+            let mut closer_center_index = 0;
+            let mut closer_center_distance = f32::INFINITY;
+            for &center in clusters.iter() {
+                let distance_to_center = self.ctx_histograms[center].distance(&histogram);
+                if distance_to_center < closer_center_distance {
+                    closer_center_distance = distance_to_center;
+                    closer_center_index = center;
+                }
+            }
+            clusters_map[index] = closer_center_index;
+        }
+
+        clusters_map
     }
 
     pub fn number_of_contexts(&self) -> usize {

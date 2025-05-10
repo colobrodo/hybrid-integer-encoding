@@ -160,6 +160,7 @@ impl<EP: EncodeParams, E: Encode, C: ContextModel> HuffmanGraphEncoderBuilder<EP
     }
 
     pub fn build_estimator(self) -> HuffmanEstimator<EP, C> {
+        self.data.print_entropies();
         HuffmanEstimator::new(self.data, self.context_model)
     }
 

@@ -23,7 +23,10 @@ use rand::prelude::*;
 use rand_distr::Zipf;
 
 use hybrid_integer_encoding::{
-    graphs::{build_offsets, compare_graphs, ComparisonResult, CreateBvComp, CreateBvCompZ},
+    graphs::{
+        build_offsets, compare_graphs, partition::FixedSizePartition, ComparisonResult,
+        CreateBvComp, CreateBvCompZ, PartitionedContextModel,
+    },
     utils::IntegerData,
 };
 use hybrid_integer_encoding::{
@@ -559,7 +562,12 @@ fn main() -> Result<()> {
                         output_basename,
                         max_bits,
                         CreateBvCompZ::with_chunk_size(10000),
-                        SimpleContextModel::default,
+                        || {
+                            PartitionedContextModel::new(
+                                FixedSizePartition::new(50000, 325557),
+                                SimpleContextModel::default(),
+                            )
+                        },
                         compression_parameters,
                     )?,
                     (ContextModelArgument::Simple, true) => convert_graph(
