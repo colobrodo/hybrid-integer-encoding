@@ -244,8 +244,18 @@ impl<P: GraphPartition, C: ContextModel> ContextModel for PartitionedContextMode
 
 pub struct ClusteredContextMap<C: ContextModel> {
     model: C,
-    clusters_map: Box<[u8]>,
+    clusters_map: Vec<u8>,
     num_clusters: usize,
+}
+
+impl<C: ContextModel> ClusteredContextMap<C> {
+    pub fn new(model: C, num_clusters: usize, clusters_map: Vec<u8>) -> Self {
+        ClusteredContextMap {
+            model,
+            clusters_map,
+            num_clusters,
+        }
+    }
 }
 
 impl<C: ContextModel> ContextModel for ClusteredContextMap<C> {

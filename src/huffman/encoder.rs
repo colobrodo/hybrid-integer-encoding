@@ -198,7 +198,7 @@ impl<EP: EncodeParams> IntegerHistograms<EP> {
         }
     }
 
-    pub fn cluster(&self, num_clusters: usize) -> Vec<usize> {
+    pub fn cluster(&self, num_clusters: usize) -> Vec<u8> {
         // find the histogram with maximal entropy
         let (max_entropy_index, _) = self
             .ctx_histograms
@@ -250,7 +250,7 @@ impl<EP: EncodeParams> IntegerHistograms<EP> {
                     closer_center_index = center;
                 }
             }
-            clusters_map[index] = closer_center_index;
+            clusters_map[index] = closer_center_index as _;
         }
 
         clusters_map

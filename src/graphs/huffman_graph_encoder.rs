@@ -6,7 +6,7 @@ use anyhow::Result;
 use dsi_bitstream::traits::{BitWrite, LE};
 use webgraph::prelude::*;
 
-use super::{BvGraphComponent, ContextModel, HuffmanEstimator};
+use super::{BvGraphComponent, ClusteredContextMap, ContextModel, HuffmanEstimator};
 
 /// Encoder to compress a graph using Hybrid integer huffman encoding.
 /// This encoder can be constructed using an `HuffmanGraphEncoderBuilder`
