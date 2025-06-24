@@ -20,17 +20,17 @@ The following compressors are evaluated experimentally over a set of 10 graphs f
 
 The Huffman-based hybrid encoding achieves a compression ratio that is 10–17% better than the standard WebGraph implementation, though it does not reach the compression levels of Zuckerli. However, it offers a good trade-off between compression and decoding speed.
 
-![Bits per arc plot](bpa-plot.png)
+![Bits per arc plot](img/bpa-plot.png)
 
 ### Compression Time
 
-![Random access time plot](plot_compression_time.png)
+![Random access time plot](img/plot_compression_time.png)
 
 ### Random Access Decoding Time
 
 One of the main advantages of this implementation is the significantly faster random access decoding time compared to the default Zuckerli implementation, thanks to a reduced context model.
 
-![Compression time plot](bench-time.png)
+![Compression time plot](img/bench-time.png)
 
 ## References
 
