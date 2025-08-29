@@ -39,7 +39,7 @@ use hybrid_integer_encoding::{
     utils::StatBitWriter,
 };
 use webgraph::{
-    prelude::{BvGraphSeq, Decode, SequentialDecoderFactory},
+    prelude::*,
     traits::{RandomAccessGraph, SequentialGraph},
 };
 
