@@ -10,10 +10,9 @@ use std::{
 
 use dsi_bitstream::{
     impls::{BufBitReader, BufBitWriter, MemWordReader, MemWordWriterVec, WordAdapter},
-    traits::{BitWrite, LE},
+    traits::{BitSeek, BitWrite, LE},
     utils::CountBitWriter,
 };
-
 use epserde::prelude::*;
 
 use anyhow::Result;
@@ -23,7 +22,9 @@ use rand::prelude::*;
 use rand_distr::Zipf;
 
 use hybrid_integer_encoding::{
-    graphs::{build_offsets, compare_graphs, ComparisonResult, CreateBvComp, CreateBvCompZ},
+    graphs::{
+        build_offsets, compare_graphs, measure_stats, ComparisonResult, CreateBvComp, CreateBvCompZ,
+    },
     utils::IntegerData,
 };
 use hybrid_integer_encoding::{
@@ -37,7 +38,10 @@ use hybrid_integer_encoding::{
     },
     utils::StatBitWriter,
 };
-use webgraph::traits::{RandomAccessGraph, SequentialGraph};
+use webgraph::{
+    prelude::{BvGraphSeq, Decode, SequentialDecoderFactory},
+    traits::{RandomAccessGraph, SequentialGraph},
+};
 
 #[derive(Parser, Debug)]
 #[clap(name = "hybrid-integer-encoding", version)]
@@ -192,6 +196,17 @@ enum GraphCommand {
     },
     /// Create the offsets file from an existing huffman compressed graph
     Offsets {
+        /// The basename of the graph to read
+        basename: PathBuf,
+        /// The maximum number of bits for each word of the huffman code used to compress the graph
+        #[arg(short = 'b', long, default_value = "8")]
+        max_bits: usize,
+        /// The type of context model used to encode the graph.
+        #[arg(long, default_value = "simple")]
+        context_model: ContextModelArgument,
+    },
+    /// Read the graphs and print the total number of bits used to encode each component
+    Stats {
         /// The basename of the graph to read
         basename: PathBuf,
         /// The maximum number of bits for each word of the huffman code used to compress the graph
@@ -736,6 +751,27 @@ fn main() -> Result<()> {
                     build_offsets(graph, basename)?;
                 }
             },
+            GraphCommand::Stats {
+                basename,
+                max_bits,
+                context_model,
+            } => match context_model {
+                ContextModelArgument::Single => {
+                    let graph = load_graph_seq::<ConstantContextModel>(basename.clone(), max_bits)?;
+                    print_graph_stats(graph);
+                }
+                ContextModelArgument::Simple => {
+                    let graph = load_graph_seq::<SimpleContextModel>(basename.clone(), max_bits)?;
+                    print_graph_stats(graph);
+                }
+                ContextModelArgument::Zuckerli => {
+                    let graph = load_graph_seq::<ZuckerliContextModel<DefaultEncodeParams>>(
+                        basename.clone(),
+                        max_bits,
+                    )?;
+                    print_graph_stats(graph);
+                }
+            },
         },
     }
 
@@ -818,4 +854,57 @@ fn bench_random_graph(
         bench_result.add((start.elapsed().as_secs_f64() / c as f64) * 1e9)
     }
     bench_result
+}
+
+fn print_graph_stats<F: SequentialDecoderFactory>(graph: BvGraphSeq<F>)
+where
+    for<'a> F::Decoder<'a>: Decode + BitSeek,
+{
+    let stats = measure_stats(graph);
+    println!("total: {}", stats.total);
+    println!(
+        "outdegrees: {} ({:.2}%)",
+        stats.outdegrees,
+        stats.outdegrees as f64 / stats.total as f64 * 100.0
+    );
+    println!(
+        "reference_offsets: {} ({:.2}%)",
+        stats.reference_offsets,
+        stats.reference_offsets as f64 / stats.total as f64 * 100.0
+    );
+    println!(
+        "block_counts: {} ({:.2}%)",
+        stats.block_counts,
+        stats.block_counts as f64 / stats.total as f64 * 100.0
+    );
+    println!(
+        "blocks: {} ({:.2}%)",
+        stats.blocks,
+        stats.blocks as f64 / stats.total as f64 * 100.0
+    );
+    println!(
+        "interval_counts: {} ({:.2}%)",
+        stats.interval_counts,
+        stats.interval_counts as f64 / stats.total as f64 * 100.0
+    );
+    println!(
+        "interval_starts: {} ({:.2}%)",
+        stats.interval_starts,
+        stats.interval_starts as f64 / stats.total as f64 * 100.0
+    );
+    println!(
+        "interval_lens: {} ({:.2}%)",
+        stats.interval_lens,
+        stats.interval_lens as f64 / stats.total as f64 * 100.0
+    );
+    println!(
+        "first_residuals: {} ({:.2}%)",
+        stats.first_residuals,
+        stats.first_residuals as f64 / stats.total as f64 * 100.0
+    );
+    println!(
+        "residuals: {} ({:.2}%)",
+        stats.residuals,
+        stats.residuals as f64 / stats.total as f64 * 100.0
+    );
 }

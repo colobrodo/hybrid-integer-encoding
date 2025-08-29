@@ -4,6 +4,7 @@ mod context_model;
 pub mod estimator;
 mod huffman_graph_decoder;
 mod huffman_graph_encoder;
+mod stats;
 
 use anyhow::{Context, Result};
 use dsi_bitstream::prelude::*;
@@ -24,6 +25,7 @@ pub use context_model::*;
 use estimator::*;
 pub use huffman_graph_decoder::*;
 use huffman_graph_encoder::*;
+pub use stats::*;
 
 use crate::huffman::{DefaultEncodeParams, EncodeParams};
 
@@ -348,6 +350,30 @@ where
     pl.light_update();
     pl.start("Done!");
     Ok(())
+}
+
+pub fn measure_stats<F: SequentialDecoderFactory>(graph: BvGraphSeq<F>) -> GraphStats
+where
+    for<'a> F::Decoder<'a>: Decode + BitSeek,
+{
+    let graph = graph.map_factory(stats::StatsDecoderFactory::new);
+
+    let mut pl = ProgressLogger::default();
+    pl.display_memory(true)
+        .item_name("node")
+        .expected_updates(Some(graph.num_nodes()));
+
+    pl.start("Scanning...");
+
+    let mut iter = graph.iter();
+    while iter.next().is_some() {
+        pl.light_update();
+    }
+    pl.done();
+
+    // drop needed so the graph is no longer borrowed by the iterator
+    drop(iter);
+    graph.into_inner().stats()
 }
 
 pub enum ComparisonResult {
