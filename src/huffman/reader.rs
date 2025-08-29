@@ -41,8 +41,7 @@ struct HuffmanDecoderInfo {
 
 pub struct HuffmanReader<R: BitRead<LE>> {
     reader: R,
-    max_bits: usize,
-    info_: Rc<[Box<[HuffmanDecoderInfo]>]>,
+    table: HuffmanTable,
 }
 
 /// The huffman decoder table computed from the header of the file and the maximum
@@ -162,18 +161,14 @@ impl<R: BitRead<LE>> HuffmanReader<R> {
     }
 
     pub fn new(table: HuffmanTable, reader: R) -> Self {
-        Self {
-            reader,
-            max_bits: table.max_bits,
-            info_: table.info_,
-        }
+        Self { reader, table }
     }
 }
 
 impl<R: BitRead<LE>> EntropyCoder for HuffmanReader<R> {
     fn read_token(&mut self, context: usize) -> Result<usize> {
-        let bits: u64 = self.reader.peek_bits(self.max_bits)?.cast();
-        let info = self.info_[context][bits as usize];
+        let bits: u64 = self.reader.peek_bits(self.table.max_bits)?.cast();
+        let info = self.table.info_[context][bits as usize];
         self.reader
             .skip_bits_after_table_lookup(info.nbits as usize);
         Ok(info.symbol as usize)
