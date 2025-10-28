@@ -361,7 +361,7 @@ fn bench_file<EP: EncodeParams>(
     let num_symbols = 1 << max_bits;
     // Load the serialized form in a buffer
     let buffer = std::fs::read(&path)?;
-    let items = <Vec<u64>>::deserialize_eps(buffer.as_ref())?;
+    let items = unsafe { <Vec<u64>>::deserialize_eps(buffer.as_ref()) }?;
     let mut last_integer = 0;
     let mut integer_data = IntegerData::<EP>::new(num_contexts, num_symbols);
     for &n in items {

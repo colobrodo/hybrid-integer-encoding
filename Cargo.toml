@@ -6,14 +6,15 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.93"
 clap = { version = "4.5.21", features = ["derive"] }
-common_traits = "0.11.0"
-dsi-bitstream = "0.4.0"
+common_traits = "0.12.0"
+dsi-bitstream = "0.5.2"
 dsi-progress-logger = "0.2.5"
 env_logger = "0.11.5"
-epserde = "0.6.1"
-sux = "0.4.1"
-lender = "0.2.9"
+epserde = "0.11.1"
+sux = { version = "0.9.0", features = ["epserde", "rayon", "mmap"] }
+lender = "0.4.0"
 log = "0.4.22"
+mmap-rs = "0.6.0"
 rand = "0.9.0"
 webgraph = { git = "https://github.com/colobrodo/webgraph-rs.git", branch = "bvgraphz" }
 tempfile = "3.2"

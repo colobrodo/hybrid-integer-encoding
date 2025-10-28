@@ -7,16 +7,18 @@ mod huffman_graph_encoder;
 mod stats;
 
 use anyhow::{Context, Result};
+use dsi_bitstream::prelude::factory::CodesReaderFactoryHelper;
 use dsi_bitstream::prelude::*;
 use dsi_progress_logger::prelude::*;
-use epserde::deser::{Deserialize, MemCase};
-use lender::for_;
-use lender::Lender;
-use std::io::{BufReader, BufWriter};
+use epserde::deser::{Deserialize, Owned};
+use epserde::prelude::*;
+use lender::*;
+use mmap_rs::MmapFlags;
+use std::io::{BufReader, BufWriter, Seek};
 use std::path::Path;
 use std::time::Duration;
 use std::{fs::File, path::PathBuf};
-use webgraph::cli::build::ef::{build_eliasfano, CliArgs};
+use sux::prelude::*;
 use webgraph::prelude::{SequentialLabeling, *};
 
 use component::*;
@@ -94,6 +96,160 @@ fn copy_properties_file(
 
     let new_properties_file = BufWriter::new(File::create(&temp_properties_path)?);
     java_properties::write(new_properties_file, &properties_map)?;
+    Ok(())
+}
+
+fn build_eliasfano<E: Endianness + 'static>(src: &Path) -> Result<()>
+where
+    for<'a> BufBitReader<E, MemWordReader<u32, &'a [u32]>>: CodesRead<E> + BitSeek,
+{
+    let mut pl = ProgressLogger::default();
+    pl.display_memory(true).item_name("offset");
+
+    // Creates the offsets file
+    let of_file_path = src.with_extension(OFFSETS_EXTENSION);
+
+    let graph_path = src.with_extension(GRAPH_EXTENSION);
+    log::info!("Getting size of graph at '{}'", graph_path.display());
+    let mut file = File::open(&graph_path)
+        .with_context(|| format!("Could not open {}", graph_path.display()))?;
+    let file_len = 8 * file
+        .seek(std::io::SeekFrom::End(0))
+        .with_context(|| format!("Could not seek in {}", graph_path.display()))?;
+    log::info!("Graph file size: {} bits", file_len);
+
+    // if the num_of_nodes is not present, read it from the properties file
+    // otherwise use the provided value, this is so we can build the Elias-Fano
+    // for offsets of any custom format that might not use the standard
+    // properties file
+    let num_nodes = {
+        let properties_path = src.with_extension(PROPERTIES_EXTENSION);
+        log::info!(
+            "Reading num_of_nodes from properties file at '{}'",
+            properties_path.display()
+        );
+        let f = File::open(&properties_path).with_context(|| {
+            format!(
+                "Could not open properties file: {}",
+                properties_path.display()
+            )
+        })?;
+        let map = java_properties::read(BufReader::new(f))?;
+        map.get("nodes").unwrap().parse::<usize>()?
+    };
+    pl.expected_updates(Some(num_nodes));
+
+    let mut efb = EliasFanoBuilder::new(num_nodes + 1, file_len as usize);
+
+    log::info!("Checking if offsets exists at '{}'", of_file_path.display());
+    // if the offset files exists, read it to build elias-fano
+    if of_file_path.exists() {
+        log::info!("The offsets file exists, reading it to build Elias-Fano");
+        let of = <MmapHelper<u32>>::mmap(of_file_path, MmapFlags::SEQUENTIAL)?;
+        build_eliasfano_from_offsets::<E>(num_nodes, of.new_reader(), &mut pl, &mut efb)?;
+    } else {
+        build_eliasfano_from_graph(src, &mut pl, &mut efb)?;
+    }
+
+    serialize_eliasfano(src, efb, &mut pl)
+}
+
+pub fn build_eliasfano_from_graph(
+    src: &Path,
+    pl: &mut impl ProgressLog,
+    efb: &mut EliasFanoBuilder,
+) -> Result<()> {
+    log::info!("The offsets file does not exists, reading the graph to build Elias-Fano");
+    match get_endianness(src)?.as_str() {
+        BE::NAME => build_eliasfano_from_graph_with_endianness::<BE>(src, pl, efb),
+        LE::NAME => build_eliasfano_from_graph_with_endianness::<LE>(src, pl, efb),
+        e => panic!("Unknown endianness: {}", e),
+    }
+}
+
+pub fn build_eliasfano_from_offsets<E: Endianness>(
+    num_nodes: usize,
+    mut reader: impl GammaRead<E>,
+    pl: &mut impl ProgressLog,
+    efb: &mut EliasFanoBuilder,
+) -> Result<()> {
+    log::info!("Building Elias-Fano from offsets...");
+
+    // progress bar
+    pl.start("Translating offsets to EliasFano...");
+    // read the graph a write the offsets
+    let mut offset = 0;
+    for _node_id in 0..num_nodes + 1 {
+        // write where
+        offset += reader.read_gamma().context("Could not read gamma")?;
+        efb.push(offset as _);
+        // decode the next nodes so we know where the next node_id starts
+        pl.light_update();
+    }
+    pl.done();
+    Ok(())
+}
+
+pub fn build_eliasfano_from_graph_with_endianness<E: Endianness>(
+    src: &Path,
+    pl: &mut impl ProgressLog,
+    efb: &mut EliasFanoBuilder,
+) -> Result<()>
+where
+    MmapHelper<u32>: CodesReaderFactoryHelper<E>,
+    for<'a> LoadModeCodesReader<'a, E, Mmap>: BitSeek,
+{
+    let seq_graph = BvGraphSeq::with_basename(src)
+        .endianness::<E>()
+        .load()
+        .with_context(|| format!("Could not load graph at {}", src.display()))?;
+    // otherwise directly read the graph
+    // progress bar
+    pl.start("Building EliasFano...");
+    // read the graph a write the offsets
+    let mut iter = seq_graph.offset_deg_iter();
+    for (new_offset, _degree) in iter.by_ref() {
+        // write where
+        efb.push(new_offset as _);
+        // decode the next nodes so we know where the next node_id starts
+        pl.light_update();
+    }
+    efb.push(iter.get_pos() as _);
+    Ok(())
+}
+
+pub fn serialize_eliasfano(
+    src: &Path,
+    efb: EliasFanoBuilder,
+    pl: &mut impl ProgressLog,
+) -> Result<()> {
+    let ef = efb.build();
+    pl.done();
+
+    let mut pl = ProgressLogger::default();
+    pl.display_memory(true);
+    pl.start("Building the Index over the ones in the high-bits...");
+    let ef: EF = unsafe { ef.map_high_bits(SelectAdaptConst::<_, _, 12, 4>::new) };
+    pl.done();
+
+    let mut pl = ProgressLogger::default();
+    pl.display_memory(true);
+    pl.start("Writing to disk...");
+
+    let ef_path = src.with_extension(EF_EXTENSION);
+    log::info!("Creating Elias-Fano at '{}'", ef_path.display());
+    let mut ef_file = BufWriter::new(
+        File::create(&ef_path)
+            .with_context(|| format!("Could not create {}", ef_path.display()))?,
+    );
+
+    // serialize and dump the schema to disk
+    unsafe {
+        ef.serialize(&mut ef_file)
+            .with_context(|| format!("Could not serialize EliasFano to {}", ef_path.display()))
+    }?;
+
+    pl.done();
     Ok(())
 }
 
@@ -272,7 +428,7 @@ fn check_compression_parameters(
 pub fn load_graph<C: ContextModel + Default + Copy>(
     basename: PathBuf,
     max_bits: usize,
-) -> Result<BvGraph<RandomAccessHuffmanDecoderFactory<MmapHelper<u32>, EF, C>>> {
+) -> Result<BvGraph<RandomAccessHuffmanDecoderFactory<MmapHelper<u32>, Owned<EF>, C>>> {
     let properties_path = basename.with_extension(PROPERTIES_EXTENSION);
     let (num_nodes, num_arcs, comp_flags) = parse_properties::<BE>(&properties_path)?;
     check_compression_parameters(&properties_path, max_bits, C::NAME)?;
@@ -281,11 +437,8 @@ pub fn load_graph<C: ContextModel + Default + Copy>(
     if !eliasfano_path.exists() {
         let offsets_path = basename.with_extension(OFFSETS_EXTENSION);
         assert!(offsets_path.exists(), "In order to load the graph from random access you should first convert it building the offsets with the mode 'offsets' in the 'graph' command");
-        build_eliasfano::<LE>(CliArgs {
-            src: basename.clone(),
-            n: None,
-        })
-        .context("trying to build elias-fano for the current offsets")?;
+        build_eliasfano::<LE>(&basename)
+            .context("trying to build elias-fano for the current offsets")?;
         assert!(eliasfano_path.exists());
     }
 
@@ -293,11 +446,11 @@ pub fn load_graph<C: ContextModel + Default + Copy>(
     let flags = MemoryFlags::TRANSPARENT_HUGE_PAGES | MemoryFlags::RANDOM_ACCESS;
     let mmap_factory = MmapHelper::mmap(&graph_path, flags.into())?;
 
-    let ef = EF::load_full(eliasfano_path)?;
+    let ef = unsafe { EF::load_full(eliasfano_path)? };
     let factory = RandomAccessHuffmanDecoderFactory::<_, _, _, DefaultEncodeParams>::new(
         mmap_factory,
         C::default(),
-        MemCase::encase(ef),
+        ef.into(),
         max_bits,
     )?;
 

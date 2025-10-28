@@ -1,4 +1,7 @@
-use dsi_bitstream::traits::{BitRead, BitSeek, LE};
+use dsi_bitstream::{
+    prelude::CodesReaderFactory,
+    traits::{BitRead, BitSeek, LE},
+};
 use epserde::deser::MemCase;
 use sux::traits::IndexedSeq;
 use webgraph::prelude::*;
@@ -106,7 +109,7 @@ impl<EP: EncodeParams, R: BitRead<LE> + BitSeek, S: ContextModel> BitSeek
 
 pub struct SequentialHuffmanDecoderFactory<
     EP: EncodeParams,
-    F: BitReaderFactory<LE>,
+    F: CodesReaderFactory<LE>,
     S: ContextModel,
 > {
     _marker: core::marker::PhantomData<(EP, S)>,
@@ -114,7 +117,7 @@ pub struct SequentialHuffmanDecoderFactory<
     max_bits: usize,
 }
 
-impl<EP: EncodeParams, F: BitReaderFactory<LE>, C: ContextModel>
+impl<EP: EncodeParams, F: CodesReaderFactory<LE>, C: ContextModel>
     SequentialHuffmanDecoderFactory<EP, F, C>
 {
     pub fn new(factory: F, max_bits: usize) -> Self {
@@ -126,13 +129,13 @@ impl<EP: EncodeParams, F: BitReaderFactory<LE>, C: ContextModel>
     }
 }
 
-impl<EP: EncodeParams, F: BitReaderFactory<LE>, C: ContextModel + Default> SequentialDecoderFactory
-    for SequentialHuffmanDecoderFactory<EP, F, C>
+impl<EP: EncodeParams, F: CodesReaderFactory<LE>, C: ContextModel + Default>
+    SequentialDecoderFactory for SequentialHuffmanDecoderFactory<EP, F, C>
 where
-    for<'a> <F as BitReaderFactory<LE>>::BitReader<'a>: BitRead<LE>,
+    for<'a> <F as CodesReaderFactory<LE>>::CodesReader<'a>: BitRead<LE>,
 {
     type Decoder<'a>
-        = HuffmanGraphDecoder<EP, <F as BitReaderFactory<LE>>::BitReader<'a>, C>
+        = HuffmanGraphDecoder<EP, <F as CodesReaderFactory<LE>>::CodesReader<'a>, C>
     where
         Self: 'a;
 
@@ -146,8 +149,8 @@ where
 }
 
 pub struct RandomAccessHuffmanDecoderFactory<
-    F: BitReaderFactory<LE>,
-    OFF: IndexedSeq<Input = usize, Output = usize>,
+    F: CodesReaderFactory<LE>,
+    OFF: Offsets,
     C: ContextModel + Clone,
     EP: EncodeParams = DefaultEncodeParams,
 > {
@@ -159,14 +162,10 @@ pub struct RandomAccessHuffmanDecoderFactory<
     table: HuffmanTable,
 }
 
-impl<
-        OFF: IndexedSeq<Input = usize, Output = usize>,
-        F: BitReaderFactory<LE>,
-        C: ContextModel + Clone,
-        EP: EncodeParams,
-    > RandomAccessHuffmanDecoderFactory<F, OFF, C, EP>
+impl<OFF: Offsets, F: CodesReaderFactory<LE>, C: ContextModel + Clone, EP: EncodeParams>
+    RandomAccessHuffmanDecoderFactory<F, OFF, C, EP>
 where
-    for<'a> <F as BitReaderFactory<LE>>::BitReader<'a>: BitRead<LE> + BitSeek,
+    for<'a> <F as CodesReaderFactory<LE>>::CodesReader<'a>: BitRead<LE> + BitSeek,
 {
     pub fn new(
         factory: F,
@@ -187,23 +186,19 @@ where
     }
 }
 
-impl<
-        OFF: IndexedSeq<Input = usize, Output = usize>,
-        F: BitReaderFactory<LE>,
-        EP: EncodeParams,
-        C: ContextModel + Copy,
-    > RandomAccessDecoderFactory for RandomAccessHuffmanDecoderFactory<F, OFF, C, EP>
+impl<OFF: Offsets, F: CodesReaderFactory<LE>, EP: EncodeParams, C: ContextModel + Copy>
+    RandomAccessDecoderFactory for RandomAccessHuffmanDecoderFactory<F, OFF, C, EP>
 where
-    for<'a> <F as BitReaderFactory<LE>>::BitReader<'a>: BitRead<LE> + BitSeek,
+    for<'a> <F as CodesReaderFactory<LE>>::CodesReader<'a>: BitRead<LE> + BitSeek,
 {
     type Decoder<'a>
-        = HuffmanGraphDecoder<EP, <F as BitReaderFactory<LE>>::BitReader<'a>, C>
+        = HuffmanGraphDecoder<EP, <F as CodesReaderFactory<LE>>::CodesReader<'a>, C>
     where
         Self: 'a;
 
     fn new_decoder(&self, node: usize) -> anyhow::Result<Self::Decoder<'_>> {
         let mut reader = self.factory.new_reader();
-        reader.set_bit_pos(self.offsets.get(node) as u64)?;
+        reader.set_bit_pos(self.offsets.uncase().get(node) as u64)?;
         let huffman_reader = HuffmanReader::new(self.table.clone(), reader);
         Ok(HuffmanGraphDecoder::new(huffman_reader, self.model))
     }
