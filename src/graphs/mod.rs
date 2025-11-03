@@ -7,7 +7,6 @@ mod huffman_graph_encoder;
 mod stats;
 
 use anyhow::{Context, Result};
-use dsi_bitstream::prelude::factory::CodesReaderFactoryHelper;
 use dsi_bitstream::prelude::*;
 use dsi_progress_logger::prelude::*;
 use epserde::deser::{Deserialize, Owned};
@@ -173,34 +172,6 @@ pub fn build_eliasfano_from_offsets<E: Endianness>(
     Ok(())
 }
 
-pub fn build_eliasfano_from_graph_with_endianness<E: Endianness>(
-    src: &Path,
-    pl: &mut impl ProgressLog,
-    efb: &mut EliasFanoBuilder,
-) -> Result<()>
-where
-    MmapHelper<u32>: CodesReaderFactoryHelper<E>,
-    for<'a> LoadModeCodesReader<'a, E, Mmap>: BitSeek,
-{
-    let seq_graph = BvGraphSeq::with_basename(src)
-        .endianness::<E>()
-        .load()
-        .with_context(|| format!("Could not load graph at {}", src.display()))?;
-    // otherwise directly read the graph
-    // progress bar
-    pl.start("Building EliasFano...");
-    // read the graph a write the offsets
-    let mut iter = seq_graph.offset_deg_iter();
-    for (new_offset, _degree) in iter.by_ref() {
-        // write where
-        efb.push(new_offset as _);
-        // decode the next nodes so we know where the next node_id starts
-        pl.light_update();
-    }
-    efb.push(iter.get_pos() as _);
-    Ok(())
-}
-
 pub fn serialize_eliasfano(
     src: &Path,
     efb: EliasFanoBuilder,
@@ -335,8 +306,8 @@ pub fn convert_graph<C: ContextModel + Default + Copy>(
     ));
 
     copy_properties_file(
-        &basename,
-        &output_basename,
+        basename,
+        output_basename,
         &compression_parameters,
         C::NAME,
         max_bits,
@@ -388,8 +359,8 @@ fn check_compression_parameters(
         if max_bits != expected_max_bits {
             return Err(anyhow::anyhow!(
                 "Expected maximum length for huffman codewords to be '{}', but have '{}' in {}",
-                expected_max_bits.to_string(),
-                max_bits.to_string(),
+                expected_max_bits,
+                max_bits,
                 name
             ));
         }

@@ -87,7 +87,7 @@ fn compute_decoder_table(
         .iter()
         .enumerate()
         .filter(|(_, sym)| sym.present != 0)
-        .last()
+        .next_back()
         .map_or(0, |(i, _)| i);
     if cnt <= 1 {
         for (info, sym_info) in infos.iter_mut().zip(sym_infos) {
