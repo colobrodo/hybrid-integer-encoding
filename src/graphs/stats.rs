@@ -6,7 +6,7 @@ use webgraph::prelude::*;
 /// Represent the overall usage of bits in the encoding of the graph.
 /// As StatsDecoder it differs from the webgraph counterpart due to the
 /// fact that this keeps track of the number of bit read (and so by any encoder)
-/// while the other simultaneously count the space of the inter stream with all the
+/// while the other simultaneously count the space of the stream encoded with all the
 /// instantaneous codes.  
 #[derive(Default)]
 pub struct GraphStats {

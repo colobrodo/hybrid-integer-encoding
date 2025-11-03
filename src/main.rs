@@ -36,7 +36,6 @@ use hybrid_integer_encoding::{
         encode, DefaultEncodeParams, EncodeParams, EntropyCoder, HuffmanEncoder, HuffmanReader,
         IntegerHistogram,
     },
-    utils::StatBitWriter,
 };
 use webgraph::{
     prelude::*,
@@ -413,10 +412,10 @@ fn bench<EP: EncodeParams>(
     let num_contexts = histograms.number_of_contexts();
     let encoder = HuffmanEncoder::<EP>::new(histograms, max_bits);
     let word_write = MemWordWriterVec::new(Vec::<u64>::new());
-    let mut writer = StatBitWriter::<LE, _>::new(BufBitWriter::<LE, _>::new(word_write));
+    let mut writer = CountBitWriter::<_, _>::new(BufBitWriter::<LE, _>::new(word_write));
 
     encoder.write_header(&mut writer).unwrap();
-    let header_size = writer.written_bits;
+    let header_size = writer.bits_written;
     if verbose {
         println!("Header took {} bits", header_size);
     }
@@ -425,7 +424,7 @@ fn bench<EP: EncodeParams>(
         encoder.write(ctx, value, &mut writer)?;
     }
     writer.flush()?;
-    let encoded_size = writer.written_bits;
+    let encoded_size = writer.bits_written;
     if verbose {
         println!("Written whole file using {} bits", encoded_size);
         println!("  with payload {} bits", encoded_size - header_size);
