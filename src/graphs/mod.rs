@@ -143,28 +143,11 @@ where
 
     log::info!("Checking if offsets exists at '{}'", of_file_path.display());
     // if the offset files exists, read it to build elias-fano
-    if of_file_path.exists() {
-        log::info!("The offsets file exists, reading it to build Elias-Fano");
-        let of = <MmapHelper<u32>>::mmap(of_file_path, MmapFlags::SEQUENTIAL)?;
-        build_eliasfano_from_offsets::<E>(num_nodes, of.new_reader(), &mut pl, &mut efb)?;
-    } else {
-        build_eliasfano_from_graph(src, &mut pl, &mut efb)?;
-    }
+    assert!(of_file_path.exists(), "The offsets doesn't file exists");
+    let of = <MmapHelper<u32>>::mmap(of_file_path, MmapFlags::SEQUENTIAL)?;
+    build_eliasfano_from_offsets::<E>(num_nodes, of.new_reader(), &mut pl, &mut efb)?;
 
     serialize_eliasfano(src, efb, &mut pl)
-}
-
-pub fn build_eliasfano_from_graph(
-    src: &Path,
-    pl: &mut impl ProgressLog,
-    efb: &mut EliasFanoBuilder,
-) -> Result<()> {
-    log::info!("The offsets file does not exists, reading the graph to build Elias-Fano");
-    match get_endianness(src)?.as_str() {
-        BE::NAME => build_eliasfano_from_graph_with_endianness::<BE>(src, pl, efb),
-        LE::NAME => build_eliasfano_from_graph_with_endianness::<LE>(src, pl, efb),
-        e => panic!("Unknown endianness: {}", e),
-    }
 }
 
 pub fn build_eliasfano_from_offsets<E: Endianness>(
@@ -254,8 +237,8 @@ pub fn serialize_eliasfano(
 }
 
 pub fn convert_graph<C: ContextModel + Default + Copy>(
-    basename: PathBuf,
-    output_basename: PathBuf,
+    basename: &Path,
+    output_basename: &Path,
     max_bits: usize,
     create_compressor: impl CompressorFromEncoder,
     compression_parameters: CompressionParameters,
@@ -366,7 +349,7 @@ pub fn convert_graph<C: ContextModel + Default + Copy>(
 }
 
 pub fn load_graph_seq<C: ContextModel + Default + Copy>(
-    basename: PathBuf,
+    basename: &Path,
     max_bits: usize,
 ) -> Result<BvGraphSeq<SequentialHuffmanDecoderFactory<DefaultEncodeParams, MmapHelper<u32>, C>>> {
     let properties_path = basename.with_extension(PROPERTIES_EXTENSION);
@@ -437,12 +420,13 @@ pub fn load_graph<C: ContextModel + Default + Copy>(
     if !eliasfano_path.exists() {
         let offsets_path = basename.with_extension(OFFSETS_EXTENSION);
         assert!(offsets_path.exists(), "In order to load the graph from random access you should first convert it building the offsets with the mode 'offsets' in the 'graph' command");
-        build_eliasfano::<LE>(&basename)
+        build_eliasfano::<BE>(&basename)
             .context("trying to build elias-fano for the current offsets")?;
         assert!(eliasfano_path.exists());
     }
 
     let graph_path = basename.with_extension(GRAPH_EXTENSION);
+    println!("graph file size: {} bytes", graph_path.metadata()?.len());
     let flags = MemoryFlags::TRANSPARENT_HUGE_PAGES | MemoryFlags::RANDOM_ACCESS;
     let mmap_factory = MmapHelper::mmap(&graph_path, flags.into())?;
 
@@ -466,7 +450,7 @@ pub fn load_graph<C: ContextModel + Default + Copy>(
 
 pub fn build_offsets<F: SequentialDecoderFactory>(
     graph: BvGraphSeq<F>,
-    basename: PathBuf,
+    basename: &Path,
 ) -> Result<()>
 where
     for<'a> F::Decoder<'a>: Decode + BitSeek,
@@ -547,7 +531,7 @@ pub fn compare_graphs<C: ContextModel + Default + Copy>(
     max_bits: usize,
 ) -> Result<ComparisonResult> {
     // first the Huffman-encoded graph and then the one in BvGraph format
-    let first_graph = load_graph_seq::<C>(first_basename, max_bits)?;
+    let first_graph = load_graph_seq::<C>(&first_basename, max_bits)?;
     let second_graph = BvGraphSeq::with_basename(second_basename.clone())
         .endianness::<BE>()
         .load()?;

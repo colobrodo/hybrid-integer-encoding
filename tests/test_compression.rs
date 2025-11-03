@@ -1,9 +1,10 @@
 mod tests {
     use dsi_bitstream::traits::BE;
+    use epserde::deser::Owned;
     use hybrid_integer_encoding::{
         graphs::{
-            convert_graph, load_graph_seq, CreateBvComp, CreateBvCompZ, CompressionParameters,
-            ContextModel, SimpleContextModel, ZuckerliContextModel,
+            build_offsets, convert_graph, load_graph, load_graph_seq, CompressionParameters,
+            ContextModel, CreateBvComp, CreateBvCompZ, SimpleContextModel, ZuckerliContextModel,
         },
         huffman::DefaultEncodeParams,
     };
@@ -12,10 +13,11 @@ mod tests {
     use tempfile::TempDir;
     use webgraph::prelude::*;
 
-    fn compress_graph<C: ContextModel + Default + Copy>(
+    fn compress_graph<C: ContextModel + Default + Copy + 'static>(
         compression_parameters: CompressionParameters,
         max_bits: usize,
         greedily: bool,
+        access_random: bool,
     ) -> anyhow::Result<()> {
         let basename = PathBuf::from_str("tests/data/cnr-2000")?;
 
@@ -30,24 +32,64 @@ mod tests {
 
         if greedily {
             convert_graph::<C>(
-                basename.clone(),
-                output_basename.clone(),
+                &basename,
+                &output_basename,
                 max_bits,
                 CreateBvComp,
                 compression_parameters,
             )?;
         } else {
             convert_graph::<C>(
-                basename.clone(),
-                output_basename.clone(),
+                &basename,
+                &output_basename,
                 max_bits,
                 CreateBvCompZ::with_chunk_size(10000),
                 compression_parameters,
             )?;
         }
 
-        let graph = load_graph_seq::<C>(output_basename, max_bits)?;
+        if access_random {
+            let graph = load_graph_seq::<C>(&output_basename, max_bits)?;
+            build_offsets(graph, &output_basename)?;
+            compare_graph_randomly::<C>(max_bits, original_graph, output_basename)?;
+        } else {
+            compare_graph::<C>(max_bits, original_graph, output_basename)?;
+        }
 
+        Ok(())
+    }
+
+    fn compare_graph_randomly<C: ContextModel + Default + Copy + 'static>(
+        max_bits: usize,
+        original_graph: BvGraphSeq<
+            DynCodesDecoderFactory<BE, MmapHelper<u32>, Owned<EmptyDict<usize, usize>>>,
+        >,
+        output_basename: PathBuf,
+    ) -> anyhow::Result<()> {
+        let graph = load_graph::<C>(output_basename, max_bits)?;
+        let mut original_iter = original_graph.iter().enumerate();
+        while let Some((i, (node_id, true_succ))) = original_iter.next() {
+            let succ = graph.successors(node_id);
+
+            assert_eq!(node_id, i);
+            assert_eq!(
+                true_succ.into_iter().collect::<Vec<_>>(),
+                succ.into_iter().collect::<Vec<_>>(),
+                "node_id: {}",
+                i
+            );
+        }
+        Ok(())
+    }
+
+    fn compare_graph<C: ContextModel + Default + Copy + 'static>(
+        max_bits: usize,
+        original_graph: BvGraphSeq<
+            DynCodesDecoderFactory<BE, MmapHelper<u32>, Owned<EmptyDict<usize, usize>>>,
+        >,
+        output_basename: PathBuf,
+    ) -> anyhow::Result<()> {
+        let graph = load_graph_seq::<C>(&output_basename, max_bits)?;
         let mut original_iter = original_graph.iter().enumerate();
         let mut iter = graph.iter();
         while let Some((i, (true_node_id, true_succ))) = original_iter.next() {
@@ -62,7 +104,6 @@ mod tests {
                 i
             );
         }
-
         Ok(())
     }
 
@@ -74,7 +115,31 @@ mod tests {
             min_interval_length: 4,
             num_rounds: 1,
         };
-        compress_graph::<SimpleContextModel>(compression_parameters, 12, false)
+        compress_graph::<SimpleContextModel>(compression_parameters, 12, false, false)
+            .expect("Converting the graph");
+    }
+
+    #[test]
+    fn compress_and_decompress_accessing_randomly() {
+        let compression_parameters = CompressionParameters {
+            compression_window: 7,
+            max_ref_count: 3,
+            min_interval_length: 4,
+            num_rounds: 1,
+        };
+        compress_graph::<SimpleContextModel>(compression_parameters, 12, false, true)
+            .expect("Converting the graph");
+    }
+
+    #[test]
+    fn compress_and_decompress_with_multiple_rounds() {
+        let compression_parameters = CompressionParameters {
+            compression_window: 7,
+            max_ref_count: 3,
+            min_interval_length: 4,
+            num_rounds: 3,
+        };
+        compress_graph::<SimpleContextModel>(compression_parameters, 12, false, false)
             .expect("Converting the graph");
     }
 
@@ -86,7 +151,7 @@ mod tests {
             min_interval_length: 4,
             num_rounds: 1,
         };
-        compress_graph::<SimpleContextModel>(compression_parameters, 8, false)
+        compress_graph::<SimpleContextModel>(compression_parameters, 8, false, false)
             .expect("Converting the graph");
     }
 
@@ -102,6 +167,7 @@ mod tests {
             compression_parameters,
             12,
             false,
+            false,
         )
         .expect("Converting the graph");
     }
@@ -114,7 +180,7 @@ mod tests {
             min_interval_length: 4,
             num_rounds: 1,
         };
-        compress_graph::<SimpleContextModel>(compression_parameters, 12, false)
+        compress_graph::<SimpleContextModel>(compression_parameters, 12, false, false)
             .expect("Converting the graph");
     }
 
@@ -126,7 +192,7 @@ mod tests {
             min_interval_length: 4,
             num_rounds: 1,
         };
-        compress_graph::<SimpleContextModel>(compression_parameters, 12, true)
+        compress_graph::<SimpleContextModel>(compression_parameters, 12, true, false)
             .expect("Converting the graph");
     }
 }

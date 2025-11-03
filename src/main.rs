@@ -553,38 +553,38 @@ fn main() -> Result<()> {
                 }
                 match (context_model, greedy_compressor) {
                     (ContextModelArgument::Single, false) => convert_graph::<ConstantContextModel>(
-                        basename,
-                        output_basename,
+                        &basename,
+                        &output_basename,
                         max_bits,
                         CreateBvCompZ::with_chunk_size(10000),
                         compression_parameters,
                     )?,
                     (ContextModelArgument::Single, true) => convert_graph::<ConstantContextModel>(
-                        basename,
-                        output_basename,
+                        &basename,
+                        &output_basename,
                         max_bits,
                         CreateBvComp,
                         compression_parameters,
                     )?,
 
                     (ContextModelArgument::Simple, false) => convert_graph::<SimpleContextModel>(
-                        basename,
-                        output_basename,
+                        &basename,
+                        &output_basename,
                         max_bits,
                         CreateBvCompZ::with_chunk_size(10000),
                         compression_parameters,
                     )?,
                     (ContextModelArgument::Simple, true) => convert_graph::<SimpleContextModel>(
-                        basename,
-                        output_basename,
+                        &basename,
+                        &output_basename,
                         max_bits,
                         CreateBvComp,
                         compression_parameters,
                     )?,
                     (ContextModelArgument::Zuckerli, false) => {
                         convert_graph::<ZuckerliContextModel<DefaultEncodeParams>>(
-                            basename,
-                            output_basename,
+                            &basename,
+                            &output_basename,
                             max_bits,
                             CreateBvCompZ::with_chunk_size(10000),
                             compression_parameters,
@@ -592,8 +592,8 @@ fn main() -> Result<()> {
                     }
                     (ContextModelArgument::Zuckerli, true) => {
                         convert_graph::<ZuckerliContextModel<DefaultEncodeParams>>(
-                            basename,
-                            output_basename,
+                            &basename,
+                            &output_basename,
                             max_bits,
                             CreateBvComp,
                             compression_parameters,
@@ -644,7 +644,7 @@ fn main() -> Result<()> {
                 context_model,
             } => match context_model {
                 ContextModelArgument::Single => {
-                    let graph = load_graph_seq::<ConstantContextModel>(basename, max_bits)?;
+                    let graph = load_graph_seq::<ConstantContextModel>(&basename, max_bits)?;
                     for_!((src, succ) in graph {
                         for dst in succ {
                             println!("{}{}{}", src, separator, dst);
@@ -652,7 +652,7 @@ fn main() -> Result<()> {
                     });
                 }
                 ContextModelArgument::Simple => {
-                    let graph = load_graph_seq::<SimpleContextModel>(basename, max_bits)?;
+                    let graph = load_graph_seq::<SimpleContextModel>(&basename, max_bits)?;
                     for_!((src, succ) in graph {
                         for dst in succ {
                             println!("{}{}{}", src, separator, dst);
@@ -661,7 +661,7 @@ fn main() -> Result<()> {
                 }
                 ContextModelArgument::Zuckerli => {
                     let graph = load_graph_seq::<ZuckerliContextModel<DefaultEncodeParams>>(
-                        basename, max_bits,
+                        &basename, max_bits,
                     )?;
                     for_!((src, succ) in graph {
                         for dst in succ {
@@ -679,16 +679,16 @@ fn main() -> Result<()> {
             } => {
                 let bench_result = match context_model {
                     ContextModelArgument::Single => {
-                        let graph = load_graph_seq::<ConstantContextModel>(basename, max_bits)?;
+                        let graph = load_graph_seq::<ConstantContextModel>(&basename, max_bits)?;
                         bench_seq(graph, repeats)
                     }
                     ContextModelArgument::Simple => {
-                        let graph = load_graph_seq::<SimpleContextModel>(basename, max_bits)?;
+                        let graph = load_graph_seq::<SimpleContextModel>(&basename, max_bits)?;
                         bench_seq(graph, repeats)
                     }
                     ContextModelArgument::Zuckerli => {
                         let graph = load_graph_seq::<ZuckerliContextModel<DefaultEncodeParams>>(
-                            basename, max_bits,
+                            &basename, max_bits,
                         )?;
                         bench_seq(graph, repeats)
                     }
@@ -736,19 +736,18 @@ fn main() -> Result<()> {
                 context_model,
             } => match context_model {
                 ContextModelArgument::Single => {
-                    let graph = load_graph_seq::<ConstantContextModel>(basename.clone(), max_bits)?;
-                    build_offsets(graph, basename)?;
+                    let graph = load_graph_seq::<ConstantContextModel>(&basename, max_bits)?;
+                    build_offsets(graph, &basename)?;
                 }
                 ContextModelArgument::Simple => {
-                    let graph = load_graph_seq::<SimpleContextModel>(basename.clone(), max_bits)?;
-                    build_offsets(graph, basename)?;
+                    let graph = load_graph_seq::<SimpleContextModel>(&basename, max_bits)?;
+                    build_offsets(graph, &basename)?;
                 }
                 ContextModelArgument::Zuckerli => {
                     let graph = load_graph_seq::<ZuckerliContextModel<DefaultEncodeParams>>(
-                        basename.clone(),
-                        max_bits,
+                        &basename, max_bits,
                     )?;
-                    build_offsets(graph, basename)?;
+                    build_offsets(graph, &basename)?;
                 }
             },
             GraphCommand::Stats {
@@ -757,17 +756,16 @@ fn main() -> Result<()> {
                 context_model,
             } => match context_model {
                 ContextModelArgument::Single => {
-                    let graph = load_graph_seq::<ConstantContextModel>(basename.clone(), max_bits)?;
+                    let graph = load_graph_seq::<ConstantContextModel>(&basename, max_bits)?;
                     print_graph_stats(graph);
                 }
                 ContextModelArgument::Simple => {
-                    let graph = load_graph_seq::<SimpleContextModel>(basename.clone(), max_bits)?;
+                    let graph = load_graph_seq::<SimpleContextModel>(&basename, max_bits)?;
                     print_graph_stats(graph);
                 }
                 ContextModelArgument::Zuckerli => {
                     let graph = load_graph_seq::<ZuckerliContextModel<DefaultEncodeParams>>(
-                        basename.clone(),
-                        max_bits,
+                        &basename, max_bits,
                     )?;
                     print_graph_stats(graph);
                 }
