@@ -3,8 +3,9 @@ mod tests {
     use epserde::deser::Owned;
     use hybrid_integer_encoding::{
         graphs::{
-            build_offsets, convert_graph, load_graph, load_graph_seq, CompressionParameters,
-            ContextModel, CreateBvComp, CreateBvCompZ, SimpleContextModel, ZuckerliContextModel,
+            build_offsets, compare_graphs, convert_graph, load_graph, load_graph_seq,
+            ComparisonResult, CompressionParameters, ContextModel, CreateBvComp, CreateBvCompZ,
+            SimpleContextModel, ZuckerliContextModel,
         },
         huffman::DefaultEncodeParams,
     };
@@ -20,10 +21,6 @@ mod tests {
         access_random: bool,
     ) -> anyhow::Result<()> {
         let basename = PathBuf::from_str("tests/data/cnr-2000")?;
-
-        let original_graph = BvGraphSeq::with_basename(basename.clone())
-            .endianness::<BE>()
-            .load()?;
 
         // Create a temporary directory
         let temp_dir = TempDir::new()?;
@@ -49,11 +46,15 @@ mod tests {
         }
 
         if access_random {
+            let original_graph = BvGraphSeq::with_basename(basename.clone())
+                .endianness::<BE>()
+                .load()?;
             let graph = load_graph_seq::<C>(&output_basename, max_bits)?;
             build_offsets(graph, &output_basename)?;
             compare_graph_randomly::<C>(max_bits, original_graph, output_basename)?;
         } else {
-            compare_graph::<C>(max_bits, original_graph, output_basename)?;
+            let result = compare_graphs::<C>(output_basename, basename, max_bits)?;
+            assert!(matches!(result, ComparisonResult::Equal));
         }
 
         Ok(())
@@ -72,31 +73,6 @@ mod tests {
             let succ = graph.successors(node_id);
 
             assert_eq!(node_id, i);
-            assert_eq!(
-                true_succ.into_iter().collect::<Vec<_>>(),
-                succ.into_iter().collect::<Vec<_>>(),
-                "node_id: {}",
-                i
-            );
-        }
-        Ok(())
-    }
-
-    fn compare_graph<C: ContextModel + Default + Copy + 'static>(
-        max_bits: usize,
-        original_graph: BvGraphSeq<
-            DynCodesDecoderFactory<BE, MmapHelper<u32>, Owned<EmptyDict<usize, usize>>>,
-        >,
-        output_basename: PathBuf,
-    ) -> anyhow::Result<()> {
-        let graph = load_graph_seq::<C>(&output_basename, max_bits)?;
-        let mut original_iter = original_graph.iter().enumerate();
-        let mut iter = graph.iter();
-        while let Some((i, (true_node_id, true_succ))) = original_iter.next() {
-            let (node_id, succ) = iter.next().unwrap();
-
-            assert_eq!(true_node_id, i);
-            assert_eq!(true_node_id, node_id);
             assert_eq!(
                 true_succ.into_iter().collect::<Vec<_>>(),
                 succ.into_iter().collect::<Vec<_>>(),
