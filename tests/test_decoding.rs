@@ -5,7 +5,7 @@ mod tests {
         traits::{BitWrite, LE},
     };
     use hybrid_integer_encoding::huffman::{
-        encode, DefaultEncodeParams, EntropyCoder, HuffmanEncoder, HuffmanReader, IntegerHistogram,
+        encode, DefaultEncodeParams, EntropyCoder, HuffmanEncoder, HuffmanDecoder, IntegerHistogram,
         DEFAULT_MAX_HUFFMAN_BITS, DEFAULT_NUM_SYMBOLS,
     };
     use rand::prelude::*;
@@ -46,7 +46,7 @@ mod tests {
             core::slice::from_raw_parts(binary_data.as_ptr() as *const u32, nsamples * 2)
         };
 
-        let mut reader = HuffmanReader::from_bitreader(
+        let mut reader = HuffmanDecoder::from_bitreader(
             BufBitReader::<LE, _>::new(MemWordReader::new(binary_data)),
             MAX_BITS,
             NUM_CONTEXT,

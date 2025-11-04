@@ -1,9 +1,9 @@
 mod common;
 mod encoder;
-mod reader;
+mod decoder;
 
 pub use encoder::*;
 
-pub use reader::*;
+pub use decoder::*;
 
 pub use common::*;

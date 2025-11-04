@@ -7,12 +7,20 @@ use common_traits::*;
 
 use anyhow::{anyhow, Result};
 
+/// Trait for entropy coding, providing methods to read tokens and bits.
+/// This trait is implemented by various entropy coding algorithms.
 pub trait EntropyCoder {
+    /// Reads a token based on the provided context.
+    /// Returns the token as a usize.
     fn read_token(&mut self, context: usize) -> Result<usize>;
 
+    /// Reads a specified number of bits from the stream.
+    /// Returns the bits as a u64 value.
     fn read_bits(&mut self, n: usize) -> Result<u64>;
 
     #[inline(always)]
+    /// Reads a value based on the encoding parameters and context.
+    /// Returns the decoded value as a usize.
     fn read<EP: EncodeParams>(&mut self, context: usize) -> Result<usize> {
         let split_token = 1 << EP::LOG2_NUM_EXPLICIT;
         let mut token = self.read_token(context)?;
@@ -33,25 +41,31 @@ pub trait EntropyCoder {
     }
 }
 
+/// Structure holding information about the Huffman lookup table.
+/// Contains the number of bits and the symbol for decoding.
 #[derive(Clone, Copy, Default, Debug)]
 struct HuffmanDecoderInfo {
     nbits: u8,
     symbol: u8,
 }
 
+/// Struct representing a Huffman decoder.
+/// It contains a reader and a Huffman table for decoding.
 pub struct HuffmanDecoder<R: BitRead<LE>> {
     reader: R,
     table: HuffmanTable,
 }
 
-/// The huffman decoder table computed from the header of the file and the maximum
-/// number of bits per token know in advance  
+/// The Huffman decoder lookup table computed from the header of the file and the maximum
+/// number of bits per token known in advance.
 #[derive(Clone)]
 pub struct HuffmanTable {
     max_bits: usize,
     info_: Rc<[Box<[HuffmanDecoderInfo]>]>,
 }
 
+/// Decodes the number of bits for symbols from the bitstream.
+/// Updates the provided `infos` array with the decoded information.
 fn decode_symbol_num_bits<R: BitRead<LE>>(
     max_bits: usize,
     infos: &mut [HuffmanSymbolInfo],
@@ -74,8 +88,7 @@ fn decode_symbol_num_bits<R: BitRead<LE>>(
 }
 
 /// Computes the lookup table from bitstream bits to decoded symbol for the
-/// decoder.
-/// The computed table is stored in the `infos` array.
+/// decoder. The computed table is stored in the `infos` array.
 fn compute_decoder_table(
     max_bits: usize,
     sym_infos: &[HuffmanSymbolInfo],
@@ -121,6 +134,8 @@ fn compute_decoder_table(
 }
 
 impl HuffmanTable {
+    /// Creates a new HuffmanTable from the provided BitReader.
+    /// Reads the symbols and constructs the table based on the maximum bits and contexts.
     fn new<R: BitRead<LE>>(reader: &mut R, max_bits: usize, num_contexts: usize) -> Result<Self> {
         let num_symbols = 1 << max_bits;
         let mut info = Rc::new_uninit_slice(num_contexts);
@@ -160,6 +175,7 @@ impl<R: BitRead<LE>> HuffmanDecoder<R> {
         HuffmanTable::new(reader, max_bits, num_contexts)
     }
 
+    /// Creates a new HuffmanDecoder with the provided table and reader.
     pub fn new(table: HuffmanTable, reader: R) -> Self {
         Self { reader, table }
     }

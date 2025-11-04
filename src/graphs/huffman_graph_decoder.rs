@@ -7,19 +7,19 @@ use sux::traits::IndexedSeq;
 use webgraph::prelude::*;
 
 use crate::huffman::{
-    DefaultEncodeParams, EncodeParams, EntropyCoder, HuffmanReader, HuffmanTable,
+    DefaultEncodeParams, EncodeParams, EntropyCoder, HuffmanDecoder, HuffmanTable,
 };
 
 use super::{BvGraphComponent, ContextModel};
 
 pub struct HuffmanGraphDecoder<EP: EncodeParams, R: BitRead<LE>, M: ContextModel> {
-    reader: HuffmanReader<R>,
+    reader: HuffmanDecoder<R>,
     context_model: M,
     _marker: core::marker::PhantomData<EP>,
 }
 
 impl<EP: EncodeParams, R: BitRead<LE>, S: ContextModel> HuffmanGraphDecoder<EP, R, S> {
-    pub fn new(reader: HuffmanReader<R>, model: S) -> Self {
+    pub fn new(reader: HuffmanDecoder<R>, model: S) -> Self {
         HuffmanGraphDecoder {
             reader,
             context_model: model,
@@ -142,7 +142,7 @@ where
     fn new_decoder(&self) -> anyhow::Result<Self::Decoder<'_>> {
         let reader = self.factory.new_reader();
         let huffman_reader =
-            HuffmanReader::from_bitreader(reader, self.max_bits, C::num_contexts())?;
+            HuffmanDecoder::from_bitreader(reader, self.max_bits, C::num_contexts())?;
         let model = C::default();
         Ok(HuffmanGraphDecoder::new(huffman_reader, model))
     }
@@ -174,7 +174,7 @@ where
         max_bits: usize,
     ) -> anyhow::Result<Self> {
         let mut reader = factory.new_reader();
-        let table = HuffmanReader::decode_table(&mut reader, max_bits, C::num_contexts())?;
+        let table = HuffmanDecoder::decode_table(&mut reader, max_bits, C::num_contexts())?;
         drop(reader);
         Ok(RandomAccessHuffmanDecoderFactory {
             offsets,
@@ -199,7 +199,7 @@ where
     fn new_decoder(&self, node: usize) -> anyhow::Result<Self::Decoder<'_>> {
         let mut reader = self.factory.new_reader();
         reader.set_bit_pos(self.offsets.uncase().get(node) as u64)?;
-        let huffman_reader = HuffmanReader::new(self.table.clone(), reader);
+        let huffman_reader = HuffmanDecoder::new(self.table.clone(), reader);
         Ok(HuffmanGraphDecoder::new(huffman_reader, self.model))
     }
 }
