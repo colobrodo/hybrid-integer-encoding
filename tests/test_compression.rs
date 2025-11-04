@@ -4,8 +4,8 @@ mod tests {
     use hybrid_integer_encoding::{
         graphs::{
             build_offsets, compare_graphs, convert_graph, load_graph, load_graph_seq,
-            ComparisonResult, CompressionParameters, ContextModel, CreateBvComp, CreateBvCompZ,
-            SimpleContextModel, ZuckerliContextModel,
+            measure_stats, ComparisonResult, CompressionParameters, ContextModel, CreateBvComp,
+            CreateBvCompZ, SimpleContextModel, ZuckerliContextModel,
         },
         huffman::DefaultEncodeParams,
     };
@@ -170,5 +170,45 @@ mod tests {
         };
         compress_graph::<SimpleContextModel>(compression_parameters, 12, true, false)
             .expect("Converting the graph");
+    }
+
+    #[test]
+    fn check_stats() -> anyhow::Result<()> {
+        let basename = PathBuf::from_str("tests/data/cnr-2000")?;
+
+        // Create a temporary directory
+        let temp_dir = TempDir::new()?;
+        // Get output basename with the same full path as the but in the temp folder
+        let output_basename = temp_dir.path().join(basename.file_name().unwrap());
+
+        let compression_parameters = CompressionParameters {
+            compression_window: 32,
+            max_ref_count: 3,
+            min_interval_length: 4,
+            num_rounds: 1,
+        };
+        let max_bits = 12;
+        convert_graph::<SimpleContextModel>(
+            &basename,
+            &output_basename,
+            max_bits,
+            CreateBvCompZ::with_chunk_size(10000),
+            compression_parameters,
+        )?;
+        let graph = load_graph_seq::<SimpleContextModel>(&output_basename, max_bits)?;
+
+        let stats = measure_stats(graph);
+        assert_eq!(stats.total, 7903485);
+        assert_eq!(stats.outdegrees, 1450145);
+        assert_eq!(stats.reference_offsets, 705343);
+        assert_eq!(stats.block_counts, 367511);
+        assert_eq!(stats.blocks, 687172);
+        assert_eq!(stats.interval_counts, 237652);
+        assert_eq!(stats.interval_starts, 419029);
+        assert_eq!(stats.interval_lens, 192597);
+        assert_eq!(stats.first_residuals, 1330119);
+        assert_eq!(stats.residuals, 2513917);
+
+        Ok(())
     }
 }
