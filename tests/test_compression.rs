@@ -1,4 +1,5 @@
 mod tests {
+    use anyhow::{Context, Result};
     use dsi_bitstream::traits::BE;
     use epserde::deser::Owned;
     use hybrid_integer_encoding::{
@@ -84,7 +85,7 @@ mod tests {
     }
 
     #[test]
-    fn compress_and_decompress_with_12_bits() {
+    fn test_compress_and_decompress_with_12_bits() -> Result<()> {
         let compression_parameters = CompressionParameters {
             compression_window: 7,
             max_ref_count: 3,
@@ -92,11 +93,12 @@ mod tests {
             num_rounds: 1,
         };
         compress_graph::<SimpleContextModel>(compression_parameters, 12, false, false)
-            .expect("Converting the graph");
+            .with_context(|| "Converting the graph")?;
+        Ok(())
     }
 
     #[test]
-    fn compress_and_decompress_accessing_randomly() {
+    fn test_compress_and_decompress_accessing_randomly() -> Result<()> {
         let compression_parameters = CompressionParameters {
             compression_window: 7,
             max_ref_count: 3,
@@ -104,11 +106,12 @@ mod tests {
             num_rounds: 1,
         };
         compress_graph::<SimpleContextModel>(compression_parameters, 12, false, true)
-            .expect("Converting the graph");
+            .with_context(|| "Converting the graph")?;
+        Ok(())
     }
 
     #[test]
-    fn compress_and_decompress_with_multiple_rounds() {
+    fn test_compress_and_decompress_with_multiple_rounds() -> Result<()> {
         let compression_parameters = CompressionParameters {
             compression_window: 7,
             max_ref_count: 3,
@@ -116,11 +119,12 @@ mod tests {
             num_rounds: 3,
         };
         compress_graph::<SimpleContextModel>(compression_parameters, 12, false, false)
-            .expect("Converting the graph");
+            .with_context(|| "Converting the graph")?;
+        Ok(())
     }
 
     #[test]
-    fn compress_and_decompress_with_8_bits() {
+    fn test_compress_and_decompress_with_8_bits() -> Result<()> {
         let compression_parameters = CompressionParameters {
             compression_window: 7,
             max_ref_count: 3,
@@ -128,11 +132,12 @@ mod tests {
             num_rounds: 1,
         };
         compress_graph::<SimpleContextModel>(compression_parameters, 8, false, false)
-            .expect("Converting the graph");
+            .with_context(|| "Converting the graph")?;
+        Ok(())
     }
 
     #[test]
-    fn compress_and_decompress_with_zuckerli_context_model() {
+    fn test_compress_and_decompress_with_zuckerli_context_model() -> Result<()> {
         let compression_parameters = CompressionParameters {
             compression_window: 7,
             max_ref_count: 3,
@@ -145,11 +150,12 @@ mod tests {
             false,
             false,
         )
-        .expect("Converting the graph");
+        .with_context(|| "Converting the graph")?;
+        Ok(())
     }
 
     #[test]
-    fn compress_and_decompress_with_bigger_window_size() {
+    fn test_compress_and_decompress_with_bigger_window_size() -> Result<()> {
         let compression_parameters = CompressionParameters {
             compression_window: 32,
             max_ref_count: 3,
@@ -157,11 +163,12 @@ mod tests {
             num_rounds: 1,
         };
         compress_graph::<SimpleContextModel>(compression_parameters, 12, false, false)
-            .expect("Converting the graph");
+            .with_context(|| "Converting the graph")?;
+        Ok(())
     }
 
     #[test]
-    fn compress_and_decompress_greedily() {
+    fn test_compress_and_decompress_greedily() -> Result<()> {
         let compression_parameters = CompressionParameters {
             compression_window: 32,
             max_ref_count: 3,
@@ -169,11 +176,12 @@ mod tests {
             num_rounds: 1,
         };
         compress_graph::<SimpleContextModel>(compression_parameters, 12, true, false)
-            .expect("Converting the graph");
+            .with_context(|| "Converting the graph")?;
+        Ok(())
     }
 
     #[test]
-    fn check_stats() -> anyhow::Result<()> {
+    fn test_graph_stats() -> Result<()> {
         let basename = PathBuf::from_str("tests/data/cnr-2000")?;
 
         // Create a temporary directory
