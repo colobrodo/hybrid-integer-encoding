@@ -33,7 +33,7 @@ mod tests {
                 &output_basename,
                 max_bits,
                 CreateBvComp,
-                compression_parameters,
+                &compression_parameters,
             )?;
         } else {
             convert_graph::<C>(
@@ -41,7 +41,7 @@ mod tests {
                 &output_basename,
                 max_bits,
                 CreateBvCompZ::with_chunk_size(10000),
-                compression_parameters,
+                &compression_parameters,
             )?;
         }
 
@@ -193,7 +193,7 @@ mod tests {
             &output_basename,
             max_bits,
             CreateBvCompZ::with_chunk_size(10000),
-            compression_parameters,
+            &compression_parameters,
         )?;
         let graph = load_graph_seq::<SimpleContextModel>(&output_basename, max_bits)?;
 

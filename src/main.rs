@@ -5,7 +5,6 @@ use std::{
     io::{BufRead, BufReader},
     path::PathBuf,
     process::exit,
-    str::FromStr,
 };
 
 use dsi_bitstream::{
@@ -556,14 +555,14 @@ fn main() -> Result<()> {
                         &output_basename,
                         max_bits,
                         CreateBvCompZ::with_chunk_size(10000),
-                        compression_parameters,
+                        &compression_parameters,
                     )?,
                     (ContextModelArgument::Single, true) => convert_graph::<ConstantContextModel>(
                         &basename,
                         &output_basename,
                         max_bits,
                         CreateBvComp,
-                        compression_parameters,
+                        &compression_parameters,
                     )?,
 
                     (ContextModelArgument::Simple, false) => convert_graph::<SimpleContextModel>(
@@ -571,14 +570,14 @@ fn main() -> Result<()> {
                         &output_basename,
                         max_bits,
                         CreateBvCompZ::with_chunk_size(10000),
-                        compression_parameters,
+                        &compression_parameters,
                     )?,
                     (ContextModelArgument::Simple, true) => convert_graph::<SimpleContextModel>(
                         &basename,
                         &output_basename,
                         max_bits,
                         CreateBvComp,
-                        compression_parameters,
+                        &compression_parameters,
                     )?,
                     (ContextModelArgument::Zuckerli, false) => {
                         convert_graph::<ZuckerliContextModel<DefaultEncodeParams>>(
@@ -586,7 +585,7 @@ fn main() -> Result<()> {
                             &output_basename,
                             max_bits,
                             CreateBvCompZ::with_chunk_size(10000),
-                            compression_parameters,
+                            &compression_parameters,
                         )?
                     }
                     (ContextModelArgument::Zuckerli, true) => {
@@ -595,7 +594,7 @@ fn main() -> Result<()> {
                             &output_basename,
                             max_bits,
                             CreateBvComp,
-                            compression_parameters,
+                            &compression_parameters,
                         )?
                     }
                 }
@@ -784,11 +783,11 @@ struct BenchResult {
 }
 
 impl BenchResult {
-    fn new(name: &str, measure_token: &str) -> BenchResult {
+    fn new(name: impl AsRef<str>, measure_token: impl AsRef<str>) -> BenchResult {
         BenchResult {
             samples: Vec::new(),
-            name: String::from_str(name).unwrap(),
-            measure_token: String::from_str(measure_token).unwrap(),
+            name: name.as_ref().to_string(),
+            measure_token: measure_token.as_ref().to_string(),
         }
     }
 

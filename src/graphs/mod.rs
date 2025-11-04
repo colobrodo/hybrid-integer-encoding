@@ -41,7 +41,7 @@ fn reference_selection_round<
     huffman_graph_encoder_builder: HuffmanGraphEncoderBuilder<EP, E, C>,
     max_bits: usize,
     compression_parameters: &CompressionParameters,
-    msg: &str,
+    msg: impl AsRef<str>,
     create_compressor: &impl CompressorFromEncoder,
     pl: &mut ProgressLogger,
 ) -> Result<HuffmanGraphEncoderBuilder<EP, HuffmanEstimator<EP, C>, C>> {
@@ -67,14 +67,14 @@ fn reference_selection_round<
 
 /// Copy the original properties file and update the compression parameters used for the new graph
 fn copy_properties_file(
-    basename: &Path,
-    destination_basename: &Path,
+    basename: impl AsRef<Path>,
+    destination_basename: impl AsRef<Path>,
     compression_parameters: &CompressionParameters,
-    context_model_name: &str,
+    context_model_name: impl AsRef<str>,
     max_bits: usize,
 ) -> Result<()> {
-    let properties_path = basename.with_extension("properties");
-    let temp_properties_path = destination_basename.with_extension("properties");
+    let properties_path = basename.as_ref().with_extension("properties");
+    let temp_properties_path = destination_basename.as_ref().with_extension("properties");
     let properties_file = BufReader::new(File::open(&properties_path)?);
     let mut properties_map = java_properties::read(properties_file)?;
     // Override the properties with passed compression parameters
@@ -91,20 +91,24 @@ fn copy_properties_file(
         compression_parameters.min_interval_length.to_string(),
     );
     properties_map.insert("maxhuffmanbits".into(), max_bits.to_string());
-    properties_map.insert("contextmodel".into(), context_model_name.to_string());
+    properties_map.insert(
+        "contextmodel".into(),
+        context_model_name.as_ref().to_string(),
+    );
 
     let new_properties_file = BufWriter::new(File::create(&temp_properties_path)?);
     java_properties::write(new_properties_file, &properties_map)?;
     Ok(())
 }
 
-fn build_eliasfano<E: Endianness + 'static>(src: &Path) -> Result<()>
+fn build_eliasfano<E: Endianness + 'static>(src: impl AsRef<Path>) -> Result<()>
 where
     for<'a> BufBitReader<E, MemWordReader<u32, &'a [u32]>>: CodesRead<E> + BitSeek,
 {
     let mut pl = ProgressLogger::default();
     pl.display_memory(true).item_name("offset");
 
+    let src = src.as_ref();
     // Creates the offsets file
     let of_file_path = src.with_extension(OFFSETS_EXTENSION);
 
@@ -173,7 +177,7 @@ pub fn build_eliasfano_from_offsets<E: Endianness>(
 }
 
 pub fn serialize_eliasfano(
-    src: &Path,
+    src: impl AsRef<Path>,
     efb: EliasFanoBuilder,
     pl: &mut impl ProgressLog,
 ) -> Result<()> {
@@ -190,7 +194,7 @@ pub fn serialize_eliasfano(
     pl.display_memory(true);
     pl.start("Writing to disk...");
 
-    let ef_path = src.with_extension(EF_EXTENSION);
+    let ef_path = src.as_ref().with_extension(EF_EXTENSION);
     log::info!("Creating Elias-Fano at '{}'", ef_path.display());
     let mut ef_file = BufWriter::new(
         File::create(&ef_path)
@@ -208,11 +212,11 @@ pub fn serialize_eliasfano(
 }
 
 pub fn convert_graph<C: ContextModel + Default + Copy>(
-    basename: &Path,
-    output_basename: &Path,
+    basename: impl AsRef<Path>,
+    output_basename: impl AsRef<Path>,
     max_bits: usize,
     create_compressor: impl CompressorFromEncoder,
-    compression_parameters: CompressionParameters,
+    compression_parameters: &CompressionParameters,
 ) -> Result<()> {
     assert!(
         compression_parameters.num_rounds >= 1,
@@ -236,7 +240,7 @@ pub fn convert_graph<C: ContextModel + Default + Copy>(
             C::default(),
         );
     let mut compressor = create_compressor
-        .create_from_encoder(&mut huffman_graph_encoder_builder, &compression_parameters);
+        .create_from_encoder(&mut huffman_graph_encoder_builder, compression_parameters);
 
     pl.item_name("node")
         .expected_updates(Some(seq_graph.num_nodes()));
@@ -277,7 +281,7 @@ pub fn convert_graph<C: ContextModel + Default + Copy>(
 
     pl.start("Building the encoder after estimation rounds...");
 
-    let output_path = output_basename.with_extension(GRAPH_EXTENSION);
+    let output_path = output_basename.as_ref().with_extension(GRAPH_EXTENSION);
     let outfile = File::create(output_path)?;
     let writer = BufBitWriter::<LE, _>::new(WordAdapter::<u32, _>::new(BufWriter::new(outfile)));
     let mut writer = CountBitWriter::<LE, _>::new(writer);
@@ -320,9 +324,10 @@ pub fn convert_graph<C: ContextModel + Default + Copy>(
 }
 
 pub fn load_graph_seq<C: ContextModel + Default + Copy>(
-    basename: &Path,
+    basename: impl AsRef<Path>,
     max_bits: usize,
 ) -> Result<BvGraphSeq<SequentialHuffmanDecoderFactory<DefaultEncodeParams, MmapHelper<u32>, C>>> {
+    let basename = basename.as_ref();
     let properties_path = basename.with_extension(PROPERTIES_EXTENSION);
     let (num_nodes, num_arcs, comp_flags) = parse_properties::<BE>(&properties_path)?;
     check_compression_parameters(&properties_path, max_bits, C::NAME)?;
@@ -345,10 +350,11 @@ pub fn load_graph_seq<C: ContextModel + Default + Copy>(
 /// Checks that the compression parameter for statistical encoding are the same between the
 /// expected one, and then ones in the properties file used to compress the graph, if presents
 fn check_compression_parameters(
-    properties_path: &Path,
+    properties_path: impl AsRef<Path>,
     expected_max_bits: usize,
-    expected_context_model_name: &str,
+    expected_context_model_name: impl AsRef<str>,
 ) -> Result<()> {
+    let properties_path = properties_path.as_ref();
     let properties_file = BufReader::new(File::open(properties_path)?);
     let name = properties_path.display();
     let properties_map = java_properties::read(properties_file)?;
@@ -366,10 +372,10 @@ fn check_compression_parameters(
         }
     }
     if let Some(context_model_name) = properties_map.get("contextmodel") {
-        if context_model_name != expected_context_model_name {
+        if context_model_name != expected_context_model_name.as_ref() {
             return Err(anyhow::anyhow!(
                 "Expected context model '{}', but have '{}' in {}",
-                expected_context_model_name,
+                expected_context_model_name.as_ref(),
                 context_model_name,
                 name
             ));
@@ -380,9 +386,10 @@ fn check_compression_parameters(
 
 /// Load an Huffman-encoded graph to be accessed in random order
 pub fn load_graph<C: ContextModel + Default + Copy>(
-    basename: PathBuf,
+    basename: impl AsRef<Path>,
     max_bits: usize,
 ) -> Result<BvGraph<RandomAccessHuffmanDecoderFactory<MmapHelper<u32>, Owned<EF>, C>>> {
+    let basename = basename.as_ref();
     let properties_path = basename.with_extension(PROPERTIES_EXTENSION);
     let (num_nodes, num_arcs, comp_flags) = parse_properties::<BE>(&properties_path)?;
     check_compression_parameters(&properties_path, max_bits, C::NAME)?;
@@ -421,12 +428,12 @@ pub fn load_graph<C: ContextModel + Default + Copy>(
 
 pub fn build_offsets<F: SequentialDecoderFactory>(
     graph: BvGraphSeq<F>,
-    basename: &Path,
+    basename: impl AsRef<Path>,
 ) -> Result<()>
 where
     for<'a> F::Decoder<'a>: Decode + BitSeek,
 {
-    let offsets_path = basename.with_extension(OFFSETS_EXTENSION);
+    let offsets_path = basename.as_ref().with_extension(OFFSETS_EXTENSION);
     let file = std::fs::File::create(&offsets_path)
         .with_context(|| format!("Could not create {}", offsets_path.display()))?;
     // create a bit writer on the file
