@@ -37,7 +37,7 @@ pub struct HuffmanEncoder<EP: EncodeParams = DefaultEncodeParams> {
     _marker: core::marker::PhantomData<EP>,
 }
 
-/// Compute the histogram of the each token frequency for each context.
+/// Compute the histogram for each token frequency in each context.
 /// An histogram is a vector of length `num_symbols` where each index represents a symbol,
 /// and the value at each index represents the frequency of the symbol.
 pub struct IntegerHistogram<EP: EncodeParams> {
