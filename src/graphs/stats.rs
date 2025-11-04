@@ -4,10 +4,10 @@ use dsi_bitstream::traits::BitSeek;
 use webgraph::prelude::*;
 
 /// Represent the overall usage of bits in the encoding of the graph.
-/// As StatsDecoder it differs from the webgraph counterpart due to the
-/// fact that this keeps track of the number of bit read (and so by any encoder)
+/// It differs from the `webgraph::StatsDecoder` due to the
+/// fact that this keeps track of the number of bit read for each component
 /// while the other simultaneously count the space of the stream encoded with all the
-/// instantaneous codes.  
+/// available instantaneous codes.  
 #[derive(Default)]
 pub struct GraphStats {
     pub total: u64,

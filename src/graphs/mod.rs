@@ -484,8 +484,12 @@ where
     graph.into_inner().stats()
 }
 
+/// Represents the result of comparing two graphs for equality.
+/// Indicates whether the graphs are equal or provides details about the first difference.
 pub enum ComparisonResult {
+    /// The graphs are equal; all nodes and successors match.
     Equal,
+    /// The graphs differ at the specified node, showing the differing successor lists.
     Different {
         node_id: usize,
         right_succs: Vec<usize>,
