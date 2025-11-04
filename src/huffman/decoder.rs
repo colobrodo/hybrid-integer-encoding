@@ -39,7 +39,7 @@ struct HuffmanDecoderInfo {
     symbol: u8,
 }
 
-pub struct HuffmanReader<R: BitRead<LE>> {
+pub struct HuffmanDecoder<R: BitRead<LE>> {
     reader: R,
     table: HuffmanTable,
 }
@@ -141,13 +141,13 @@ impl HuffmanTable {
     }
 }
 
-impl<R: BitRead<LE>> HuffmanReader<R> {
+impl<R: BitRead<LE>> HuffmanDecoder<R> {
     /// Constructs a `HuffmanReader` by consuming the provided `BitRead` implementation.
     /// Reads the Huffman table from the start and fully owns the bitstream.
     pub fn from_bitreader(reader: R, max_bits: usize, num_contexts: usize) -> Result<Self> {
         let mut reader = reader;
         let table_decoder = HuffmanTable::new(&mut reader, max_bits, num_contexts)?;
-        Ok(HuffmanReader::new(table_decoder, reader))
+        Ok(HuffmanDecoder::new(table_decoder, reader))
     }
 
     /// Decodes the Huffman table from the provided BitReader without consuming it.
@@ -165,7 +165,7 @@ impl<R: BitRead<LE>> HuffmanReader<R> {
     }
 }
 
-impl<R: BitRead<LE>> EntropyCoder for HuffmanReader<R> {
+impl<R: BitRead<LE>> EntropyCoder for HuffmanDecoder<R> {
     fn read_token(&mut self, context: usize) -> Result<usize> {
         let bits: u64 = self.reader.peek_bits(self.table.max_bits)?.cast();
         let info = self.table.info_[context][bits as usize];
@@ -179,7 +179,7 @@ impl<R: BitRead<LE>> EntropyCoder for HuffmanReader<R> {
     }
 }
 
-impl<R: BitRead<LE> + BitSeek> BitSeek for HuffmanReader<R> {
+impl<R: BitRead<LE> + BitSeek> BitSeek for HuffmanDecoder<R> {
     type Error = <R as BitSeek>::Error;
 
     fn bit_pos(&mut self) -> Result<u64, Self::Error> {
