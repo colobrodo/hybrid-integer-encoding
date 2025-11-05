@@ -43,9 +43,9 @@ impl GraphStats {
 /// This is different from webgraph-rs's StatsDecoder because it aim to find the
 /// best instantaneous code to compress each part.
 pub struct StatsDecoder<'a, D: Decode + BitSeek, F: SequentialDecoderFactory> {
-    decoder: D,
-    stats: GraphStats,
     factory: &'a StatsDecoderFactory<F>,
+    stats: GraphStats,
+    decoder: D,
 }
 
 impl<'a, D: Decode + BitSeek, F: SequentialDecoderFactory> StatsDecoder<'a, D, F> {

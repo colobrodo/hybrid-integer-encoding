@@ -52,8 +52,8 @@ struct HuffmanDecoderInfo {
 /// Struct representing a Huffman decoder.
 /// It contains a reader and a Huffman table for decoding.
 pub struct HuffmanDecoder<R: BitRead<LE>> {
-    reader: R,
     table: HuffmanTable,
+    reader: R,
 }
 
 /// The Huffman decoder lookup table computed from the header of the file and the maximum

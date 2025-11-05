@@ -9,9 +9,9 @@ use crate::huffman::{EncodeParams, IntegerHistogram};
 /// used by the internal `IntegerHistogram<EP>` to track per-context symbol
 /// encoding frequencies.
 pub struct IntegerData<EP: EncodeParams> {
+    histograms: IntegerHistogram<EP>,
     values: Vec<u32>,
     contexts: Vec<u8>,
-    histograms: IntegerHistogram<EP>,
     _marker: PhantomData<EP>,
 }
 

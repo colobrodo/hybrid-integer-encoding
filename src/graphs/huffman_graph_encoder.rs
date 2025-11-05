@@ -11,9 +11,9 @@ use super::{BvGraphComponent, ContextModel, HuffmanEstimator};
 /// Encoder to compress a graph using Hybrid integer huffman encoding.
 /// This encoder can be constructed using an `HuffmanGraphEncoderBuilder`
 pub struct HuffmanGraphEncoder<'a, EP: EncodeParams, E: Encode, W: BitWrite<LE>, S: ContextModel> {
+    context_model: S,
     encoder: HuffmanEncoder<EP>,
     estimator: E,
-    context_model: S,
     writer: &'a mut W,
 }
 impl<'a, EP: EncodeParams, E: Encode, W: BitWrite<LE>, S: ContextModel>

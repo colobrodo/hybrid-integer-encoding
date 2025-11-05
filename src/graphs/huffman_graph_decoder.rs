@@ -13,15 +13,15 @@ use crate::huffman::{
 use super::{BvGraphComponent, ContextModel};
 
 pub struct HuffmanGraphDecoder<EP: EncodeParams, R: BitRead<LE>, M: ContextModel> {
-    reader: HuffmanDecoder<R>,
     context_model: M,
+    decoder: HuffmanDecoder<R>,
     _marker: core::marker::PhantomData<EP>,
 }
 
 impl<EP: EncodeParams, R: BitRead<LE>, S: ContextModel> HuffmanGraphDecoder<EP, R, S> {
-    pub fn new(reader: HuffmanDecoder<R>, model: S) -> Self {
+    pub fn new(decoder: HuffmanDecoder<R>, model: S) -> Self {
         HuffmanGraphDecoder {
-            reader,
+            decoder,
             context_model: model,
             _marker: std::marker::PhantomData,
         }
@@ -31,7 +31,7 @@ impl<EP: EncodeParams, R: BitRead<LE>, S: ContextModel> HuffmanGraphDecoder<EP, 
     fn read(&mut self, component: BvGraphComponent) -> u64 {
         let context = self.context_model.choose_context(component);
         let symbol = self
-            .reader
+            .decoder
             .read::<EP>(context as usize)
             .expect("Reading symbol from huffman reader during graph decoding")
             as u64;
@@ -99,11 +99,11 @@ impl<EP: EncodeParams, R: BitRead<LE> + BitSeek, S: ContextModel> BitSeek
     type Error = <R as BitSeek>::Error;
 
     fn bit_pos(&mut self) -> Result<u64, Self::Error> {
-        self.reader.bit_pos()
+        self.decoder.bit_pos()
     }
 
     fn set_bit_pos(&mut self, bit_pos: u64) -> Result<(), Self::Error> {
-        self.reader.set_bit_pos(bit_pos)
+        self.decoder.set_bit_pos(bit_pos)
     }
 }
 
