@@ -2,7 +2,7 @@ use std::convert::Infallible;
 
 use crate::huffman::{EncodeParams, HuffmanEncoder, IntegerHistogram};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use dsi_bitstream::traits::{BitWrite, LE};
 use webgraph::prelude::*;
 
@@ -34,12 +34,22 @@ impl<'a, EP: EncodeParams, E: Encode, W: BitWrite<LE>, S: ContextModel>
     }
 
     pub fn write_header(&mut self) -> Result<usize> {
-        self.encoder.write_header(self.writer)
+        self.encoder
+            .write_header(self.writer)
+            .with_context(|| "Failed to write Huffman encoder header")
     }
 
     fn write(&mut self, component: BvGraphComponent, value: u64) -> Result<usize> {
         let ctx = self.context_model.choose_context(component);
-        let (token_bits, trailing_bits) = self.encoder.write(ctx, value as u32, self.writer)?;
+        let (token_bits, trailing_bits) = self
+            .encoder
+            .write(ctx, value as u32, self.writer)
+            .with_context(|| {
+                format!(
+                    "Failed to write {:?} component with value {}",
+                    component, value
+                )
+            })?;
         self.context_model.update(component, value);
         Ok(token_bits + trailing_bits)
     }
@@ -107,7 +117,7 @@ impl<EP: EncodeParams, E: Encode, W: BitWrite<LE>, S: ContextModel> Encode
     }
 
     fn flush(&mut self) -> Result<usize, Self::Error> {
-        self.writer.flush().unwrap();
+        self.writer.flush().expect("Failed to flush encoder writer");
         Ok(0)
     }
 

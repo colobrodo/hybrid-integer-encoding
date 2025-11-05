@@ -125,7 +125,7 @@ fn compute_decoder_table(
             }
         }
         if s == num_symbols {
-            return Err(anyhow!("Invalid table"));
+            return Err(anyhow!("Invalid table: cannot found a symbol for {}", i));
         }
         info.nbits = sym_infos[s].n_bits;
         info.symbol = s as u8;

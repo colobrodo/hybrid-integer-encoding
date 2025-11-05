@@ -14,7 +14,7 @@ use dsi_bitstream::{
 };
 use epserde::prelude::*;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use lender::{for_, Lender};
 use rand::prelude::*;
@@ -413,7 +413,9 @@ fn bench<EP: EncodeParams>(
     let word_write = MemWordWriterVec::new(Vec::<u64>::new());
     let mut writer = CountBitWriter::<_, _>::new(BufBitWriter::<LE, _>::new(word_write));
 
-    encoder.write_header(&mut writer).unwrap();
+    encoder
+        .write_header(&mut writer)
+        .with_context(|| "Cannot write the header of the huffman encoder")?;
     let header_size = writer.bits_written;
     if verbose {
         println!("Header took {} bits", header_size);

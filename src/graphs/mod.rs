@@ -125,21 +125,25 @@ where
     // otherwise use the provided value, this is so we can build the Elias-Fano
     // for offsets of any custom format that might not use the standard
     // properties file
-    let num_nodes = {
-        let properties_path = src.with_extension(PROPERTIES_EXTENSION);
-        log::info!(
-            "Reading num_of_nodes from properties file at '{}'",
+    let properties_path = src.with_extension(PROPERTIES_EXTENSION);
+    log::info!(
+        "Reading num_of_nodes from properties file at '{}'",
+        properties_path.display()
+    );
+    let f = File::open(&properties_path).with_context(|| {
+        format!(
+            "Could not open properties file: {}",
             properties_path.display()
-        );
-        let f = File::open(&properties_path).with_context(|| {
-            format!(
-                "Could not open properties file: {}",
-                properties_path.display()
-            )
-        })?;
-        let map = java_properties::read(BufReader::new(f))?;
-        map.get("nodes").unwrap().parse::<usize>()?
-    };
+        )
+    })?;
+    let map = java_properties::read(BufReader::new(f))?;
+    let num_nodes = map
+        .get("nodes")
+        .ok_or(anyhow::anyhow!(
+            "Cannot find 'nodes' field in properties file '{}'",
+            properties_path.display()
+        ))?
+        .parse::<usize>()?;
     pl.expected_updates(Some(num_nodes));
 
     let mut efb = EliasFanoBuilder::new(num_nodes + 1, file_len as usize);
@@ -258,7 +262,7 @@ pub fn convert_graph<C: ContextModel + Default + Copy>(
         &seq_graph,
         huffman_graph_encoder_builder,
         max_bits,
-        &compression_parameters,
+        compression_parameters,
         "Pushing symbols into encoder builder on first round with Huffman estimator...",
         &create_compressor,
         &mut pl,
@@ -268,7 +272,7 @@ pub fn convert_graph<C: ContextModel + Default + Copy>(
             &seq_graph,
             huffman_graph_encoder_builder,
             max_bits,
-            &compression_parameters,
+            compression_parameters,
             format!(
                 "Pushing symbols into encoder builder with Huffman estimator for round {}...",
                 round + 1
@@ -293,7 +297,7 @@ pub fn convert_graph<C: ContextModel + Default + Copy>(
     let header_size = huffman_graph_encoder.write_header()?;
 
     let mut compressor =
-        create_compressor.create_from_encoder(&mut huffman_graph_encoder, &compression_parameters);
+        create_compressor.create_from_encoder(&mut huffman_graph_encoder, compression_parameters);
 
     pl.item_name("node")
         .expected_updates(Some(seq_graph.num_nodes()));
@@ -312,7 +316,7 @@ pub fn convert_graph<C: ContextModel + Default + Copy>(
     copy_properties_file(
         basename,
         output_basename,
-        &compression_parameters,
+        compression_parameters,
         C::NAME,
         max_bits,
     )
@@ -384,11 +388,13 @@ fn check_compression_parameters(
     Ok(())
 }
 
+type HuffmanBvGraph<C> = BvGraph<RandomAccessHuffmanDecoderFactory<MmapHelper<u32>, Owned<EF>, C>>;
+
 /// Load an Huffman-encoded graph to be accessed in random order
 pub fn load_graph<C: ContextModel + Default + Copy>(
     basename: impl AsRef<Path>,
     max_bits: usize,
-) -> Result<BvGraph<RandomAccessHuffmanDecoderFactory<MmapHelper<u32>, Owned<EF>, C>>> {
+) -> Result<HuffmanBvGraph<C>> {
     let basename = basename.as_ref();
     let properties_path = basename.with_extension(PROPERTIES_EXTENSION);
     let (num_nodes, num_arcs, comp_flags) = parse_properties::<BE>(&properties_path)?;
