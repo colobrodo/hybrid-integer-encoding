@@ -4,9 +4,10 @@ mod tests {
     use epserde::deser::Owned;
     use hybrid_integer_encoding::{
         graphs::{
-            build_offsets, compare_graphs, convert_graph, load_graph, load_graph_seq,
-            measure_stats, ComparisonResult, CompressionParameters, ContextModel, CreateBvComp,
-            CreateBvCompZ, SimpleContextModel, ZuckerliContextModel,
+            build_offsets, check_compression_parameters, compare_graphs, convert_graph, load_graph,
+            load_graph_seq, measure_stats, ComparisonResult, CompressionParameters,
+            ConstantContextModel, ContextModel, CreateBvComp, CreateBvCompZ, SimpleContextModel,
+            ZuckerliContextModel,
         },
         huffman::DefaultEncodeParams,
     };
@@ -177,6 +178,51 @@ mod tests {
         };
         compress_graph::<SimpleContextModel>(compression_parameters, 12, true, false)
             .with_context(|| "Converting the graph")?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_check_compression_parameters_failures() -> Result<()> {
+        // First create a graph with known parameters
+        let basename = PathBuf::from_str("tests/data/cnr-2000")?;
+        let temp_dir = TempDir::new()?;
+        let output_basename = temp_dir.path().join(basename.file_name().unwrap());
+
+        let compression_parameters = CompressionParameters {
+            compression_window: 7,
+            max_ref_count: 3,
+            min_interval_length: 4,
+            num_rounds: 1,
+        };
+
+        // Create a graph with 12 bits and SimpleContextModel
+        let expected_max_bits = 12;
+        convert_graph::<SimpleContextModel>(
+            &basename,
+            &output_basename,
+            expected_max_bits,
+            CreateBvCompZ::with_chunk_size(10000),
+            &compression_parameters,
+        )?;
+
+        // Test with wrong max_bits
+        let properties_path = output_basename.with_extension("properties");
+        let wrong_max_bits = 8;
+        let wrong_max_bits_result = check_compression_parameters(
+            &properties_path,
+            wrong_max_bits,
+            SimpleContextModel::NAME,
+        );
+        assert!(wrong_max_bits_result.is_err());
+
+        // Test with wrong context model
+        let wrong_model_name_result = check_compression_parameters(
+            &output_basename,
+            expected_max_bits,
+            ConstantContextModel::NAME,
+        );
+        assert!(wrong_model_name_result.is_err());
+
         Ok(())
     }
 

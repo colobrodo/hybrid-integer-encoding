@@ -353,7 +353,7 @@ pub fn load_graph_seq<C: ContextModel + Default + Copy>(
 
 /// Checks that the compression parameter for statistical encoding are the same between the
 /// expected one, and then ones in the properties file used to compress the graph, if presents
-fn check_compression_parameters(
+pub fn check_compression_parameters(
     properties_path: impl AsRef<Path>,
     expected_max_bits: usize,
     expected_context_model_name: impl AsRef<str>,
