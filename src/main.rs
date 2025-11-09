@@ -28,7 +28,7 @@ use hybrid_integer_encoding::{
 };
 use hybrid_integer_encoding::{
     graphs::{
-        compressors::CompressionParameters, convert_graph, load_graph, load_graph_seq,
+        compressors::CompressionParameters, convert_graph_file, load_graph, load_graph_seq,
         ConstantContextModel, SimpleContextModel, ZuckerliContextModel,
     },
     huffman::{
@@ -552,37 +552,45 @@ fn main() -> Result<()> {
                     log::warn!("Cannot build offsets during conversion of graph '{}', when compressing it with Zuckerli reference selection algorithm.", basename.display());
                 }
                 match (context_model, greedy_compressor) {
-                    (ContextModelArgument::Single, false) => convert_graph::<ConstantContextModel>(
-                        &basename,
-                        &output_basename,
-                        max_bits,
-                        CreateBvCompZ::with_chunk_size(10000),
-                        &compression_parameters,
-                    )?,
-                    (ContextModelArgument::Single, true) => convert_graph::<ConstantContextModel>(
-                        &basename,
-                        &output_basename,
-                        max_bits,
-                        CreateBvComp,
-                        &compression_parameters,
-                    )?,
+                    (ContextModelArgument::Single, false) => {
+                        convert_graph_file::<ConstantContextModel>(
+                            &basename,
+                            &output_basename,
+                            max_bits,
+                            CreateBvCompZ::with_chunk_size(10000),
+                            &compression_parameters,
+                        )?
+                    }
+                    (ContextModelArgument::Single, true) => {
+                        convert_graph_file::<ConstantContextModel>(
+                            &basename,
+                            &output_basename,
+                            max_bits,
+                            CreateBvComp,
+                            &compression_parameters,
+                        )?
+                    }
 
-                    (ContextModelArgument::Simple, false) => convert_graph::<SimpleContextModel>(
-                        &basename,
-                        &output_basename,
-                        max_bits,
-                        CreateBvCompZ::with_chunk_size(10000),
-                        &compression_parameters,
-                    )?,
-                    (ContextModelArgument::Simple, true) => convert_graph::<SimpleContextModel>(
-                        &basename,
-                        &output_basename,
-                        max_bits,
-                        CreateBvComp,
-                        &compression_parameters,
-                    )?,
+                    (ContextModelArgument::Simple, false) => {
+                        convert_graph_file::<SimpleContextModel>(
+                            &basename,
+                            &output_basename,
+                            max_bits,
+                            CreateBvCompZ::with_chunk_size(10000),
+                            &compression_parameters,
+                        )?
+                    }
+                    (ContextModelArgument::Simple, true) => {
+                        convert_graph_file::<SimpleContextModel>(
+                            &basename,
+                            &output_basename,
+                            max_bits,
+                            CreateBvComp,
+                            &compression_parameters,
+                        )?
+                    }
                     (ContextModelArgument::Zuckerli, false) => {
-                        convert_graph::<ZuckerliContextModel<DefaultEncodeParams>>(
+                        convert_graph_file::<ZuckerliContextModel<DefaultEncodeParams>>(
                             &basename,
                             &output_basename,
                             max_bits,
@@ -591,7 +599,7 @@ fn main() -> Result<()> {
                         )?
                     }
                     (ContextModelArgument::Zuckerli, true) => {
-                        convert_graph::<ZuckerliContextModel<DefaultEncodeParams>>(
+                        convert_graph_file::<ZuckerliContextModel<DefaultEncodeParams>>(
                             &basename,
                             &output_basename,
                             max_bits,

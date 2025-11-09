@@ -179,7 +179,7 @@ pub fn serialize_eliasfano(
     Ok(())
 }
 
-pub fn convert_graph<C: ContextModel + Default + Copy>(
+pub fn convert_graph_file<C: ContextModel + Default + Copy>(
     basename: impl AsRef<Path>,
     output_basename: impl AsRef<Path>,
     max_bits: usize,

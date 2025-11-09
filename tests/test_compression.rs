@@ -4,8 +4,8 @@ mod tests {
     use epserde::deser::Owned;
     use hybrid_integer_encoding::{
         graphs::{
-            build_offsets, check_compression_parameters, compare_graphs, convert_graph, load_graph,
-            load_graph_seq, measure_stats, ComparisonResult, CompressionParameters,
+            build_offsets, check_compression_parameters, compare_graphs, convert_graph_file,
+            load_graph, load_graph_seq, measure_stats, ComparisonResult, CompressionParameters,
             ConstantContextModel, ContextModel, CreateBvComp, CreateBvCompZ, SimpleContextModel,
             ZuckerliContextModel,
         },
@@ -30,7 +30,7 @@ mod tests {
         let output_basename = temp_dir.path().join(basename.file_name().unwrap());
 
         if greedily {
-            convert_graph::<C>(
+            convert_graph_file::<C>(
                 &basename,
                 &output_basename,
                 max_bits,
@@ -38,7 +38,7 @@ mod tests {
                 &compression_parameters,
             )?;
         } else {
-            convert_graph::<C>(
+            convert_graph_file::<C>(
                 &basename,
                 &output_basename,
                 max_bits,
@@ -197,7 +197,7 @@ mod tests {
 
         // Create a graph with 12 bits and SimpleContextModel
         let expected_max_bits = 12;
-        convert_graph::<SimpleContextModel>(
+        convert_graph_file::<SimpleContextModel>(
             &basename,
             &output_basename,
             expected_max_bits,
@@ -242,7 +242,7 @@ mod tests {
             num_rounds: 1,
         };
         let max_bits = 12;
-        convert_graph::<SimpleContextModel>(
+        convert_graph_file::<SimpleContextModel>(
             &basename,
             &output_basename,
             max_bits,
