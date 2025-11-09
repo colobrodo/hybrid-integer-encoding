@@ -4,16 +4,17 @@ mod tests {
     use epserde::deser::Owned;
     use hybrid_integer_encoding::{
         graphs::{
-            build_offsets, check_compression_parameters, compare_graphs, convert_graph_file,
-            load_graph, load_graph_seq, measure_stats, ComparisonResult, CompressionParameters,
-            ConstantContextModel, ContextModel, CreateBvComp, CreateBvCompZ, SimpleContextModel,
-            ZuckerliContextModel,
+            build_offsets, check_compression_parameters, compare_graphs, convert_graph,
+            convert_graph_file, load_graph, load_graph_seq, measure_stats, ComparisonResult,
+            CompressionParameters, ConstantContextModel, ContextModel, CreateBvComp, CreateBvCompZ,
+            SimpleContextModel, ZuckerliContextModel,
         },
         huffman::DefaultEncodeParams,
     };
     use lender::Lender;
     use std::{path::PathBuf, str::FromStr};
     use tempfile::TempDir;
+    use webgraph::graphs::vec_graph::VecGraph;
     use webgraph::prelude::*;
 
     fn compress_graph<C: ContextModel + Default + Copy + 'static>(
@@ -183,10 +184,11 @@ mod tests {
 
     #[test]
     fn test_check_compression_parameters_failures() -> Result<()> {
-        // First create a graph with known parameters
-        let basename = PathBuf::from_str("tests/data/cnr-2000")?;
+        // First create an in-memory graph with known parameters
+        let graph = VecGraph::from_arcs([(0, 1), (1, 2), (2, 0), (2, 1)]);
+
         let temp_dir = TempDir::new()?;
-        let output_basename = temp_dir.path().join(basename.file_name().unwrap());
+        let output_basename = temp_dir.path().join("property_test");
 
         let compression_parameters = CompressionParameters {
             compression_window: 7,
@@ -195,10 +197,10 @@ mod tests {
             num_rounds: 1,
         };
 
-        // Create a graph with 12 bits and SimpleContextModel
+        // Create and save a graph with SimpleContextModel
         let expected_max_bits = 12;
-        convert_graph_file::<SimpleContextModel>(
-            &basename,
+        convert_graph::<SimpleContextModel, _>(
+            &graph,
             &output_basename,
             expected_max_bits,
             CreateBvCompZ::with_chunk_size(10000),
