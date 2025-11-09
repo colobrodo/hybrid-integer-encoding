@@ -65,42 +65,6 @@ fn reference_selection_round<
     Ok(huffman_graph_encoder_builder)
 }
 
-/// Copy the original properties file and update the compression parameters used for the new graph
-fn copy_properties_file(
-    basename: impl AsRef<Path>,
-    destination_basename: impl AsRef<Path>,
-    compression_parameters: &CompressionParameters,
-    context_model_name: impl AsRef<str>,
-    max_bits: usize,
-) -> Result<()> {
-    let properties_path = basename.as_ref().with_extension("properties");
-    let temp_properties_path = destination_basename.as_ref().with_extension("properties");
-    let properties_file = BufReader::new(File::open(&properties_path)?);
-    let mut properties_map = java_properties::read(properties_file)?;
-    // Override the properties with passed compression parameters
-    properties_map.insert(
-        "windowsize".into(),
-        compression_parameters.compression_window.to_string(),
-    );
-    properties_map.insert(
-        "maxrefcount".into(),
-        compression_parameters.max_ref_count.to_string(),
-    );
-    properties_map.insert(
-        "minintervallength".into(),
-        compression_parameters.min_interval_length.to_string(),
-    );
-    properties_map.insert("maxhuffmanbits".into(), max_bits.to_string());
-    properties_map.insert(
-        "contextmodel".into(),
-        context_model_name.as_ref().to_string(),
-    );
-
-    let new_properties_file = BufWriter::new(File::create(&temp_properties_path)?);
-    java_properties::write(new_properties_file, &properties_map)?;
-    Ok(())
-}
-
 fn build_eliasfano<E: Endianness + 'static>(src: impl AsRef<Path>) -> Result<()>
 where
     for<'a> BufBitReader<E, MemWordReader<u32, &'a [u32]>>: CodesRead<E> + BitSeek,
@@ -313,14 +277,20 @@ pub fn convert_graph<C: ContextModel + Default + Copy>(
         writer.bits_written, header_size
     ));
 
-    copy_properties_file(
-        basename,
-        output_basename,
-        compression_parameters,
-        C::NAME,
-        max_bits,
-    )
-    .expect("Cannot copy the properties file");
+    let properties = compression_parameters
+        .to_properties(
+            seq_graph.num_nodes(),
+            seq_graph
+                .num_arcs_hint()
+                .expect("Cannot know how many arcs the source graph contains"),
+            writer.bits_written as _,
+            C::NAME,
+            max_bits,
+        )
+        .context("Cannot serialize properties file")?;
+    let properties_path = output_basename.as_ref().with_extension("properties");
+    std::fs::write(&properties_path, properties)
+        .with_context(|| format!("Could not write {}", properties_path.display()))?;
 
     pl.done();
 
