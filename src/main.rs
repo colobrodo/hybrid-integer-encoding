@@ -22,14 +22,15 @@ use rand_distr::Zipf;
 
 use hybrid_integer_encoding::{
     graphs::{
-        build_offsets, compare_graphs, measure_stats, ComparisonResult, CreateBvComp, CreateBvCompZ,
+        build_offsets, compare_graphs, convert_graph_file, measure_stats, ComparisonResult,
+        CreateBvComp, CreateBvCompZ,
     },
     utils::IntegerData,
 };
 use hybrid_integer_encoding::{
     graphs::{
-        compressors::CompressionParameters, convert_graph_file, load_graph, load_graph_seq,
-        ConstantContextModel, SimpleContextModel, ZuckerliContextModel,
+        compressors::CompressionParameters, load_graph, load_graph_seq, ConstantContextModel,
+        SimpleContextModel, ZuckerliContextModel,
     },
     huffman::{
         encode, DefaultEncodeParams, EncodeParams, EntropyCoder, HuffmanDecoder, HuffmanEncoder,

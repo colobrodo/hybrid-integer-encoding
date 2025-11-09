@@ -32,12 +32,12 @@ use crate::huffman::{DefaultEncodeParams, EncodeParams};
 
 #[allow(clippy::too_many_arguments)]
 fn reference_selection_round<
-    F: SequentialDecoderFactory,
+    G: SequentialGraph,
     EP: EncodeParams,
     E: Encode,
     C: ContextModel + Default,
 >(
-    graph: &BvGraphSeq<F>,
+    graph: &G,
     huffman_graph_encoder_builder: HuffmanGraphEncoderBuilder<EP, E, C>,
     max_bits: usize,
     compression_parameters: &CompressionParameters,
@@ -56,7 +56,7 @@ fn reference_selection_round<
     pl.item_name("node")
         .expected_updates(Some(graph.num_nodes()));
     pl.start(msg);
-    for_![ (_, succ) in graph {
+    for_![ (_, succ) in graph.iter() {
         compressor.push(succ)?;
         pl.update();
     }];
@@ -186,6 +186,26 @@ pub fn convert_graph_file<C: ContextModel + Default + Copy>(
     create_compressor: impl CompressorFromEncoder,
     compression_parameters: &CompressionParameters,
 ) -> Result<()> {
+    let seq_graph = BvGraphSeq::with_basename(&basename)
+        .endianness::<BE>()
+        .load()?;
+
+    convert_graph::<C, _>(
+        &seq_graph,
+        output_basename,
+        max_bits,
+        create_compressor,
+        compression_parameters,
+    )
+}
+
+pub fn convert_graph<C: ContextModel + Default + Copy, G: SequentialGraph>(
+    seq_graph: &G,
+    output_basename: impl AsRef<Path>,
+    max_bits: usize,
+    create_compressor: impl CompressorFromEncoder,
+    compression_parameters: &CompressionParameters,
+) -> Result<()> {
     assert!(
         compression_parameters.num_rounds >= 1,
         "num_rounds must be at least 1"
@@ -194,12 +214,8 @@ pub fn convert_graph_file<C: ContextModel + Default + Copy>(
         display_memory = true,
         log_interval = Duration::from_secs(5 * 60)
     );
+
     let num_symbols = 1 << max_bits;
-
-    let seq_graph = BvGraphSeq::with_basename(&basename)
-        .endianness::<BE>()
-        .load()?;
-
     // setup for the first iteration with Log2Estimator
     let mut huffman_graph_encoder_builder =
         HuffmanGraphEncoderBuilder::<DefaultEncodeParams, _, _>::new(
@@ -215,7 +231,7 @@ pub fn convert_graph_file<C: ContextModel + Default + Copy>(
     pl.start("Pushing symbols into encoder builder with Log2Estimator...");
 
     // first iteration: build a encoder with Log2Estimator
-    for_![ (_, succ) in seq_graph {
+    for_![ (_, succ) in seq_graph.iter() {
         compressor.push(succ)?;
         pl.update();
     }];
@@ -223,7 +239,7 @@ pub fn convert_graph_file<C: ContextModel + Default + Copy>(
     pl.done();
 
     let mut huffman_graph_encoder_builder = reference_selection_round(
-        &seq_graph,
+        seq_graph,
         huffman_graph_encoder_builder,
         max_bits,
         compression_parameters,
@@ -233,7 +249,7 @@ pub fn convert_graph_file<C: ContextModel + Default + Copy>(
     )?;
     for round in 2..compression_parameters.num_rounds {
         huffman_graph_encoder_builder = reference_selection_round(
-            &seq_graph,
+            seq_graph,
             huffman_graph_encoder_builder,
             max_bits,
             compression_parameters,
@@ -267,7 +283,7 @@ pub fn convert_graph_file<C: ContextModel + Default + Copy>(
         .expected_updates(Some(seq_graph.num_nodes()));
     pl.start("Compressing the graph...");
 
-    for_![ (_, successors) in seq_graph {
+    for_![ (_, successors) in seq_graph.iter() {
         compressor.push(successors).context("Could not push successors")?;
         pl.update();
     }];
