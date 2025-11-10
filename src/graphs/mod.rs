@@ -38,18 +38,18 @@ fn reference_selection_round<
     C: ContextModel + Default,
 >(
     graph: &G,
-    huffman_graph_encoder_builder: HuffmanGraphEncoderBuilder<EP, E, C>,
+    huffman_graph_encoder_builder: HuffmanGraphEncoderBuilder<E, C, EP>,
     max_bits: usize,
     compression_parameters: &CompressionParameters,
     msg: impl AsRef<str>,
     create_compressor: &impl CompressorFromEncoder,
     pl: &mut ProgressLogger,
-) -> Result<HuffmanGraphEncoderBuilder<EP, HuffmanEstimator<EP, C>, C>> {
+) -> Result<HuffmanGraphEncoderBuilder<HuffmanEstimator<EP, C>, C, EP>> {
     let num_symbols = 1 << max_bits;
     let huffman_estimator = huffman_graph_encoder_builder.build_estimator();
     // setup for the new iteration with huffman estimator
     let mut huffman_graph_encoder_builder =
-        HuffmanGraphEncoderBuilder::<EP, _, _>::new(num_symbols, huffman_estimator, C::default());
+        HuffmanGraphEncoderBuilder::<_, _, EP>::new(num_symbols, huffman_estimator, C::default());
     let mut compressor = create_compressor
         .create_from_encoder(&mut huffman_graph_encoder_builder, compression_parameters);
 
@@ -218,7 +218,7 @@ pub fn convert_graph<C: ContextModel + Default + Copy, G: SequentialGraph>(
     let num_symbols = 1 << max_bits;
     // setup for the first iteration with Log2Estimator
     let mut huffman_graph_encoder_builder =
-        HuffmanGraphEncoderBuilder::<DefaultEncodeParams, _, _>::new(
+        HuffmanGraphEncoderBuilder::<_, _, DefaultEncodeParams>::new(
             num_symbols,
             Log2Estimator,
             C::default(),
@@ -401,12 +401,8 @@ pub fn load_graph<C: ContextModel + Default + Copy>(
     let mmap_factory = MmapHelper::mmap(&graph_path, flags.into())?;
 
     let ef = unsafe { EF::load_full(eliasfano_path)? };
-    let factory = RandomAccessHuffmanDecoderFactory::<_, _, _, DefaultEncodeParams>::new(
-        mmap_factory,
-        C::default(),
-        ef.into(),
-        max_bits,
-    )?;
+    let factory =
+        RandomAccessHuffmanDecoderFactory::new(mmap_factory, C::default(), ef.into(), max_bits)?;
 
     let graph = BvGraph::new(
         factory,

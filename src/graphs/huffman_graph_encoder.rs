@@ -1,6 +1,6 @@
 use std::convert::Infallible;
 
-use crate::huffman::{EncodeParams, HuffmanEncoder, IntegerHistogram};
+use crate::huffman::{DefaultEncodeParams, EncodeParams, HuffmanEncoder, IntegerHistogram};
 
 use anyhow::{Context, Result};
 use dsi_bitstream::traits::{BitWrite, LE};
@@ -143,13 +143,17 @@ impl<EP: EncodeParams, E: Encode, W: BitWrite<LE>, S: ContextModel> EncodeAndEst
 /// of the symbols encountered during encoding.
 /// It requires an estimator that implements the `Encode` trait and is used for estimating the
 /// adjacency list size of each node during the process of reference selection.
-pub struct HuffmanGraphEncoderBuilder<EP: EncodeParams, E: Encode, C: ContextModel> {
+pub struct HuffmanGraphEncoderBuilder<
+    E: Encode,
+    C: ContextModel,
+    EP: EncodeParams = DefaultEncodeParams,
+> {
     estimator: E,
     context_model: C,
     data: IntegerHistogram<EP>,
 }
 
-impl<EP: EncodeParams, E: Encode, C: ContextModel> HuffmanGraphEncoderBuilder<EP, E, C> {
+impl<EP: EncodeParams, E: Encode, C: ContextModel> HuffmanGraphEncoderBuilder<E, C, EP> {
     pub fn new(num_symbols: usize, estimator: E, context_model: C) -> Self {
         let contexts = C::num_contexts();
         Self {
@@ -179,7 +183,7 @@ impl<EP: EncodeParams, E: Encode, C: ContextModel> HuffmanGraphEncoderBuilder<EP
     }
 }
 
-impl<EP: EncodeParams, E: Encode, S: ContextModel> Encode for HuffmanGraphEncoderBuilder<EP, E, S> {
+impl<EP: EncodeParams, E: Encode, S: ContextModel> Encode for HuffmanGraphEncoderBuilder<E, S, EP> {
     type Error = E::Error;
 
     fn start_node(&mut self, node: usize) -> Result<usize, Self::Error> {
@@ -256,7 +260,7 @@ impl<EP: EncodeParams, E: Encode, S: ContextModel> Encode for HuffmanGraphEncode
 }
 
 impl<EP: EncodeParams, E: Encode, S: ContextModel> EncodeAndEstimate
-    for HuffmanGraphEncoderBuilder<EP, E, S>
+    for HuffmanGraphEncoderBuilder<E, S, EP>
 {
     type Estimator<'a>
         = &'a mut E

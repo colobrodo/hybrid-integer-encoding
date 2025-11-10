@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use crate::huffman::{EncodeParams, IntegerHistogram};
+use crate::huffman::{DefaultEncodeParams, EncodeParams, IntegerHistogram};
 
 /// A collection that stores integer symbols together with a small context
 /// identifier for each symbol and a set of per-context histograms.
@@ -8,7 +8,7 @@ use crate::huffman::{EncodeParams, IntegerHistogram};
 /// IntegerData is generic over an EncodeParams implementation `EP` which is
 /// used by the internal `IntegerHistogram<EP>` to track per-context symbol
 /// encoding frequencies.
-pub struct IntegerData<EP: EncodeParams> {
+pub struct IntegerData<EP: EncodeParams = DefaultEncodeParams> {
     histograms: IntegerHistogram<EP>,
     values: Vec<u32>,
     contexts: Vec<u8>,
