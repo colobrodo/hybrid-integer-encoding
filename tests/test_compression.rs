@@ -5,9 +5,9 @@ mod tests {
     use hybrid_integer_encoding::{
         graphs::{
             build_offsets, check_compression_parameters, compare_graphs, convert_graph,
-            convert_graph_file, load_graph, load_graph_seq, measure_stats, ComparisonResult,
-            CompressionParameters, ConstantContextModel, ContextModel, CreateBvComp, CreateBvCompZ,
-            SimpleContextModel, ZuckerliContextModel,
+            convert_graph_file, load_graph, load_graph_seq, measure_stats, CompressionParameters,
+            ConstantContextModel, ContextModel, CreateBvComp, CreateBvCompZ, SimpleContextModel,
+            ZuckerliContextModel,
         },
         huffman::DefaultEncodeParams,
     };
@@ -57,7 +57,7 @@ mod tests {
             compare_graph_randomly::<C>(max_bits, original_graph, output_basename)?;
         } else {
             let result = compare_graphs::<C>(output_basename, basename, max_bits)?;
-            assert!(matches!(result, ComparisonResult::Equal));
+            assert!(result.is_ok());
         }
 
         Ok(())

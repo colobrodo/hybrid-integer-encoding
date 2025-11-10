@@ -483,58 +483,19 @@ where
     graph.into_inner().stats()
 }
 
-/// Represents the result of comparing two graphs for equality.
-/// Indicates whether the graphs are equal or provides details about the first difference.
-pub enum ComparisonResult {
-    /// The graphs are equal; all nodes and successors match.
-    Equal,
-    /// The graphs differ at the specified node, showing the differing successor lists.
-    Different {
-        node_id: usize,
-        right_succs: Vec<usize>,
-        left_succs: Vec<usize>,
-    },
-}
-
 /// Compare two graphs, the first encoded using Huffman while the second is expected in the BvGraph format.
 /// It returns a `ComparisonResult` that is Equal if both the graphs are equals otherwise returns which
 /// is the first different node with the two different successors lists
-pub fn compare_graphs<C: ContextModel + Default + Copy>(
+pub fn compare_graphs<C: ContextModel + Default + Copy + 'static>(
     first_basename: PathBuf,
     second_basename: PathBuf,
     max_bits: usize,
-) -> Result<ComparisonResult> {
+) -> Result<Result<(), EqError>> {
     // first the Huffman-encoded graph and then the one in BvGraph format
     let first_graph = load_graph_seq::<C>(&first_basename, max_bits)?;
     let second_graph = BvGraphSeq::with_basename(second_basename.clone())
         .endianness::<BE>()
         .load()?;
 
-    let mut pl = ProgressLogger::default();
-    pl.display_memory(true)
-        .item_name("compare graphs")
-        .expected_updates(Some(second_graph.num_nodes()));
-
-    let mut original_iter = second_graph.iter().enumerate();
-    let mut iter = first_graph.iter();
-
-    pl.start("Start comparing the graphs...");
-    while let Some((i, (true_node_id, true_succ))) = original_iter.next() {
-        let (node_id, succ) = iter.next().unwrap();
-
-        assert_eq!(true_node_id, i);
-        assert_eq!(true_node_id, node_id);
-        let true_succs = true_succ.into_iter().collect::<Vec<_>>();
-        let succs = succ.into_iter().collect::<Vec<_>>();
-        if true_succs != succs {
-            return Ok(ComparisonResult::Different {
-                node_id,
-                right_succs: true_succs,
-                left_succs: succs,
-            });
-        }
-        pl.light_update();
-    }
-    pl.done();
-    Ok(ComparisonResult::Equal)
+    Ok(eq(&first_graph, &second_graph))
 }

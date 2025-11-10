@@ -22,8 +22,8 @@ use rand_distr::Zipf;
 
 use hybrid_integer_encoding::{
     graphs::{
-        build_offsets, compare_graphs, convert_graph_file, measure_stats, ComparisonResult,
-        CreateBvComp, CreateBvCompZ,
+        build_offsets, compare_graphs, convert_graph_file, measure_stats, CreateBvComp,
+        CreateBvCompZ,
     },
     utils::IntegerData,
 };
@@ -635,13 +635,9 @@ fn main() -> Result<()> {
                 };
                 // print the result of a comparison between two graphs, and exit if it is not successful.
                 match result {
-                    ComparisonResult::Equal => {}
-                    ComparisonResult::Different {
-                        node_id,
-                        left_succs: _,
-                        right_succs: _,
-                    } => {
-                        eprintln!("Found different node {}", node_id);
+                    Ok(()) => {}
+                    Err(eq_error) => {
+                        eprintln!("{}", eq_error);
                         exit(1);
                     }
                 }
