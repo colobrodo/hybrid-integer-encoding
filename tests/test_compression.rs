@@ -14,7 +14,7 @@ mod tests {
     use lender::Lender;
     use std::{path::PathBuf, str::FromStr};
     use tempfile::TempDir;
-    use webgraph::graphs::vec_graph::VecGraph;
+    use webgraph::graphs::{random::ErdosRenyi, vec_graph::VecGraph};
     use webgraph::prelude::*;
 
     fn compress_graph<C: ContextModel + Default + Copy + 'static>(
@@ -63,6 +63,45 @@ mod tests {
         Ok(())
     }
 
+    fn compress_random_graph<C: ContextModel + Default + Copy + 'static>(
+        compression_parameters: CompressionParameters,
+        max_bits: usize,
+        greedily: bool,
+        seed: u64,
+    ) -> anyhow::Result<()> {
+        // Create a temporary directory
+        let temp_dir = TempDir::new()?;
+        // Get output basename with the same full path as the but in the temp folder
+        let output_basename = temp_dir.path().join("random-graph");
+
+        let random_graph = ErdosRenyi::new(10_000, 0.2, seed);
+        let mut graph = VecGraph::new();
+        graph.add_lender(random_graph.iter());
+
+        if greedily {
+            convert_graph::<C, _>(
+                &graph,
+                &output_basename,
+                max_bits,
+                CreateBvComp,
+                &compression_parameters,
+            )?;
+        } else {
+            convert_graph::<C, _>(
+                &graph,
+                &output_basename,
+                max_bits,
+                CreateBvCompZ::with_chunk_size(10000),
+                &compression_parameters,
+            )?;
+        }
+        let huffman_graph = load_graph_seq::<C>(&output_basename, max_bits)?;
+        let comparison_result = graph::eq(&graph, &huffman_graph);
+        assert!(comparison_result.is_ok());
+
+        Ok(())
+    }
+
     fn compare_graph_randomly<C: ContextModel + Default + Copy + 'static>(
         max_bits: usize,
         original_graph: BvGraphSeq<
@@ -83,6 +122,19 @@ mod tests {
                 i
             );
         }
+        Ok(())
+    }
+
+    #[test]
+    fn test_compress_and_decompress_random_graph() -> Result<()> {
+        let compression_parameters = CompressionParameters {
+            compression_window: 7,
+            max_ref_count: 3,
+            min_interval_length: 4,
+            num_rounds: 1,
+        };
+        compress_random_graph::<SimpleContextModel>(compression_parameters, 12, false, 0)
+            .with_context(|| "Converting a random graph")?;
         Ok(())
     }
 
