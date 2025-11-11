@@ -43,7 +43,7 @@ impl<'a, EP: EncodeParams, E: Encode, W: BitWrite<LE>, S: ContextModel>
         let ctx = self.context_model.choose_context(component);
         let (token_bits, trailing_bits) = self
             .encoder
-            .write(ctx, value as u32, self.writer)
+            .write(ctx, value, self.writer)
             .with_context(|| {
                 format!(
                     "Failed to write {:?} component with value {}",

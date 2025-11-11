@@ -103,8 +103,8 @@ fn compute_decoder_table(
         .next_back()
         .map_or(0, |(i, _)| i);
     if cnt <= 1 {
-        for (info, sym_info) in infos.iter_mut().zip(sym_infos) {
-            info.nbits = sym_info.n_bits;
+        for info in infos.iter_mut() {
+            info.nbits = sym_infos[s].n_bits;
             info.symbol = s as u8;
         }
         return Ok(());
@@ -127,6 +127,7 @@ fn compute_decoder_table(
         if s == num_symbols {
             return Err(anyhow!("Invalid table: cannot found a symbol for {}", i));
         }
+        assert!(sym_infos[s].n_bits > 0);
         info.nbits = sym_infos[s].n_bits;
         info.symbol = s as u8;
     }

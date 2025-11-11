@@ -38,7 +38,7 @@ mod tests {
 
         encoder.write_header(&mut writer)?;
         for &(ctx, value) in integers.iter() {
-            encoder.write(ctx, value, &mut writer)?;
+            encoder.write(ctx, value as u64, &mut writer)?;
         }
         writer.flush()?;
 

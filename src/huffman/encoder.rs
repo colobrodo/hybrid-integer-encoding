@@ -201,10 +201,10 @@ impl<EP: EncodeParams> HuffmanEncoder<EP> {
     pub fn write(
         &self,
         ctx: u8,
-        value: u32,
+        value: u64,
         writer: &mut impl BitWrite<LE>,
     ) -> Result<(usize, usize)> {
-        let (token, n_bits, bits) = encode::<EP>(value as u64);
+        let (token, n_bits, bits) = encode::<EP>(value);
         debug_assert!(
             self.info_[ctx as usize][token].present == 1,
             "Unknown value {value} in context {ctx}"

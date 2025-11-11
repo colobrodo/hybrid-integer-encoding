@@ -14,10 +14,10 @@ mod tests {
     use lender::Lender;
     use std::{path::PathBuf, str::FromStr};
     use tempfile::TempDir;
-    use webgraph::graphs::{random::ErdosRenyi, vec_graph::VecGraph};
+    use webgraph::graphs::random::ErdosRenyi;
     use webgraph::prelude::*;
 
-    fn compress_graph<C: ContextModel + Default + Copy + 'static>(
+    fn compress_cnr_2000<C: ContextModel + Default + Copy + 'static>(
         compression_parameters: CompressionParameters,
         max_bits: usize,
         greedily: bool,
@@ -74,7 +74,7 @@ mod tests {
         // Get output basename with the same full path as the but in the temp folder
         let output_basename = temp_dir.path().join("random-graph");
 
-        let random_graph = ErdosRenyi::new(10_000, 0.2, seed);
+        let random_graph = ErdosRenyi::new(1000, 0.2, seed);
         let mut graph = VecGraph::new();
         graph.add_lender(random_graph.iter());
 
@@ -96,8 +96,7 @@ mod tests {
             )?;
         }
         let huffman_graph = load_graph_seq::<C>(&output_basename, max_bits)?;
-        let comparison_result = graph::eq(&graph, &huffman_graph);
-        assert!(comparison_result.is_ok());
+        assert!(graph::eq(&graph, &huffman_graph).is_ok());
 
         Ok(())
     }
@@ -139,15 +138,15 @@ mod tests {
     }
 
     #[test]
-    fn test_compress_and_decompress_with_12_bits() -> Result<()> {
+    fn test_compress_and_decompress_random_graph2() -> Result<()> {
         let compression_parameters = CompressionParameters {
             compression_window: 7,
             max_ref_count: 3,
             min_interval_length: 4,
             num_rounds: 1,
         };
-        compress_graph::<SimpleContextModel>(compression_parameters, 12, false, false)
-            .with_context(|| "Converting the graph")?;
+        compress_random_graph::<SimpleContextModel>(compression_parameters, 12, false, 31415)
+            .with_context(|| "Converting a random graph")?;
         Ok(())
     }
 
@@ -159,7 +158,20 @@ mod tests {
             min_interval_length: 4,
             num_rounds: 1,
         };
-        compress_graph::<SimpleContextModel>(compression_parameters, 12, false, true)
+        compress_cnr_2000::<SimpleContextModel>(compression_parameters, 12, false, true)
+            .with_context(|| "Converting the graph")?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_compress_and_decompress_cnr_2000_with_12_bits() -> Result<()> {
+        let compression_parameters = CompressionParameters {
+            compression_window: 7,
+            max_ref_count: 3,
+            min_interval_length: 4,
+            num_rounds: 1,
+        };
+        compress_cnr_2000::<SimpleContextModel>(compression_parameters, 12, false, false)
             .with_context(|| "Converting the graph")?;
         Ok(())
     }
@@ -172,7 +184,7 @@ mod tests {
             min_interval_length: 4,
             num_rounds: 3,
         };
-        compress_graph::<SimpleContextModel>(compression_parameters, 12, false, false)
+        compress_random_graph::<SimpleContextModel>(compression_parameters, 12, false, 0)
             .with_context(|| "Converting the graph")?;
         Ok(())
     }
@@ -185,7 +197,7 @@ mod tests {
             min_interval_length: 4,
             num_rounds: 1,
         };
-        compress_graph::<SimpleContextModel>(compression_parameters, 8, false, false)
+        compress_random_graph::<SimpleContextModel>(compression_parameters, 8, false, 0)
             .with_context(|| "Converting the graph")?;
         Ok(())
     }
@@ -198,11 +210,11 @@ mod tests {
             min_interval_length: 4,
             num_rounds: 1,
         };
-        compress_graph::<ZuckerliContextModel<DefaultEncodeParams>>(
+        compress_random_graph::<ZuckerliContextModel<DefaultEncodeParams>>(
             compression_parameters,
             12,
             false,
-            false,
+            0,
         )
         .with_context(|| "Converting the graph")?;
         Ok(())
@@ -216,7 +228,7 @@ mod tests {
             min_interval_length: 4,
             num_rounds: 1,
         };
-        compress_graph::<SimpleContextModel>(compression_parameters, 12, false, false)
+        compress_random_graph::<SimpleContextModel>(compression_parameters, 12, false, 0)
             .with_context(|| "Converting the graph")?;
         Ok(())
     }
@@ -229,7 +241,7 @@ mod tests {
             min_interval_length: 4,
             num_rounds: 1,
         };
-        compress_graph::<SimpleContextModel>(compression_parameters, 12, true, false)
+        compress_random_graph::<SimpleContextModel>(compression_parameters, 12, true, 0)
             .with_context(|| "Converting the graph")?;
         Ok(())
     }

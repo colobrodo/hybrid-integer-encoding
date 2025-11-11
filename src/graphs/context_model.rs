@@ -204,7 +204,7 @@ impl<C: ContextModel> ContextModel for DebugContextModel<C> {
     fn choose_context(&mut self, component: BvGraphComponent) -> u8 {
         let context = self.model.choose_context(component);
         eprintln!(
-            "Choosed context {} for the next component {}",
+            "Chose context {} for the next component {}",
             context, component
         );
         context

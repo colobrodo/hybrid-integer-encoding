@@ -308,7 +308,7 @@ fn encode_file(
     encoder.write_header(&mut writer)?;
     let header_size = writer.bits_written;
     for (ctx, number) in integers {
-        encoder.write(ctx, number, &mut writer)?;
+        encoder.write(ctx, number as u64, &mut writer)?;
     }
 
     writer.flush()?;
@@ -423,7 +423,7 @@ fn bench<EP: EncodeParams>(
     }
 
     for &(ctx, value) in integers.iter() {
-        encoder.write(ctx, value, &mut writer)?;
+        encoder.write(ctx, value as u64, &mut writer)?;
     }
     writer.flush()?;
     let encoded_size = writer.bits_written;
