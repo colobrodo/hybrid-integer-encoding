@@ -12,7 +12,10 @@ mod tests {
         huffman::DefaultEncodeParams,
     };
     use lender::Lender;
-    use std::{path::PathBuf, str::FromStr};
+    use std::{
+        path::{Path, PathBuf},
+        str::FromStr,
+    };
     use tempfile::TempDir;
     use webgraph::graphs::random::ErdosRenyi;
     use webgraph::prelude::*;
@@ -49,7 +52,7 @@ mod tests {
         }
 
         if access_random {
-            let original_graph = BvGraphSeq::with_basename(basename.clone())
+            let original_graph = BvGraphSeq::with_basename(&basename)
                 .endianness::<BE>()
                 .load()?;
             let graph = load_graph_seq::<C>(&output_basename, max_bits)?;
@@ -106,7 +109,7 @@ mod tests {
         original_graph: BvGraphSeq<
             DynCodesDecoderFactory<BE, MmapHelper<u32>, Owned<EmptyDict<usize, usize>>>,
         >,
-        output_basename: PathBuf,
+        output_basename: impl AsRef<Path>,
     ) -> anyhow::Result<()> {
         let graph = load_graph::<C>(output_basename, max_bits)?;
         let mut original_iter = original_graph.iter().enumerate();
