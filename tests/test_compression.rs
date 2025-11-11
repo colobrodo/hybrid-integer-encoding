@@ -159,7 +159,7 @@ mod tests {
             num_rounds: 1,
         };
         compress_cnr_2000::<SimpleContextModel>(compression_parameters, 12, false, true)
-            .with_context(|| "Converting the graph")?;
+            .with_context(|| "Converting the graph and reading accessing randomly")?;
         Ok(())
     }
 
@@ -172,7 +172,7 @@ mod tests {
             num_rounds: 1,
         };
         compress_cnr_2000::<SimpleContextModel>(compression_parameters, 12, false, false)
-            .with_context(|| "Converting the graph")?;
+            .with_context(|| "Converting cnr-2000 with max 12 bits per word")?;
         Ok(())
     }
 
@@ -185,7 +185,7 @@ mod tests {
             num_rounds: 3,
         };
         compress_random_graph::<SimpleContextModel>(compression_parameters, 12, false, 0)
-            .with_context(|| "Converting the graph")?;
+            .with_context(|| "Converting the graph with multiple rounds")?;
         Ok(())
     }
 
@@ -198,7 +198,7 @@ mod tests {
             num_rounds: 1,
         };
         compress_random_graph::<SimpleContextModel>(compression_parameters, 8, false, 0)
-            .with_context(|| "Converting the graph")?;
+            .with_context(|| "Converting the graph with 8-bit maximum size")?;
         Ok(())
     }
 
@@ -216,7 +216,7 @@ mod tests {
             false,
             0,
         )
-        .with_context(|| "Converting the graph")?;
+        .with_context(|| "Converting the graph with Zuckerli-like context model")?;
         Ok(())
     }
 
@@ -229,7 +229,7 @@ mod tests {
             num_rounds: 1,
         };
         compress_random_graph::<SimpleContextModel>(compression_parameters, 12, false, 0)
-            .with_context(|| "Converting the graph")?;
+            .with_context(|| "Converting the graph with bigger window size")?;
         Ok(())
     }
 
@@ -242,7 +242,7 @@ mod tests {
             num_rounds: 1,
         };
         compress_random_graph::<SimpleContextModel>(compression_parameters, 12, true, 0)
-            .with_context(|| "Converting the graph")?;
+            .with_context(|| "Converting the graph with greedy reference selection")?;
         Ok(())
     }
 
