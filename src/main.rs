@@ -3,7 +3,7 @@ use std::{
     fs::File,
     hint::black_box,
     io::{BufRead, BufReader},
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::exit,
 };
 
@@ -272,8 +272,8 @@ enum ContextModelArgument {
 }
 
 fn encode_file(
-    input_path: PathBuf,
-    output_path: PathBuf,
+    input_path: impl AsRef<Path>,
+    output_path: impl AsRef<Path>,
     max_bits: usize,
     num_contexts: usize,
     verbose: bool,
@@ -324,7 +324,12 @@ fn encode_file(
     Ok(())
 }
 
-fn decode_file(path: PathBuf, length: u64, max_bits: usize, num_context: usize) -> Result<()> {
+fn decode_file(
+    path: impl AsRef<Path>,
+    length: u64,
+    max_bits: usize,
+    num_context: usize,
+) -> Result<()> {
     let file = File::open(path)?;
     let mut reader = HuffmanDecoder::from_bitreader(
         BufBitReader::<LE, _>::new(WordAdapter::<u32, _>::new(BufReader::new(file))),
@@ -351,7 +356,7 @@ fn choose_context<EP: EncodeParams>(last_sample: u64, num_contexts: usize) -> u8
 }
 
 fn bench_file<EP: EncodeParams>(
-    path: PathBuf,
+    path: impl AsRef<Path>,
     repeats: usize,
     max_bits: usize,
     num_contexts: usize,

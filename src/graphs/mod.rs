@@ -13,10 +13,10 @@ use epserde::deser::{Deserialize, Owned};
 use epserde::prelude::*;
 use lender::*;
 use mmap_rs::MmapFlags;
+use std::fs::File;
 use std::io::{BufReader, BufWriter, Seek};
 use std::path::Path;
 use std::time::Duration;
-use std::{fs::File, path::PathBuf};
 use sux::prelude::*;
 use webgraph::prelude::{SequentialLabeling, *};
 
@@ -483,13 +483,13 @@ where
 /// It returns a `ComparisonResult` that is Equal if both the graphs are equals otherwise returns which
 /// is the first different node with the two different successors lists
 pub fn compare_graphs<C: ContextModel + Default + Copy + 'static>(
-    first_basename: PathBuf,
-    second_basename: PathBuf,
+    first_basename: impl AsRef<Path>,
+    second_basename: impl AsRef<Path>,
     max_bits: usize,
 ) -> Result<Result<(), EqError>> {
     // first the Huffman-encoded graph and then the one in BvGraph format
     let first_graph = load_graph_seq::<C>(&first_basename, max_bits)?;
-    let second_graph = BvGraphSeq::with_basename(second_basename.clone())
+    let second_graph = BvGraphSeq::with_basename(&second_basename)
         .endianness::<BE>()
         .load()?;
 
