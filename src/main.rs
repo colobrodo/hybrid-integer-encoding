@@ -283,7 +283,7 @@ fn encode_file(
     let reader = BufReader::new(file);
 
     let mut integers = Vec::new();
-    let mut integer_data = IntegerHistogram::new(num_contexts, 0);
+    let mut integer_data = IntegerHistogram::new(num_contexts, 1 << max_bits);
     let mut last_sample = 0;
     for line in reader.lines().map_while(Result::ok) {
         // Split the line by whitespace and parse each number as u8
@@ -329,7 +329,7 @@ fn decode_file(
     length: u64,
     max_bits: usize,
     num_context: usize,
-) -> Result<()> {
+) -> Result<Vec<usize>> {
     let file = File::open(path)?;
     let mut reader = HuffmanDecoder::from_bitreader(
         BufBitReader::<LE, _>::new(WordAdapter::<u32, _>::new(BufReader::new(file))),
@@ -337,16 +337,19 @@ fn decode_file(
         num_context,
     )?;
     let mut i = 0;
-    while let Ok(value) = reader.read::<DefaultEncodeParams>(0) {
+    let mut integers = Vec::new();
+    let mut next_context = 0;
+    while let Ok(value) = reader.read::<DefaultEncodeParams>(next_context) {
         // TODO: HACK: reading from mem word, read a 0 at the end of the bitstream but the length of the encoded file is not know
         if i == length {
             break;
         }
-        println!("{}", value);
+        integers.push(value);
+        next_context = choose_context::<DefaultEncodeParams>(value as _, num_context) as _;
         i += 1;
     }
 
-    Ok(())
+    Ok(integers)
 }
 
 #[inline]
@@ -495,12 +498,15 @@ fn main() -> Result<()> {
             length,
             huffman_arguments,
         } => {
-            decode_file(
+            let decoded = decode_file(
                 path,
                 length,
                 huffman_arguments.max_bits,
                 huffman_arguments.contexts,
             )?;
+            for element in decoded {
+                println!("{}", element);
+            }
         }
         Command::Bench { command } => match command {
             BenchCommand::Random {
@@ -915,4 +921,54 @@ where
         stats.residuals,
         stats.residuals as f64 / stats.total as f64 * 100.0
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use anyhow::Result;
+    use rand::rngs::SmallRng;
+    use rand::RngCore;
+    use rand::SeedableRng;
+    use std::io::Write;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_encode_and_decode_roundtrip() -> Result<()> {
+        let mut rng = SmallRng::seed_from_u64(31415);
+        let n = 1024;
+        let mut values: Vec<u32> = Vec::with_capacity(n);
+        for _ in 0..n {
+            values.push(rng.next_u32());
+        }
+
+        // create line separated file with all the values in a temp directory
+        let temp_dir = TempDir::new()?;
+        let input_path = temp_dir.path().join("input.txt");
+        let output_path = temp_dir.path().join("out.huff");
+
+        {
+            let mut f = std::fs::File::create(&input_path)?;
+            for v in &values {
+                writeln!(f, "{}", v)?;
+            }
+            f.flush()?;
+        }
+
+        // encode with hybrid integer encoding
+        let max_bits = 8usize;
+        let num_contexts = 1usize;
+        encode_file(&input_path, &output_path, max_bits, num_contexts, false)?;
+
+        // decode the huffman file
+        let decoded = decode_file(&output_path, values.len() as u64, max_bits, num_contexts)?;
+
+        // check the correctness of the
+        assert_eq!(decoded.len(), values.len());
+        for (i, &v) in values.iter().enumerate() {
+            assert_eq!(decoded[i], v as usize);
+        }
+
+        Ok(())
+    }
 }
