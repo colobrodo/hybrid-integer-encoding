@@ -31,6 +31,8 @@ pub use stats::*;
 use crate::huffman::{DefaultEncodeParams, EncodeParams};
 
 #[allow(clippy::too_many_arguments)]
+/// Run one reference-selection pass: collect symbols with the given estimator.
+/// Returns a builder seeded with frequency estimates for the next stage.
 fn reference_selection_round<
     G: SequentialGraph,
     EP: EncodeParams,
@@ -65,6 +67,8 @@ fn reference_selection_round<
     Ok(huffman_graph_encoder_builder)
 }
 
+/// Build the Elias-Fano index for a graph file at `src` using offsets.
+/// Reads the graph file size and constructs the EF index on disk.
 fn build_eliasfano<E: Endianness + 'static>(src: impl AsRef<Path>) -> Result<()>
 where
     for<'a> BufBitReader<E, MemWordReader<u32, &'a [u32]>>: CodesRead<E> + BitSeek,
@@ -121,6 +125,8 @@ where
     serialize_eliasfano(src, efb, &mut pl)
 }
 
+/// Convert a stream of gamma-coded offsets into an Elias-Fano builder.
+/// Pushes decoded offsets into `efb` and reports progress via `pl`.
 pub fn build_eliasfano_from_offsets<E: Endianness>(
     num_nodes: usize,
     mut reader: impl GammaRead<E>,
@@ -144,6 +150,8 @@ pub fn build_eliasfano_from_offsets<E: Endianness>(
     Ok(())
 }
 
+/// Finalize and write an Elias-Fano structure to disk at `src`.
+/// Builds the high-bit index and serializes the EF to a file.
 pub fn serialize_eliasfano(
     src: impl AsRef<Path>,
     efb: EliasFanoBuilder,
@@ -179,6 +187,8 @@ pub fn serialize_eliasfano(
     Ok(())
 }
 
+/// Read a BVGraph from `basename` and convert it to a Huffman-encoded graph.
+/// The converted graph is written to `output_basename`.
 pub fn convert_graph_file<C: ContextModel + Default + Copy>(
     basename: impl AsRef<Path>,
     output_basename: impl AsRef<Path>,
@@ -199,6 +209,8 @@ pub fn convert_graph_file<C: ContextModel + Default + Copy>(
     )
 }
 
+/// Convert a sequential graph to Huffman-encoded form and save to disk.
+/// Runs estimation rounds, builds the encoder and writes the compressed graph.
 pub fn convert_graph<C: ContextModel + Default + Copy, G: SequentialGraph>(
     seq_graph: &G,
     output_basename: impl AsRef<Path>,
@@ -313,6 +325,9 @@ pub fn convert_graph<C: ContextModel + Default + Copy, G: SequentialGraph>(
     Ok(())
 }
 
+/// Load a Huffman-compressed graph to be read in sequential order.
+/// If the context model or the number of bits passed are different by the ones present
+/// in the properties file this function returns an error.  
 pub fn load_graph_seq<C: ContextModel + Default + Copy>(
     basename: impl AsRef<Path>,
     max_bits: usize,
@@ -338,7 +353,7 @@ pub fn load_graph_seq<C: ContextModel + Default + Copy>(
 }
 
 /// Checks that the compression parameter for statistical encoding are the same between the
-/// expected one, and then ones in the properties file used to compress the graph, if presents
+/// expected one, and then ones in the properties file used to compress the graph, if presents.
 pub fn check_compression_parameters(
     properties_path: impl AsRef<Path>,
     expected_max_bits: usize,
@@ -376,7 +391,8 @@ pub fn check_compression_parameters(
 
 type HuffmanBvGraph<C> = BvGraph<RandomAccessHuffmanDecoderFactory<MmapHelper<u32>, Owned<EF>, C>>;
 
-/// Load an Huffman-encoded graph to be accessed in random order
+/// Load a Huffman-compressed graph for random access.
+/// Ensures offsets/Elias-Fano exist and returns a `BvGraph`.
 pub fn load_graph<C: ContextModel + Default + Copy>(
     basename: impl AsRef<Path>,
     max_bits: usize,
@@ -414,6 +430,7 @@ pub fn load_graph<C: ContextModel + Default + Copy>(
     Ok(graph)
 }
 
+/// Produce the offsets file from a sequential `BvGraphSeq` by writing gamma deltas.
 pub fn build_offsets<F: SequentialDecoderFactory>(
     graph: BvGraphSeq<F>,
     basename: impl AsRef<Path>,
@@ -455,6 +472,7 @@ where
     Ok(())
 }
 
+/// Decodes a graphs and returns the number of bits used by each component.
 pub fn measure_stats<F: SequentialDecoderFactory>(graph: BvGraphSeq<F>) -> GraphStats
 where
     for<'a> F::Decoder<'a>: Decode + BitSeek,
@@ -479,9 +497,8 @@ where
     graph.into_inner().stats()
 }
 
-/// Compare two graphs, the first encoded using Huffman while the second is expected in the BvGraph format.
-/// It returns a `ComparisonResult` that is Equal if both the graphs are equals otherwise returns which
-/// is the first different node with the two different successors lists
+/// Compare a Huffman-encoded graph against a BvGraph and return equality results.
+/// Returns `Ok(())` when graphs are equal or an `EqError` describing the first mismatch.
 pub fn compare_graphs<C: ContextModel + Default + Copy + 'static>(
     first_basename: impl AsRef<Path>,
     second_basename: impl AsRef<Path>,
