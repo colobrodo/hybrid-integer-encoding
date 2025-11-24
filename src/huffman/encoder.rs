@@ -49,6 +49,8 @@ pub struct IntegerHistogram<EP: EncodeParams> {
 }
 
 impl<EP: EncodeParams> IntegerHistogram<EP> {
+    /// Creates a new histogram with the specified number of contexts and symbols.
+    /// Returns an instance of `IntegerHistogram`.
     pub fn new(num_contexts: usize, num_symbols: usize) -> Self {
         let mut histograms = Vec::with_capacity(num_contexts);
         histograms.resize(num_contexts, vec![0; num_symbols]);
@@ -60,18 +62,22 @@ impl<EP: EncodeParams> IntegerHistogram<EP> {
         }
     }
 
+    /// Returns the count of symbols for a given context.
     pub fn context_count(&self, context: u8) -> usize {
         self.totals[context as usize]
     }
 
+    /// Returns the total count of all symbols across contexts.
     pub fn count(&self) -> usize {
         self.totals.iter().sum()
     }
 
+    /// Checks if the histogram is empty.
     pub fn is_empty(&self) -> bool {
         self.count() == 0
     }
 
+    /// Adds a symbol count for a specific context.
     pub fn add(&mut self, context: u8, value: u32) {
         debug_assert!(
             (context as usize) < self.num_contexts,
@@ -81,6 +87,32 @@ impl<EP: EncodeParams> IntegerHistogram<EP> {
         let (token, _, _) = encode::<EP>(value.into());
         self.ctx_histograms[context as usize][token] += 1;
         self.totals[context as usize] += 1;
+    }
+
+    /// Merges another histogram into this one, summing the counts.
+    pub fn add_all(&mut self, other: &Self) {
+        debug_assert_eq!(self.num_contexts, other.num_contexts);
+        for (ctx_idx, (dst_hist, src_hist)) in self
+            .ctx_histograms
+            .iter_mut()
+            .zip(other.ctx_histograms.iter())
+            .enumerate()
+        {
+            debug_assert_eq!(
+                dst_hist.len(),
+                src_hist.len(),
+                "Histogram length mismatch for context {}",
+                ctx_idx
+            );
+            for (dst, src) in dst_hist.iter_mut().zip(src_hist.iter()) {
+                *dst += *src;
+            }
+        }
+
+        // Add totals
+        for (d, s) in self.totals.iter_mut().zip(other.totals.iter()) {
+            *d += *s;
+        }
     }
 
     /// Returns the histogram as his underlying vector.
@@ -111,6 +143,7 @@ impl<EP: EncodeParams> IntegerHistogram<EP> {
         }
     }
 
+    /// Returns the number of contexts in the histogram.
     pub fn number_of_contexts(&self) -> usize {
         self.num_contexts
     }
