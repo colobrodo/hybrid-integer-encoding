@@ -105,6 +105,13 @@ enum GraphCommand {
         /// The maximum number of bits used for each word of the huffman code.
         #[arg(short = 'b', long, default_value = "8")]
         max_bits: usize,
+        /// The dimension of the block to be used during approximate reference selection.
+        /// With the approximate selection, the references are chosen using a dynamic selection algorithm:
+        /// the graph is first divided into blocks, which are then compressed individually.
+        /// The size of these blocks is chosen by this parameter.
+        /// This parameter will be ignored if the option `greedy-compressor` is specified.
+        #[arg(long, default_value = "10000")]
+        block_size: usize,
         /// If specified uses the BVGraph's greedy reference selection algorithm.
         /// Otherwise it choose the reference using the Zuckerli approximated algorithm.
         #[arg(long, default_value = "false")]
@@ -550,6 +557,7 @@ fn main() -> Result<()> {
                 num_rounds,
                 build_offsets,
                 context_model,
+                block_size,
             } => {
                 let compression_parameters = CompressionParameters {
                     compression_window,
@@ -569,7 +577,7 @@ fn main() -> Result<()> {
                             &basename,
                             &output_basename,
                             max_bits,
-                            CreateBvCompZ::with_chunk_size(10000),
+                            CreateBvCompZ::with_chunk_size(block_size),
                             &compression_parameters,
                         )?
                     }
@@ -588,7 +596,7 @@ fn main() -> Result<()> {
                             &basename,
                             &output_basename,
                             max_bits,
-                            CreateBvCompZ::with_chunk_size(10000),
+                            CreateBvCompZ::with_chunk_size(block_size),
                             &compression_parameters,
                         )?
                     }
@@ -606,7 +614,7 @@ fn main() -> Result<()> {
                             &basename,
                             &output_basename,
                             max_bits,
-                            CreateBvCompZ::with_chunk_size(10000),
+                            CreateBvCompZ::with_chunk_size(block_size),
                             &compression_parameters,
                         )?
                     }

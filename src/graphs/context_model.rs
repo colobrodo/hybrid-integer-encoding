@@ -66,7 +66,7 @@ impl ContextModel for ConstantContextModel {
 
 /// A partial implementation of the Zuckerli context model, it does not implement
 /// multiple contexts for outdegrees and references and introduce a context model
-/// for intervals (originaly not presents because Zuckerli uses RLE instead)
+/// for intervals (originally not presents because Zuckerli uses RLE instead)
 #[derive(Default, Clone, Copy)]
 pub struct ZuckerliContextModel<EP: EncodeParams> {
     /// Outdegree of the current node used to determine the context for the interval count
