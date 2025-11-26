@@ -565,9 +565,9 @@ fn main() -> Result<()> {
                     min_interval_length,
                     num_rounds,
                 };
-                // the Zuckerli reference selection algorithm don't work in a streaming fashion like the BVGraph greedy one.
-                // So, for now, it is not possible to know each time we push a node the amount of bits used to write that node
-                // but only when each chunk is flushed.
+                // Unlike the BVGraph greedy one, the Zuckerli reference selection algorithm does not work in a streaming fashion.
+                // Therefore, it is currently impossible to determine the number of bits used to write a node each time it is pushed,
+                // only when each chunk is flushed.
                 if build_offsets && !greedy_compressor {
                     log::warn!("Cannot build offsets during conversion of graph '{}', when compressing it with Zuckerli reference selection algorithm.", basename.display());
                 }
