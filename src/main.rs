@@ -21,15 +21,12 @@ use rand::prelude::*;
 use rand_distr::Zipf;
 
 use hybrid_integer_encoding::{
-    graphs::{
-        build_offsets, compare_graphs, convert_graph_file, measure_stats, CreateBvComp,
-        CreateBvCompZ,
-    },
+    graphs::{build_offsets, compare_graphs, convert_graph_file, measure_stats, CompressorType},
     utils::IntegerData,
 };
 use hybrid_integer_encoding::{
     graphs::{
-        compressors::CompressionParameters, load_graph, load_graph_seq, ConstantContextModel,
+        load_graph, load_graph_seq, parameters::CompressionParameters, ConstantContextModel,
         SimpleContextModel, ZuckerliContextModel,
     },
     huffman::{
@@ -577,7 +574,9 @@ fn main() -> Result<()> {
                             &basename,
                             &output_basename,
                             max_bits,
-                            CreateBvCompZ::with_chunk_size(block_size),
+                            CompressorType::Approximated {
+                                chunk_size: block_size,
+                            },
                             &compression_parameters,
                         )?
                     }
@@ -586,7 +585,7 @@ fn main() -> Result<()> {
                             &basename,
                             &output_basename,
                             max_bits,
-                            CreateBvComp,
+                            CompressorType::Greedy,
                             &compression_parameters,
                         )?
                     }
@@ -596,7 +595,9 @@ fn main() -> Result<()> {
                             &basename,
                             &output_basename,
                             max_bits,
-                            CreateBvCompZ::with_chunk_size(block_size),
+                            CompressorType::Approximated {
+                                chunk_size: block_size,
+                            },
                             &compression_parameters,
                         )?
                     }
@@ -605,7 +606,7 @@ fn main() -> Result<()> {
                             &basename,
                             &output_basename,
                             max_bits,
-                            CreateBvComp,
+                            CompressorType::Greedy,
                             &compression_parameters,
                         )?
                     }
@@ -614,7 +615,9 @@ fn main() -> Result<()> {
                             &basename,
                             &output_basename,
                             max_bits,
-                            CreateBvCompZ::with_chunk_size(block_size),
+                            CompressorType::Approximated {
+                                chunk_size: block_size,
+                            },
                             &compression_parameters,
                         )?
                     }
@@ -623,7 +626,7 @@ fn main() -> Result<()> {
                             &basename,
                             &output_basename,
                             max_bits,
-                            CreateBvComp,
+                            CompressorType::Greedy,
                             &compression_parameters,
                         )?
                     }

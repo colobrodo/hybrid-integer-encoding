@@ -6,7 +6,7 @@ mod tests {
         graphs::{
             build_offsets, check_compression_parameters, compare_graphs, convert_graph,
             convert_graph_file, load_graph, load_graph_seq, measure_stats, CompressionParameters,
-            ConstantContextModel, ContextModel, CreateBvComp, CreateBvCompZ, SimpleContextModel,
+            CompressorType, ConstantContextModel, ContextModel, SimpleContextModel,
             ZuckerliContextModel,
         },
         huffman::DefaultEncodeParams,
@@ -38,7 +38,7 @@ mod tests {
                 &basename,
                 &output_basename,
                 max_bits,
-                CreateBvComp,
+                CompressorType::Greedy,
                 &compression_parameters,
             )?;
         } else {
@@ -46,7 +46,7 @@ mod tests {
                 &basename,
                 &output_basename,
                 max_bits,
-                CreateBvCompZ::with_chunk_size(10000),
+                CompressorType::Approximated { chunk_size: 10000 },
                 &compression_parameters,
             )?;
         }
@@ -86,7 +86,7 @@ mod tests {
                 &graph,
                 &output_basename,
                 max_bits,
-                CreateBvComp,
+                CompressorType::Greedy,
                 &compression_parameters,
             )?;
         } else {
@@ -94,7 +94,7 @@ mod tests {
                 &graph,
                 &output_basename,
                 max_bits,
-                CreateBvCompZ::with_chunk_size(10000),
+                CompressorType::Approximated { chunk_size: 10000 },
                 &compression_parameters,
             )?;
         }
@@ -270,7 +270,7 @@ mod tests {
             &graph,
             &output_basename,
             expected_max_bits,
-            CreateBvCompZ::with_chunk_size(10000),
+            CompressorType::Approximated { chunk_size: 10000 },
             &compression_parameters,
         )?;
 
@@ -315,7 +315,7 @@ mod tests {
             &basename,
             &output_basename,
             max_bits,
-            CreateBvCompZ::with_chunk_size(10000),
+            CompressorType::Approximated { chunk_size: 10000 },
             &compression_parameters,
         )?;
         let graph = load_graph_seq::<SimpleContextModel>(&output_basename, max_bits)?;

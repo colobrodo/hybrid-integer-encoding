@@ -1,9 +1,9 @@
 mod component;
-pub mod compressors;
 mod context_model;
 pub mod estimator;
 mod huffman_graph_decoder;
 mod huffman_graph_encoder;
+pub mod parameters;
 mod stats;
 
 use anyhow::{Context, Result};
@@ -14,18 +14,18 @@ use epserde::prelude::*;
 use lender::*;
 use mmap_rs::MmapFlags;
 use std::fs::File;
-use std::io::{BufReader, BufWriter, Seek};
+use std::io::{self, BufReader, BufWriter, Seek};
 use std::path::Path;
 use std::time::Duration;
 use sux::prelude::*;
 use webgraph::prelude::{SequentialLabeling, *};
 
 use component::*;
-pub use compressors::*;
 pub use context_model::*;
 use estimator::*;
 pub use huffman_graph_decoder::*;
 use huffman_graph_encoder::*;
+pub use parameters::*;
 pub use stats::*;
 
 use crate::huffman::{DefaultEncodeParams, EncodeParams};
@@ -44,7 +44,7 @@ fn reference_selection_round<
     max_bits: usize,
     compression_parameters: &CompressionParameters,
     msg: impl AsRef<str>,
-    create_compressor: &impl CompressorFromEncoder,
+    compressor_type: CompressorType,
     pl: &mut ProgressLogger,
 ) -> Result<HuffmanGraphEncoderBuilder<HuffmanEstimator<EP, C>, C, EP>> {
     let num_symbols = 1 << max_bits;
@@ -52,17 +52,44 @@ fn reference_selection_round<
     // setup for the new iteration with huffman estimator
     let mut huffman_graph_encoder_builder =
         HuffmanGraphEncoderBuilder::<_, _, EP>::new(num_symbols, huffman_estimator, C::default());
-    let mut compressor = create_compressor
-        .create_from_encoder(&mut huffman_graph_encoder_builder, compression_parameters);
-
+    // Discard all the offsets
+    let offsets_writer = OffsetsWriter::from_write(io::empty())?;
     pl.item_name("node")
         .expected_updates(Some(graph.num_nodes()));
     pl.start(msg);
-    for_![ (_, succ) in graph.iter() {
-        compressor.push(succ)?;
-        pl.update();
-    }];
-    compressor.flush()?;
+    match compressor_type {
+        CompressorType::Approximated { chunk_size } => {
+            let mut compressor = BvCompZ::new(
+                &mut huffman_graph_encoder_builder,
+                offsets_writer,
+                compression_parameters.compression_window,
+                chunk_size,
+                compression_parameters.max_ref_count,
+                compression_parameters.min_interval_length,
+                0,
+            );
+            for_![ (_, succ) in graph.iter() {
+                compressor.push(succ)?;
+                pl.update();
+            }];
+            compressor.flush()?;
+        }
+        CompressorType::Greedy => {
+            let mut compressor = BvComp::new(
+                &mut huffman_graph_encoder_builder,
+                offsets_writer,
+                compression_parameters.compression_window,
+                compression_parameters.max_ref_count,
+                compression_parameters.min_interval_length,
+                0,
+            );
+            for_![ (_, succ) in graph.iter() {
+                compressor.push(succ)?;
+                pl.update();
+            }];
+            compressor.flush()?;
+        }
+    }
     pl.done();
     Ok(huffman_graph_encoder_builder)
 }
@@ -193,7 +220,7 @@ pub fn convert_graph_file<C: ContextModel + Default + Copy>(
     basename: impl AsRef<Path>,
     output_basename: impl AsRef<Path>,
     max_bits: usize,
-    create_compressor: impl CompressorFromEncoder,
+    compressor_type: CompressorType,
     compression_parameters: &CompressionParameters,
 ) -> Result<()> {
     let seq_graph = BvGraphSeq::with_basename(&basename)
@@ -204,7 +231,7 @@ pub fn convert_graph_file<C: ContextModel + Default + Copy>(
         &seq_graph,
         output_basename,
         max_bits,
-        create_compressor,
+        compressor_type,
         compression_parameters,
     )
 }
@@ -215,7 +242,7 @@ pub fn convert_graph<C: ContextModel + Default + Copy, G: SequentialGraph>(
     seq_graph: &G,
     output_basename: impl AsRef<Path>,
     max_bits: usize,
-    create_compressor: impl CompressorFromEncoder,
+    compressor_type: CompressorType,
     compression_parameters: &CompressionParameters,
 ) -> Result<()> {
     assert!(
@@ -235,19 +262,46 @@ pub fn convert_graph<C: ContextModel + Default + Copy, G: SequentialGraph>(
             Log2Estimator,
             C::default(),
         );
-    let mut compressor = create_compressor
-        .create_from_encoder(&mut huffman_graph_encoder_builder, compression_parameters);
 
+    let offsets_writer = OffsetsWriter::from_write(io::empty())?;
     pl.item_name("node")
         .expected_updates(Some(seq_graph.num_nodes()));
     pl.start("Pushing symbols into encoder builder with Log2Estimator...");
 
     // first iteration: build a encoder with Log2Estimator
-    for_![ (_, succ) in seq_graph.iter() {
-        compressor.push(succ)?;
-        pl.update();
-    }];
-    compressor.flush()?;
+    match compressor_type {
+        CompressorType::Approximated { chunk_size } => {
+            let mut compressor = BvCompZ::new(
+                &mut huffman_graph_encoder_builder,
+                offsets_writer,
+                compression_parameters.compression_window,
+                chunk_size,
+                compression_parameters.max_ref_count,
+                compression_parameters.min_interval_length,
+                0,
+            );
+            for_![ (_, succ) in seq_graph.iter() {
+                compressor.push(succ)?;
+                pl.update();
+            }];
+            compressor.flush()?;
+        }
+        CompressorType::Greedy => {
+            let mut compressor = BvComp::new(
+                &mut huffman_graph_encoder_builder,
+                offsets_writer,
+                compression_parameters.compression_window,
+                compression_parameters.max_ref_count,
+                compression_parameters.min_interval_length,
+                0,
+            );
+            for_![ (_, succ) in seq_graph.iter() {
+                compressor.push(succ)?;
+                pl.update();
+            }];
+            compressor.flush()?;
+        }
+    }
     pl.done();
 
     let mut huffman_graph_encoder_builder = reference_selection_round(
@@ -256,7 +310,7 @@ pub fn convert_graph<C: ContextModel + Default + Copy, G: SequentialGraph>(
         max_bits,
         compression_parameters,
         "Pushing symbols into encoder builder on first round with Huffman estimator...",
-        &create_compressor,
+        compressor_type,
         &mut pl,
     )?;
     for round in 2..compression_parameters.num_rounds {
@@ -270,7 +324,7 @@ pub fn convert_graph<C: ContextModel + Default + Copy, G: SequentialGraph>(
                 round + 1
             )
             .as_str(),
-            &create_compressor,
+            compressor_type,
             &mut pl,
         )?;
     }
@@ -287,19 +341,45 @@ pub fn convert_graph<C: ContextModel + Default + Copy, G: SequentialGraph>(
 
     pl.info(format_args!("Writing header for the graph..."));
     let header_size = huffman_graph_encoder.write_header()?;
-
-    let mut compressor =
-        create_compressor.create_from_encoder(&mut huffman_graph_encoder, compression_parameters);
+    let offsets_writer = OffsetsWriter::from_write(io::empty())?;
 
     pl.item_name("node")
         .expected_updates(Some(seq_graph.num_nodes()));
     pl.start("Compressing the graph...");
 
-    for_![ (_, successors) in seq_graph.iter() {
-        compressor.push(successors).context("Could not push successors")?;
-        pl.update();
-    }];
-    compressor.flush()?;
+    match compressor_type {
+        CompressorType::Approximated { chunk_size } => {
+            let mut compressor = BvCompZ::new(
+                huffman_graph_encoder,
+                offsets_writer,
+                compression_parameters.compression_window,
+                chunk_size,
+                compression_parameters.max_ref_count,
+                compression_parameters.min_interval_length,
+                0,
+            );
+            for_![ (_, succ) in seq_graph.iter() {
+                compressor.push(succ)?;
+                pl.update();
+            }];
+            compressor.flush()?;
+        }
+        CompressorType::Greedy => {
+            let mut compressor = BvComp::new(
+                huffman_graph_encoder,
+                offsets_writer,
+                compression_parameters.compression_window,
+                compression_parameters.max_ref_count,
+                compression_parameters.min_interval_length,
+                0,
+            );
+            for_![ (_, succ) in seq_graph.iter() {
+                compressor.push(succ)?;
+                pl.update();
+            }];
+            compressor.flush()?;
+        }
+    }
     pl.info(format_args!(
         "After last round with Huffman estimator: Recompressed graph using {} bits ({} bits of header)",
         writer.bits_written, header_size
