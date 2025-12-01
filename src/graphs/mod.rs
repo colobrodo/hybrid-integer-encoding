@@ -237,7 +237,7 @@ pub fn convert_graph_file<C: ContextModel + Default + Copy>(
 }
 
 /// Convert a sequential graph to Huffman-encoded form and save to disk.
-/// Runs estimation rounds, builds the encoder and writes the compressed graph.
+/// Runs estimation rounds, builds the encoder and writes the compressed graph with its offsets.
 pub fn convert_graph<C: ContextModel + Default + Copy, G: SequentialGraph>(
     seq_graph: &G,
     output_basename: impl AsRef<Path>,
@@ -341,7 +341,8 @@ pub fn convert_graph<C: ContextModel + Default + Copy, G: SequentialGraph>(
 
     pl.info(format_args!("Writing header for the graph..."));
     let header_size = huffman_graph_encoder.write_header()?;
-    let offsets_writer = OffsetsWriter::from_write(io::empty())?;
+    let offsets_writer =
+        OffsetsWriter::from_path(output_basename.as_ref().with_extension(OFFSETS_EXTENSION))?;
 
     pl.item_name("node")
         .expected_updates(Some(seq_graph.num_nodes()));
