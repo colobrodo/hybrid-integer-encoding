@@ -203,9 +203,8 @@ fn compute_symbol_num_bits(histogram: &[usize], max_bits: usize, infos: &mut [Hu
     // In the groups of symbols for the highest bit length we need to select the
     // last 2*num_symbols-2 groups, and assign to each symbol one bit of cost for
     // each of its occurrences in these groups.
-    for i in 0..2 * non_zero_symbols - 2 {
-        let b = &bags[max_bits - 1][i];
-        for &x in b.1.iter() {
+    for bag in bags[max_bits - 1].iter().take(2 * non_zero_symbols - 2) {
+        for &x in bag.1.iter() {
             infos[x as usize].n_bits += 1;
         }
     }
