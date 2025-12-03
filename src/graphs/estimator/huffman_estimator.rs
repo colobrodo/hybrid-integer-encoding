@@ -10,7 +10,6 @@ use crate::huffman::{CostModel, EncodeParams, IntegerHistogram};
 pub struct HuffmanEstimator<EP: EncodeParams, S: ContextModel> {
     cost_model: CostModel<EP>,
     context_model: S,
-    marker_: core::marker::PhantomData<EP>,
 }
 
 impl<EP: EncodeParams, S: ContextModel> HuffmanEstimator<EP, S> {
@@ -18,7 +17,6 @@ impl<EP: EncodeParams, S: ContextModel> HuffmanEstimator<EP, S> {
         Self {
             cost_model: data.cost(),
             context_model,
-            marker_: core::marker::PhantomData,
         }
     }
 
