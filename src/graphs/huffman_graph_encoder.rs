@@ -173,7 +173,7 @@ impl<EP: EncodeParams, E: Encode, C: ContextModel> HuffmanGraphEncoderBuilder<E,
     }
 
     pub fn build_estimator(self) -> HuffmanEstimator<EP, C> {
-        HuffmanEstimator::new(self.data, self.context_model)
+        HuffmanEstimator::new(self.data.cost(), self.context_model)
     }
 
     fn add_data(&mut self, component: BvGraphComponent, value: u64) {
