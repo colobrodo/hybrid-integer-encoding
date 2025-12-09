@@ -53,7 +53,7 @@ fn reference_selection_round<
     let mut huffman_graph_encoder_builder =
         HuffmanGraphEncoderBuilder::<_, _, EP>::new(num_symbols, huffman_estimator, C::default());
     // Discard all the offsets
-    let offsets_writer = OffsetsWriter::from_write(io::empty())?;
+    let offsets_writer = OffsetsWriter::from_write(io::empty(), true)?;
     pl.item_name("node")
         .expected_updates(Some(graph.num_nodes()));
     pl.start(msg);
@@ -263,7 +263,7 @@ pub fn convert_graph<C: ContextModel + Default + Copy, G: SequentialGraph>(
             C::default(),
         );
 
-    let offsets_writer = OffsetsWriter::from_write(io::empty())?;
+    let offsets_writer = OffsetsWriter::from_write(io::empty(), true)?;
     pl.item_name("node")
         .expected_updates(Some(seq_graph.num_nodes()));
     pl.start("Pushing symbols into encoder builder with Log2Estimator...");
@@ -341,8 +341,10 @@ pub fn convert_graph<C: ContextModel + Default + Copy, G: SequentialGraph>(
 
     pl.info(format_args!("Writing header for the graph..."));
     let header_size = huffman_graph_encoder.write_header()?;
-    let offsets_writer =
-        OffsetsWriter::from_path(output_basename.as_ref().with_extension(OFFSETS_EXTENSION))?;
+    let offsets_writer = OffsetsWriter::from_path(
+        output_basename.as_ref().with_extension(OFFSETS_EXTENSION),
+        true,
+    )?;
 
     pl.item_name("node")
         .expected_updates(Some(seq_graph.num_nodes()));
