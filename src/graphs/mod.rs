@@ -14,6 +14,7 @@ use epserde::prelude::*;
 use lender::*;
 use mmap_rs::MmapFlags;
 use rayon::current_num_threads;
+use rayon::iter::{ParallelBridge, ParallelIterator};
 use std::fs::File;
 use std::io::{self, BufReader, BufWriter, Seek};
 use std::path::Path;
@@ -54,7 +55,7 @@ fn reference_selection_round<
     // setup for the new iteration with huffman estimator
     let mut huffman_graph_encoder_builder =
         HuffmanGraphEncoderBuilder::<_, _, EP>::new(num_symbols, huffman_estimator, C::default());
-    // Discard all the offsets
+    // discard all the offsets
     let offsets_writer = OffsetsWriter::from_write(io::empty(), true)?;
     pl.item_name("node")
         .expected_updates(Some(graph.num_nodes()));
@@ -99,84 +100,108 @@ fn reference_selection_round<
 #[allow(clippy::too_many_arguments)]
 /// Run one reference-selection pass: collect symbols with the given estimator.
 /// Returns a builder seeded with frequency estimates for the next stage.
-fn parallel_reference_selection_round<EP: EncodeParams, E: Encode, C: ContextModel + Default>(
-    graph: &(impl SequentialGraph + for<'a> SplitLabeling<SplitLender<'a>: ExactSizeLender>),
+fn parallel_reference_selection_round<
+    EP: EncodeParams + Send + Sync,
+    E: Encode,
+    C: ContextModel + Default,
+>(
+    graph: &(impl SequentialGraph + for<'a> SplitLabeling<SplitLender<'a>: ExactSizeLender + Send>),
     huffman_graph_encoder_builder: HuffmanGraphEncoderBuilder<E, C, EP>,
     max_bits: usize,
     compression_parameters: &CompressionParameters,
     _msg: impl AsRef<str>,
     compressor_type: CompressorType,
+    // TODO: use a concurrent_progress_logger
     pl: &mut ProgressLogger,
 ) -> Result<HuffmanGraphEncoderBuilder<HuffmanEstimator<EP, CostModel<EP>, C>, C, EP>> {
     let num_symbols = 1 << max_bits;
     let num_threads = current_num_threads();
-    let split_iter = graph.split_iter(num_threads);
+    let split_iter = graph
+        .split_iter(num_threads)
+        .into_iter()
+        .collect::<Vec<_>>();
+
+    // obtain cost model of the previous iteration
     let cost_model = huffman_graph_encoder_builder.histograms().cost();
+
+    // iterate the split iter in parallel
+    let thread_histograms: Vec<IntegerHistograms<EP>> = split_iter
+        .into_iter()
+        .enumerate()
+        .par_bridge()
+        .map(
+            |(thread_id, mut thread_lender)| -> Result<IntegerHistograms<EP>> {
+                let Some((node_id, successors)) = thread_lender.next() else {
+                    return Err(anyhow::anyhow!(
+                        "Empty chunked size of compressors in thread {}",
+                        thread_id
+                    ));
+                };
+                let first_node = node_id;
+
+                // Initialize local builder
+                let huffman_estimator = HuffmanEstimator::new(&cost_model, C::default());
+                let mut thread_huffman_builder = HuffmanGraphEncoderBuilder::<_, _, EP>::new(
+                    num_symbols,
+                    huffman_estimator,
+                    C::default(),
+                );
+                let offsets_writer = OffsetsWriter::from_write(io::empty(), false)?;
+
+                match compressor_type {
+                    CompressorType::Approximated { chunk_size } => {
+                        let mut compressor = BvCompZ::new(
+                            &mut thread_huffman_builder,
+                            offsets_writer,
+                            compression_parameters.compression_window,
+                            chunk_size,
+                            compression_parameters.max_ref_count,
+                            compression_parameters.min_interval_length,
+                            first_node,
+                        );
+                        compressor.push(successors).unwrap();
+                        for_![ (_, succ) in thread_lender {
+                            compressor.push(succ)?;
+                        }];
+                        compressor.flush()?;
+                    }
+                    CompressorType::Greedy => {
+                        let mut compressor = BvComp::new(
+                            &mut thread_huffman_builder,
+                            offsets_writer,
+                            compression_parameters.compression_window,
+                            compression_parameters.max_ref_count,
+                            compression_parameters.min_interval_length,
+                            first_node,
+                        );
+                        compressor.push(successors).unwrap();
+                        for_![ (_, succ) in thread_lender {
+                            compressor.push(succ)?;
+                        }];
+                        compressor.flush()?;
+                    }
+                }
+
+                Ok(thread_huffman_builder.histograms())
+            },
+        )
+        .collect::<Result<Vec<_>>>()?;
+
+    // 3. Merge Phase: Combine all local histograms into one
     let mut shared_histograms = IntegerHistograms::<EP>::new(C::num_contexts(), num_symbols);
-    for (thread_id, mut thread_lender) in split_iter.into_iter().enumerate() {
-        let Some((node_id, successors)) = thread_lender.next() else {
-            return Err(anyhow::anyhow!(
-                "Empty chunked size of compressors in thread {}",
-                thread_id
-            ));
-        };
-        let first_node = node_id;
-
-        let huffman_estimator = HuffmanEstimator::new(&cost_model, C::default());
-        // setup for the new iteration with huffman estimator
-        let mut huffman_graph_encoder_builder = HuffmanGraphEncoderBuilder::<_, _, EP>::new(
-            num_symbols,
-            huffman_estimator,
-            C::default(),
-        );
-        let offsets_writer = OffsetsWriter::from_write(io::empty(), false)?;
-
-        match compressor_type {
-            CompressorType::Approximated { chunk_size } => {
-                let mut compressor = BvCompZ::new(
-                    &mut huffman_graph_encoder_builder,
-                    offsets_writer,
-                    compression_parameters.compression_window,
-                    chunk_size,
-                    compression_parameters.max_ref_count,
-                    compression_parameters.min_interval_length,
-                    first_node,
-                );
-                compressor.push(successors).unwrap();
-                for_![ (_, succ) in thread_lender {
-                    compressor.push(succ)?;
-                    pl.update();
-                }];
-                compressor.flush()?;
-            }
-            CompressorType::Greedy => {
-                let mut compressor = BvComp::new(
-                    &mut huffman_graph_encoder_builder,
-                    offsets_writer,
-                    compression_parameters.compression_window,
-                    compression_parameters.max_ref_count,
-                    compression_parameters.min_interval_length,
-                    first_node,
-                );
-                compressor.push(successors).unwrap();
-                for_![ (_, succ) in thread_lender {
-                    compressor.push(succ)?;
-                    pl.update();
-                }];
-                compressor.flush()?;
-            }
-        }
-        let thread_histograms = huffman_graph_encoder_builder.histograms();
-        shared_histograms.add_all(&thread_histograms);
+    for h in thread_histograms {
+        shared_histograms.add_all(&h);
     }
+
+    // Finalize builder
     let huffman_estimator = HuffmanEstimator::new(cost_model, C::default());
-    let huffman_graph_encoder_builder = HuffmanGraphEncoderBuilder::<_, _, EP>::from_histograms(
+    let builder = HuffmanGraphEncoderBuilder::<_, _, EP>::from_histograms(
         shared_histograms,
         huffman_estimator,
         C::default(),
     );
-    // Discard all the offsets
-    Ok(huffman_graph_encoder_builder)
+
+    Ok(builder)
 }
 
 /// Build the Elias-Fano index for a graph file at `src` using offsets.
@@ -326,7 +351,7 @@ pub fn convert_graph_file<C: ContextModel + Default + Copy>(
 pub fn convert_graph<
     C: ContextModel + Default + Copy,
     // TODO: for<'a> SplitLabeling<SplitLender<'a>: ExactSizeLender> trait bound is temporary
-    G: SequentialGraph + for<'a> SplitLabeling<SplitLender<'a>: ExactSizeLender>,
+    G: SequentialGraph + for<'a> SplitLabeling<SplitLender<'a>: ExactSizeLender + Send>,
 >(
     seq_graph: &G,
     output_basename: impl AsRef<Path>,
