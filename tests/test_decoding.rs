@@ -7,7 +7,7 @@ mod tests {
     };
     use hybrid_integer_encoding::huffman::{
         encode, DefaultEncodeParams, EntropyCoder, HuffmanDecoder, HuffmanEncoder,
-        IntegerHistogram, DEFAULT_MAX_HUFFMAN_BITS, DEFAULT_NUM_SYMBOLS,
+        IntegerHistograms, DEFAULT_MAX_HUFFMAN_BITS, DEFAULT_NUM_SYMBOLS,
     };
     use rand::prelude::*;
     use rand_distr::Zipf;
@@ -23,7 +23,7 @@ mod tests {
         let mut rng = SmallRng::seed_from_u64(seed);
         let zipf = Zipf::new(1000_000_000.0, 1.5)?;
 
-        let mut data = IntegerHistogram::new(NUM_CONTEXT, NUM_SYMBOLS);
+        let mut data = IntegerHistograms::new(NUM_CONTEXT, NUM_SYMBOLS);
         let default_context = 0;
         let mut integers = Vec::with_capacity(nsamples);
         for _ in 0..nsamples {

@@ -40,7 +40,7 @@ pub struct HuffmanEncoder<EP: EncodeParams = DefaultEncodeParams> {
 /// Compute the histogram for each token frequency in each context.
 /// An histogram is a vector of length `num_symbols` where each index represents a symbol,
 /// and the value at each index represents the frequency of the symbol.
-pub struct IntegerHistogram<EP: EncodeParams> {
+pub struct IntegerHistograms<EP: EncodeParams> {
     ctx_histograms: Vec<Vec<usize>>,
     /// Total number of symbols for each context.
     totals: Vec<usize>,
@@ -48,7 +48,7 @@ pub struct IntegerHistogram<EP: EncodeParams> {
     _marker: core::marker::PhantomData<EP>,
 }
 
-impl<EP: EncodeParams> IntegerHistogram<EP> {
+impl<EP: EncodeParams> IntegerHistograms<EP> {
     /// Creates a new histogram with the specified number of contexts and symbols.
     /// Returns an instance of `IntegerHistogram`.
     pub fn new(num_contexts: usize, num_symbols: usize) -> Self {
@@ -211,7 +211,7 @@ fn compute_symbol_num_bits(histogram: &[usize], max_bits: usize, infos: &mut [Hu
 }
 
 impl<EP: EncodeParams> HuffmanEncoder<EP> {
-    pub fn new(data: IntegerHistogram<EP>, max_bits: usize) -> Self {
+    pub fn new(data: IntegerHistograms<EP>, max_bits: usize) -> Self {
         let num_symbols = 1 << max_bits;
         let histograms = data.as_vec();
         let mut info = Vec::new();

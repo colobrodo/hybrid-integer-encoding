@@ -13,6 +13,7 @@ use epserde::deser::{Deserialize, Owned};
 use epserde::prelude::*;
 use lender::*;
 use mmap_rs::MmapFlags;
+use rayon::current_num_threads;
 use std::fs::File;
 use std::io::{self, BufReader, BufWriter, Seek};
 use std::path::Path;
@@ -28,12 +29,13 @@ use huffman_graph_encoder::*;
 pub use parameters::*;
 pub use stats::*;
 
-use crate::huffman::{DefaultEncodeParams, EncodeParams};
+use crate::huffman::{CostModel, DefaultEncodeParams, EncodeParams};
 
 #[allow(clippy::too_many_arguments)]
 /// Run one reference-selection pass: collect symbols with the given estimator.
 /// Returns a builder seeded with frequency estimates for the next stage.
 fn reference_selection_round<
+    'a,
     G: SequentialGraph,
     EP: EncodeParams,
     E: Encode,
@@ -46,7 +48,7 @@ fn reference_selection_round<
     msg: impl AsRef<str>,
     compressor_type: CompressorType,
     pl: &mut ProgressLogger,
-) -> Result<HuffmanGraphEncoderBuilder<HuffmanEstimator<EP, C>, C, EP>> {
+) -> Result<HuffmanGraphEncoderBuilder<HuffmanEstimator<EP, CostModel<EP>, C>, C, EP>> {
     let num_symbols = 1 << max_bits;
     let huffman_estimator = huffman_graph_encoder_builder.build_estimator();
     // setup for the new iteration with huffman estimator

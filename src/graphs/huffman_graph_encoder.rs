@@ -1,6 +1,8 @@
 use std::convert::Infallible;
 
-use crate::huffman::{DefaultEncodeParams, EncodeParams, HuffmanEncoder, IntegerHistogram};
+use crate::huffman::{
+    CostModel, DefaultEncodeParams, EncodeParams, HuffmanEncoder, IntegerHistograms,
+};
 
 use anyhow::{Context, Result};
 use dsi_bitstream::traits::{BitWrite, LE};
@@ -150,7 +152,7 @@ pub struct HuffmanGraphEncoderBuilder<
 > {
     estimator: E,
     context_model: C,
-    data: IntegerHistogram<EP>,
+    data: IntegerHistograms<EP>,
 }
 
 impl<EP: EncodeParams, E: Encode, C: ContextModel> HuffmanGraphEncoderBuilder<E, C, EP> {
@@ -159,7 +161,7 @@ impl<EP: EncodeParams, E: Encode, C: ContextModel> HuffmanGraphEncoderBuilder<E,
         Self {
             estimator,
             context_model,
-            data: IntegerHistogram::new(contexts, num_symbols),
+            data: IntegerHistograms::new(contexts, num_symbols),
         }
     }
 
@@ -172,8 +174,13 @@ impl<EP: EncodeParams, E: Encode, C: ContextModel> HuffmanGraphEncoderBuilder<E,
         HuffmanGraphEncoder::new(encoder, self.estimator, self.context_model, writer)
     }
 
-    pub fn build_estimator(self) -> HuffmanEstimator<EP, C> {
-        HuffmanEstimator::new(self.data.cost(), self.context_model)
+    pub fn build_estimator(self) -> HuffmanEstimator<EP, CostModel<EP>, C> {
+        let cost_model = self.data.cost();
+        HuffmanEstimator::new(cost_model, self.context_model)
+    }
+
+    pub fn histogram(self) -> IntegerHistograms<EP> {
+        self.data
     }
 
     fn add_data(&mut self, component: BvGraphComponent, value: u64) {

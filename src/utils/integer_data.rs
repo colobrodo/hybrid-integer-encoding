@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use crate::huffman::{DefaultEncodeParams, EncodeParams, IntegerHistogram};
+use crate::huffman::{DefaultEncodeParams, EncodeParams, IntegerHistograms};
 
 /// A collection that stores integer symbols together with a small context
 /// identifier for each symbol and a set of per-context histograms.
@@ -9,7 +9,7 @@ use crate::huffman::{DefaultEncodeParams, EncodeParams, IntegerHistogram};
 /// used by the internal `IntegerHistogram<EP>` to track per-context symbol
 /// encoding frequencies.
 pub struct IntegerData<EP: EncodeParams = DefaultEncodeParams> {
-    histograms: IntegerHistogram<EP>,
+    histograms: IntegerHistograms<EP>,
     values: Vec<u32>,
     contexts: Vec<u8>,
     _marker: PhantomData<EP>,
@@ -22,7 +22,7 @@ impl<EP: EncodeParams> IntegerData<EP> {
         Self {
             values: Vec::new(),
             contexts: Vec::new(),
-            histograms: IntegerHistogram::new(num_contexts, num_symbols),
+            histograms: IntegerHistograms::new(num_contexts, num_symbols),
             _marker: PhantomData,
         }
     }
@@ -58,7 +58,7 @@ impl<EP: EncodeParams> IntegerData<EP> {
 
     /// Consumes the collection and returns the internal histogram data structure.
     /// This provides access to the accumulated frequency information for each context.
-    pub fn histograms(self) -> IntegerHistogram<EP> {
+    pub fn histograms(self) -> IntegerHistograms<EP> {
         self.histograms
     }
 }

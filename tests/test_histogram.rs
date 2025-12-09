@@ -1,10 +1,10 @@
 #[cfg(test)]
 mod tests {
-    use hybrid_integer_encoding::huffman::{DefaultEncodeParams, IntegerHistogram};
+    use hybrid_integer_encoding::huffman::{DefaultEncodeParams, IntegerHistograms};
 
     #[test]
     fn new_histogram_is_empty() {
-        let hist = IntegerHistogram::<DefaultEncodeParams>::new(3, 256);
+        let hist = IntegerHistograms::<DefaultEncodeParams>::new(3, 256);
         assert_eq!(hist.number_of_contexts(), 3);
         assert!(hist.is_empty());
         assert_eq!(hist.count(), 0);
@@ -15,7 +15,7 @@ mod tests {
 
     #[test]
     fn add_increments_context_and_total_counts() {
-        let mut hist = IntegerHistogram::<DefaultEncodeParams>::new(4, 256);
+        let mut hist = IntegerHistograms::<DefaultEncodeParams>::new(4, 256);
         assert!(hist.is_empty());
 
         hist.add(1, 5);
@@ -40,8 +40,8 @@ mod tests {
 
     #[test]
     fn add_all_merges_two_histograms() {
-        let mut a = IntegerHistogram::<DefaultEncodeParams>::new(2, 256);
-        let mut b = IntegerHistogram::<DefaultEncodeParams>::new(2, 256);
+        let mut a = IntegerHistograms::<DefaultEncodeParams>::new(2, 256);
+        let mut b = IntegerHistograms::<DefaultEncodeParams>::new(2, 256);
 
         // a: ctx0=1, ctx1=2
         a.add(0, 1);

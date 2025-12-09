@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use std::convert::Infallible;
 
 use anyhow::Result;
@@ -7,27 +8,31 @@ use webgraph::prelude::Encode;
 use crate::graphs::{BvGraphComponent, ContextModel};
 use crate::huffman::{CostModel, EncodeParams};
 
-pub struct HuffmanEstimator<EP: EncodeParams, S: ContextModel> {
-    cost_model: CostModel<EP>,
+pub struct HuffmanEstimator<EP: EncodeParams, M: Borrow<CostModel<EP>>, S: ContextModel> {
+    cost_model: M,
     context_model: S,
+    _marker: core::marker::PhantomData<EP>,
 }
 
-impl<EP: EncodeParams, S: ContextModel> HuffmanEstimator<EP, S> {
-    pub fn new(cost_model: CostModel<EP>, context_model: S) -> Self {
+impl<'a, EP: EncodeParams, S: ContextModel, M: Borrow<CostModel<EP>>> HuffmanEstimator<EP, M, S> {
+    pub fn new(cost_model: M, context_model: S) -> Self {
         Self {
             cost_model,
             context_model,
+            _marker: std::marker::PhantomData,
         }
     }
 
     pub fn estimate(&mut self, component: BvGraphComponent, value: u64) -> usize {
         let ctx = self.context_model.choose_context(component);
         self.context_model.update(component, value);
-        self.cost_model.cost(ctx, value)
+        self.cost_model.borrow().cost(ctx, value)
     }
 }
 
-impl<EP: EncodeParams, S: ContextModel> Encode for HuffmanEstimator<EP, S> {
+impl<EP: EncodeParams, M: Borrow<CostModel<EP>>, S: ContextModel> Encode
+    for HuffmanEstimator<EP, M, S>
+{
     type Error = Infallible;
 
     fn start_node(&mut self, _node: usize) -> Result<usize, Self::Error> {
