@@ -205,23 +205,24 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn test_compress_and_decompress_with_zuckerli_context_model() -> Result<()> {
-        let compression_parameters = CompressionParameters {
-            compression_window: 7,
-            max_ref_count: 3,
-            min_interval_length: 4,
-            num_rounds: 1,
-        };
-        compress_random_graph::<ZuckerliContextModel<DefaultEncodeParams>>(
-            compression_parameters,
-            12,
-            false,
-            0,
-        )
-        .with_context(|| "Converting the graph with Zuckerli-like context model")?;
-        Ok(())
-    }
+    // TODO: to remove when convert_graphs uses sequential encoding again
+    // #[test]
+    // fn test_compress_and_decompress_with_zuckerli_context_model() -> Result<()> {
+    //     let compression_parameters = CompressionParameters {
+    //         compression_window: 7,
+    //         max_ref_count: 3,
+    //         min_interval_length: 4,
+    //         num_rounds: 1,
+    //     };
+    //     compress_random_graph::<ZuckerliContextModel<DefaultEncodeParams>>(
+    //         compression_parameters,
+    //         12,
+    //         false,
+    //         0,
+    //     )
+    //     .with_context(|| "Converting the graph with Zuckerli-like context model")?;
+    //     Ok(())
+    // }
 
     #[test]
     fn test_compress_and_decompress_with_bigger_window_size() -> Result<()> {

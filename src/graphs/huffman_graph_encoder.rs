@@ -141,6 +141,7 @@ impl<EP: EncodeParams, E: Encode, W: BitWrite<LE>, S: ContextModel> EncodeAndEst
     }
 }
 
+// TODO: we should borrow the estimator too?
 /// Encoder to construct a `HuffmanGraphEncoder` or a `HuffmanEstimator` from the frequencies
 /// of the symbols encountered during encoding.
 /// It requires an estimator that implements the `Encode` trait and is used for estimating the
@@ -165,6 +166,18 @@ impl<EP: EncodeParams, E: Encode, C: ContextModel> HuffmanGraphEncoderBuilder<E,
         }
     }
 
+    pub fn from_histograms(
+        histograms: IntegerHistograms<EP>,
+        estimator: E,
+        context_model: C,
+    ) -> Self {
+        Self {
+            estimator,
+            context_model,
+            data: histograms,
+        }
+    }
+
     pub fn build<W: BitWrite<LE>>(
         self,
         writer: &'_ mut W,
@@ -179,7 +192,7 @@ impl<EP: EncodeParams, E: Encode, C: ContextModel> HuffmanGraphEncoderBuilder<E,
         HuffmanEstimator::new(cost_model, self.context_model)
     }
 
-    pub fn histogram(self) -> IntegerHistograms<EP> {
+    pub fn histograms(self) -> IntegerHistograms<EP> {
         self.data
     }
 
