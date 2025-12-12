@@ -99,8 +99,8 @@ impl<EP: EncodeParams> ZuckerliContextModel<EP> {
     const BASE_ODD_BLOCK: usize = Self::BASE_EVEN_BLOCK + 1;
     // Zuckerli doesn't use intervals
     const BASE_INTERVAL_COUNT: usize = Self::BASE_ODD_BLOCK + 1;
-    // TODO: Multiple contexts for num interval count doesn't works :/
-    const NUM_INTERVAL_COUNT: usize = 1;
+    // 8 contexts for interval count
+    const NUM_INTERVAL_COUNT: usize = 8;
     const BASE_INTERVAL_START: usize = Self::BASE_INTERVAL_COUNT + Self::NUM_INTERVAL_COUNT;
     const BASE_INTERVAL_LEN: usize = Self::BASE_INTERVAL_START + 1;
     const NUM_INTERVAL_LEN: usize = 16;
