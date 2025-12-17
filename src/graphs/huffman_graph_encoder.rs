@@ -1,6 +1,8 @@
 use std::convert::Infallible;
 
-use crate::huffman::{DefaultEncodeParams, EncodeParams, HuffmanEncoder, IntegerHistogram};
+use crate::huffman::{
+    CostModel, DefaultEncodeParams, EncodeParams, HuffmanEncoder, IntegerHistograms,
+};
 
 use anyhow::{Context, Result};
 use dsi_bitstream::traits::{BitWrite, LE};
@@ -139,6 +141,7 @@ impl<EP: EncodeParams, E: Encode, W: BitWrite<LE>, S: ContextModel> EncodeAndEst
     }
 }
 
+// TODO: we should borrow the estimator too?
 /// Encoder to construct a `HuffmanGraphEncoder` or a `HuffmanEstimator` from the frequencies
 /// of the symbols encountered during encoding.
 /// It requires an estimator that implements the `Encode` trait and is used for estimating the
@@ -150,7 +153,7 @@ pub struct HuffmanGraphEncoderBuilder<
 > {
     estimator: E,
     context_model: C,
-    data: IntegerHistogram<EP>,
+    data: IntegerHistograms<EP>,
 }
 
 impl<EP: EncodeParams, E: Encode, C: ContextModel> HuffmanGraphEncoderBuilder<E, C, EP> {
@@ -159,7 +162,19 @@ impl<EP: EncodeParams, E: Encode, C: ContextModel> HuffmanGraphEncoderBuilder<E,
         Self {
             estimator,
             context_model,
-            data: IntegerHistogram::new(contexts, num_symbols),
+            data: IntegerHistograms::new(contexts, num_symbols),
+        }
+    }
+
+    pub fn from_histograms(
+        histograms: IntegerHistograms<EP>,
+        estimator: E,
+        context_model: C,
+    ) -> Self {
+        Self {
+            estimator,
+            context_model,
+            data: histograms,
         }
     }
 
@@ -172,8 +187,13 @@ impl<EP: EncodeParams, E: Encode, C: ContextModel> HuffmanGraphEncoderBuilder<E,
         HuffmanGraphEncoder::new(encoder, self.estimator, self.context_model, writer)
     }
 
-    pub fn build_estimator(self) -> HuffmanEstimator<EP, C> {
-        HuffmanEstimator::new(self.data.cost(), self.context_model)
+    pub fn build_estimator(self) -> HuffmanEstimator<EP, CostModel<EP>, C> {
+        let cost_model = self.data.cost();
+        HuffmanEstimator::new(cost_model, self.context_model)
+    }
+
+    pub fn histograms(self) -> IntegerHistograms<EP> {
+        self.data
     }
 
     fn add_data(&mut self, component: BvGraphComponent, value: u64) {

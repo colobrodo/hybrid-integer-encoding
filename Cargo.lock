@@ -677,6 +677,7 @@ dependencies = [
  "mmap-rs",
  "rand",
  "rand_distr",
+ "rayon",
  "sux",
  "tempfile",
  "webgraph",

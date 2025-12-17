@@ -31,7 +31,7 @@ use hybrid_integer_encoding::{
     },
     huffman::{
         encode, DefaultEncodeParams, EncodeParams, EntropyCoder, HuffmanDecoder, HuffmanEncoder,
-        IntegerHistogram,
+        IntegerHistograms,
     },
 };
 use webgraph::{
@@ -287,7 +287,7 @@ fn encode_file(
     let reader = BufReader::new(file);
 
     let mut integers = Vec::new();
-    let mut integer_data = IntegerHistogram::new(num_contexts, 1 << max_bits);
+    let mut integer_data = IntegerHistograms::new(num_contexts, 1 << max_bits);
     let mut last_sample = 0;
     for line in reader.lines().map_while(Result::ok) {
         // Split the line by whitespace and parse each number as u8

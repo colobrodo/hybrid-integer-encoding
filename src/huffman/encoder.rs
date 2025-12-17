@@ -37,26 +37,68 @@ pub struct HuffmanEncoder<EP: EncodeParams = DefaultEncodeParams> {
     _marker: core::marker::PhantomData<EP>,
 }
 
+/// Stores an histogram for a set of integers in [0..n)
+pub struct Histogram {
+    frequencies: Vec<usize>,
+    /// Total number of elements in the histogram.
+    total: usize,
+}
+
+impl Histogram {
+    pub fn new(num_elements: usize) -> Self {
+        let freqs = vec![0; num_elements];
+        Self {
+            frequencies: freqs,
+            total: 0,
+        }
+    }
+
+    /// Returns the number of the element in the intervals.
+    pub fn len(&self) -> usize {
+        self.frequencies.len()
+    }
+
+    /// Returns the total number of occurrences for all the elements in the interval.
+    pub fn count(&self) -> usize {
+        self.total
+    }
+
+    /// Account for a new occurrence of `item` in the histograms.
+    pub fn add(&mut self, item: usize) {
+        self.frequencies[item] += 1;
+        self.total += 1;
+    }
+
+    /// Merges another histogram into this one, summing the counts.
+    pub fn add_all(&mut self, other: &Self) {
+        assert_eq!(self.len(), other.len());
+        for (this_occurrences, other_occurrences) in
+            self.frequencies.iter_mut().zip(other.frequencies.iter())
+        {
+            *this_occurrences += other_occurrences;
+        }
+        self.total += other.total;
+    }
+}
+
 /// Compute the histogram for each token frequency in each context.
 /// An histogram is a vector of length `num_symbols` where each index represents a symbol,
 /// and the value at each index represents the frequency of the symbol.
-pub struct IntegerHistogram<EP: EncodeParams> {
-    ctx_histograms: Vec<Vec<usize>>,
-    /// Total number of symbols for each context.
-    totals: Vec<usize>,
+pub struct IntegerHistograms<EP: EncodeParams> {
+    ctx_histograms: Vec<Histogram>,
     num_contexts: usize,
     _marker: core::marker::PhantomData<EP>,
 }
 
-impl<EP: EncodeParams> IntegerHistogram<EP> {
+impl<EP: EncodeParams> IntegerHistograms<EP> {
     /// Creates a new histogram with the specified number of contexts and symbols.
     /// Returns an instance of `IntegerHistogram`.
     pub fn new(num_contexts: usize, num_symbols: usize) -> Self {
-        let mut histograms = Vec::with_capacity(num_contexts);
-        histograms.resize(num_contexts, vec![0; num_symbols]);
+        let histograms = (0..num_contexts)
+            .map(|_| Histogram::new(num_symbols))
+            .collect();
         Self {
             ctx_histograms: histograms,
-            totals: vec![0; num_contexts],
             num_contexts,
             _marker: core::marker::PhantomData,
         }
@@ -64,12 +106,15 @@ impl<EP: EncodeParams> IntegerHistogram<EP> {
 
     /// Returns the count of symbols for a given context.
     pub fn context_count(&self, context: u8) -> usize {
-        self.totals[context as usize]
+        self.ctx_histograms[context as usize].count()
     }
 
     /// Returns the total count of all symbols across contexts.
     pub fn count(&self) -> usize {
-        self.totals.iter().sum()
+        self.ctx_histograms
+            .iter()
+            .map(|histogram| histogram.count())
+            .sum()
     }
 
     /// Checks if the histogram is empty.
@@ -85,8 +130,7 @@ impl<EP: EncodeParams> IntegerHistogram<EP> {
             value, context, self.num_contexts
         );
         let (token, _, _) = encode::<EP>(value.into());
-        self.ctx_histograms[context as usize][token] += 1;
-        self.totals[context as usize] += 1;
+        self.ctx_histograms[context as usize].add(token)
     }
 
     /// Merges another histogram into this one, summing the counts.
@@ -104,20 +148,16 @@ impl<EP: EncodeParams> IntegerHistogram<EP> {
                 "Histogram length mismatch for context {}",
                 ctx_idx
             );
-            for (dst, src) in dst_hist.iter_mut().zip(src_hist.iter()) {
-                *dst += *src;
-            }
-        }
-
-        // Add totals
-        for (d, s) in self.totals.iter_mut().zip(other.totals.iter()) {
-            *d += *s;
+            dst_hist.add_all(src_hist);
         }
     }
 
-    /// Returns the histogram as his underlying vector.
+    /// Returns the histograms as his underlying vector.
     pub fn as_vec(self) -> Vec<Vec<usize>> {
         self.ctx_histograms
+            .into_iter()
+            .map(|histogram| histogram.frequencies)
+            .collect()
     }
 
     /// Returns the cost model of encoding each value according to the distributions
@@ -129,8 +169,8 @@ impl<EP: EncodeParams> IntegerHistogram<EP> {
             .map(|histogram| Vec::with_capacity(histogram.len()))
             .collect::<Vec<_>>();
         for (ctx, ctx_histogram) in self.ctx_histograms.iter().enumerate() {
-            let total_symbols = self.totals[ctx];
-            for &freq in ctx_histogram.iter() {
+            let total_symbols = self.ctx_histograms[ctx].count();
+            for &freq in ctx_histogram.frequencies.iter() {
                 let cnt = f64::max(freq as f64, 0.1);
                 let inv_freq = (total_symbols as f64 / cnt) as u64;
                 let token_cost = inv_freq.max(2).ilog2() as usize;
@@ -211,7 +251,7 @@ fn compute_symbol_num_bits(histogram: &[usize], max_bits: usize, infos: &mut [Hu
 }
 
 impl<EP: EncodeParams> HuffmanEncoder<EP> {
-    pub fn new(data: IntegerHistogram<EP>, max_bits: usize) -> Self {
+    pub fn new(data: IntegerHistograms<EP>, max_bits: usize) -> Self {
         let num_symbols = 1 << max_bits;
         let histograms = data.as_vec();
         let mut info = Vec::new();

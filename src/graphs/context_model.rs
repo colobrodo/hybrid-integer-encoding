@@ -181,9 +181,9 @@ impl<EP: EncodeParams> ContextModel for ZuckerliContextModel<EP> {
 
     fn reset(&mut self) {
         self.outdegree = 0;
+        self.block_number = 0;
         self.total_intervals = 0;
         self.total_residuals = 0;
-        self.block_number = 0;
         self.last_residual = 0;
     }
 }
