@@ -58,6 +58,10 @@ impl Histogram {
         self.frequencies.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.len() > 0
+    }
+
     /// Returns the total number of occurrences for all the elements in the interval.
     pub fn count(&self) -> usize {
         self.total

@@ -14,7 +14,7 @@ pub struct HuffmanEstimator<EP: EncodeParams, M: Borrow<CostModel<EP>>, S: Conte
     _marker: core::marker::PhantomData<EP>,
 }
 
-impl<'a, EP: EncodeParams, S: ContextModel, M: Borrow<CostModel<EP>>> HuffmanEstimator<EP, M, S> {
+impl<EP: EncodeParams, S: ContextModel, M: Borrow<CostModel<EP>>> HuffmanEstimator<EP, M, S> {
     pub fn new(cost_model: M, context_model: S) -> Self {
         Self {
             cost_model,

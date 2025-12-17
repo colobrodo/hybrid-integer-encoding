@@ -32,11 +32,13 @@ pub use stats::*;
 
 use crate::huffman::{CostModel, DefaultEncodeParams, EncodeParams, IntegerHistograms};
 
+type HuffmanEstimatedEncoderBuilder<EP, C> =
+    HuffmanGraphEncoderBuilder<HuffmanEstimator<EP, CostModel<EP>, C>, C, EP>;
+
 #[allow(clippy::too_many_arguments)]
 /// Run one reference-selection pass: collect symbols with the given estimator.
 /// Returns a builder seeded with frequency estimates for the next stage.
 fn reference_selection_round<
-    'a,
     G: SequentialGraph,
     EP: EncodeParams,
     E: Encode,
@@ -49,7 +51,7 @@ fn reference_selection_round<
     msg: impl AsRef<str>,
     compressor_type: CompressorType,
     pl: &mut ProgressLogger,
-) -> Result<HuffmanGraphEncoderBuilder<HuffmanEstimator<EP, CostModel<EP>, C>, C, EP>> {
+) -> Result<HuffmanEstimatedEncoderBuilder<EP, C>> {
     let num_symbols = 1 << max_bits;
     let huffman_estimator = huffman_graph_encoder_builder.build_estimator();
     // setup for the new iteration with huffman estimator
@@ -113,7 +115,7 @@ fn parallel_reference_selection_round<
     compressor_type: CompressorType,
     // TODO: use a concurrent_progress_logger
     _pl: &mut ProgressLogger,
-) -> Result<HuffmanGraphEncoderBuilder<HuffmanEstimator<EP, CostModel<EP>, C>, C, EP>> {
+) -> Result<HuffmanEstimatedEncoderBuilder<EP, C>> {
     let num_symbols = 1 << max_bits;
     let num_threads = current_num_threads();
     let split_iter = graph
