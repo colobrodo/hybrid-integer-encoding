@@ -6,7 +6,7 @@ mod huffman_graph_encoder;
 pub mod parameters;
 mod stats;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use dsi_bitstream::prelude::*;
 use dsi_progress_logger::prelude::*;
 use epserde::deser::{Deserialize, Owned};
@@ -112,7 +112,7 @@ fn parallel_reference_selection_round<
     _msg: impl AsRef<str>,
     compressor_type: CompressorType,
     // TODO: use a concurrent_progress_logger
-    pl: &mut ProgressLogger,
+    _pl: &mut ProgressLogger,
 ) -> Result<HuffmanGraphEncoderBuilder<HuffmanEstimator<EP, CostModel<EP>, C>, C, EP>> {
     let num_symbols = 1 << max_bits;
     let num_threads = current_num_threads();
@@ -343,6 +343,30 @@ pub fn convert_graph_file<C: ContextModel + Default + Copy>(
         max_bits,
         compressor_type,
         compression_parameters,
+        false,
+    )
+}
+
+/// Read a BVGraph from `basename` and convert it to a Huffman-encoded graph running the estimation rounds in parallel.
+/// The converted graph is written to `output_basename`.
+pub fn parallel_convert_graph_file<C: ContextModel + Default + Copy>(
+    basename: impl AsRef<Path>,
+    output_basename: impl AsRef<Path>,
+    max_bits: usize,
+    compressor_type: CompressorType,
+    compression_parameters: &CompressionParameters,
+) -> Result<()> {
+    let seq_graph = BvGraphSeq::with_basename(&basename)
+        .endianness::<BE>()
+        .load()?;
+
+    convert_graph::<C, _>(
+        &seq_graph,
+        output_basename,
+        max_bits,
+        compressor_type,
+        compression_parameters,
+        true,
     )
 }
 
@@ -358,6 +382,7 @@ pub fn convert_graph<
     max_bits: usize,
     compressor_type: CompressorType,
     compression_parameters: &CompressionParameters,
+    parallel: bool,
 ) -> Result<()> {
     assert!(
         compression_parameters.num_rounds >= 1,
@@ -418,29 +443,57 @@ pub fn convert_graph<
     }
     pl.done();
 
-    let mut huffman_graph_encoder_builder = parallel_reference_selection_round(
-        seq_graph,
-        huffman_graph_encoder_builder,
-        max_bits,
-        compression_parameters,
-        "Pushing symbols into encoder builder on first round with Huffman estimator...",
-        compressor_type,
-        &mut pl,
-    )?;
-    for round in 2..compression_parameters.num_rounds {
-        huffman_graph_encoder_builder = parallel_reference_selection_round(
+    let mut huffman_graph_encoder_builder = if parallel {
+        parallel_reference_selection_round(
             seq_graph,
             huffman_graph_encoder_builder,
             max_bits,
             compression_parameters,
-            format!(
-                "Pushing symbols into encoder builder with Huffman estimator for round {}...",
-                round + 1
-            )
-            .as_str(),
+            "Pushing symbols into encoder builder on first round with Huffman estimator...",
             compressor_type,
             &mut pl,
-        )?;
+        )?
+    } else {
+        reference_selection_round(
+            seq_graph,
+            huffman_graph_encoder_builder,
+            max_bits,
+            compression_parameters,
+            "Pushing symbols into encoder builder on first round with Huffman estimator...",
+            compressor_type,
+            &mut pl,
+        )?
+    };
+    for round in 2..compression_parameters.num_rounds {
+        huffman_graph_encoder_builder = if parallel {
+            parallel_reference_selection_round(
+                seq_graph,
+                huffman_graph_encoder_builder,
+                max_bits,
+                compression_parameters,
+                format!(
+                    "Pushing symbols into encoder builder with Huffman estimator for round {}...",
+                    round + 1
+                )
+                .as_str(),
+                compressor_type,
+                &mut pl,
+            )?
+        } else {
+            reference_selection_round(
+                seq_graph,
+                huffman_graph_encoder_builder,
+                max_bits,
+                compression_parameters,
+                format!(
+                    "Pushing symbols into encoder builder with Huffman estimator for round {}...",
+                    round + 1
+                )
+                .as_str(),
+                compressor_type,
+                &mut pl,
+            )?
+        };
     }
 
     pl.start("Building the encoder after estimation rounds...");

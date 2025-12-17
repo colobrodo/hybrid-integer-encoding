@@ -2,14 +2,11 @@ mod tests {
     use anyhow::{Context, Result};
     use dsi_bitstream::traits::BE;
     use epserde::deser::Owned;
-    use hybrid_integer_encoding::{
-        graphs::{
-            build_offsets, check_compression_parameters, compare_graphs, convert_graph,
-            convert_graph_file, load_graph, load_graph_seq, measure_stats, CompressionParameters,
-            CompressorType, ConstantContextModel, ContextModel, SimpleContextModel,
-            ZuckerliContextModel,
-        },
-        huffman::DefaultEncodeParams,
+    use hybrid_integer_encoding::graphs::{
+        build_offsets, check_compression_parameters, compare_graphs, convert_graph,
+        convert_graph_file, load_graph, load_graph_seq, measure_stats, parallel_convert_graph_file,
+        CompressionParameters, CompressorType, ConstantContextModel, ContextModel,
+        SimpleContextModel,
     };
     use lender::Lender;
     use std::{
@@ -25,6 +22,7 @@ mod tests {
         max_bits: usize,
         greedily: bool,
         access_random: bool,
+        parallel: bool,
     ) -> anyhow::Result<()> {
         let basename = PathBuf::from_str("tests/data/cnr-2000")?;
 
@@ -33,12 +31,16 @@ mod tests {
         // Get output basename with the same full path as the but in the temp folder
         let output_basename = temp_dir.path().join(basename.file_name().unwrap());
 
-        if greedily {
-            convert_graph_file::<C>(
+        if parallel {
+            parallel_convert_graph_file::<C>(
                 &basename,
                 &output_basename,
                 max_bits,
-                CompressorType::Greedy,
+                if greedily {
+                    CompressorType::Greedy
+                } else {
+                    CompressorType::Approximated { chunk_size: 10000 }
+                },
                 &compression_parameters,
             )?;
         } else {
@@ -46,7 +48,11 @@ mod tests {
                 &basename,
                 &output_basename,
                 max_bits,
-                CompressorType::Approximated { chunk_size: 10000 },
+                if greedily {
+                    CompressorType::Greedy
+                } else {
+                    CompressorType::Approximated { chunk_size: 10000 }
+                },
                 &compression_parameters,
             )?;
         }
@@ -88,6 +94,7 @@ mod tests {
                 max_bits,
                 CompressorType::Greedy,
                 &compression_parameters,
+                false,
             )?;
         } else {
             convert_graph::<C, _>(
@@ -96,6 +103,7 @@ mod tests {
                 max_bits,
                 CompressorType::Approximated { chunk_size: 10000 },
                 &compression_parameters,
+                false,
             )?;
         }
         let huffman_graph = load_graph_seq::<C>(&output_basename, max_bits)?;
@@ -161,7 +169,7 @@ mod tests {
             min_interval_length: 4,
             num_rounds: 1,
         };
-        compress_cnr_2000::<SimpleContextModel>(compression_parameters, 12, false, true)
+        compress_cnr_2000::<SimpleContextModel>(compression_parameters, 12, false, true, false)
             .with_context(|| "Converting the graph and reading accessing randomly")?;
         Ok(())
     }
@@ -174,8 +182,21 @@ mod tests {
             min_interval_length: 4,
             num_rounds: 1,
         };
-        compress_cnr_2000::<SimpleContextModel>(compression_parameters, 12, false, false)
+        compress_cnr_2000::<SimpleContextModel>(compression_parameters, 12, false, false, false)
             .with_context(|| "Converting cnr-2000 with max 12 bits per word")?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_compress_and_decompress_cnr_2000_parallel() -> Result<()> {
+        let compression_parameters = CompressionParameters {
+            compression_window: 7,
+            max_ref_count: 3,
+            min_interval_length: 4,
+            num_rounds: 1,
+        };
+        compress_cnr_2000::<SimpleContextModel>(compression_parameters, 12, false, false, true)
+            .with_context(|| "Converting cnr-2000 running the estimation rounds in parallel")?;
         Ok(())
     }
 
@@ -273,6 +294,7 @@ mod tests {
             expected_max_bits,
             CompressorType::Approximated { chunk_size: 10000 },
             &compression_parameters,
+            false,
         )?;
 
         // Test with wrong max_bits
