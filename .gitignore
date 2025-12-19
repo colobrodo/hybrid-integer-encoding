@@ -5,3 +5,6 @@
 
 lcov.info
 tarpaulin-report.html
+
+# ignore samply and profile files
+profile.json.gz
