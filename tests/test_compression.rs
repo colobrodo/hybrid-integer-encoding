@@ -3,8 +3,8 @@ mod tests {
     use dsi_bitstream::traits::BE;
     use epserde::deser::Owned;
     use hybrid_integer_encoding::graphs::{
-        build_offsets, check_compression_parameters, compare_graphs, convert_graph,
-        convert_graph_file, load_graph, load_graph_seq, measure_stats, parallel_convert_graph_file,
+        build_offsets, check_compression_parameters, compare_graphs, convert_graph, load_graph,
+        load_graph_seq, measure_stats, parallel_convert_graph_file, sequential_convert_graph_file,
         CompressionParameters, CompressorType, ConstantContextModel, ContextModel,
         SimpleContextModel,
     };
@@ -44,7 +44,7 @@ mod tests {
                 &compression_parameters,
             )?;
         } else {
-            convert_graph_file::<C>(
+            sequential_convert_graph_file::<C>(
                 &basename,
                 &output_basename,
                 max_bits,
@@ -334,7 +334,7 @@ mod tests {
             num_rounds: 1,
         };
         let max_bits = 12;
-        convert_graph_file::<SimpleContextModel>(
+        sequential_convert_graph_file::<SimpleContextModel>(
             &basename,
             &output_basename,
             max_bits,

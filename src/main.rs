@@ -124,6 +124,9 @@ enum GraphCommand {
         /// is ignored.
         #[arg(long, default_value = "false")]
         build_offsets: bool,
+        /// If `true` executes the estimation rounds in parallel.
+        #[arg(long, default_value = "false")]
+        parallel: bool,
     },
     /// Compare a Huffman graph and a graph in BvGraph format and checks that all the successor lists are equal.
     /// It returns a 0 exit code if the graphs are the same, otherwise it prints the first node that is different
@@ -555,6 +558,7 @@ fn main() -> Result<()> {
                 build_offsets,
                 context_model,
                 block_size,
+                parallel,
             } => {
                 let compression_parameters = CompressionParameters {
                     compression_window,
@@ -578,6 +582,7 @@ fn main() -> Result<()> {
                                 chunk_size: block_size,
                             },
                             &compression_parameters,
+                            parallel,
                         )?
                     }
                     (ContextModelArgument::Single, true) => {
@@ -587,6 +592,7 @@ fn main() -> Result<()> {
                             max_bits,
                             CompressorType::Greedy,
                             &compression_parameters,
+                            parallel,
                         )?
                     }
 
@@ -599,6 +605,7 @@ fn main() -> Result<()> {
                                 chunk_size: block_size,
                             },
                             &compression_parameters,
+                            parallel,
                         )?
                     }
                     (ContextModelArgument::Simple, true) => {
@@ -608,6 +615,7 @@ fn main() -> Result<()> {
                             max_bits,
                             CompressorType::Greedy,
                             &compression_parameters,
+                            parallel,
                         )?
                     }
                     (ContextModelArgument::Zuckerli, false) => {
@@ -619,6 +627,7 @@ fn main() -> Result<()> {
                                 chunk_size: block_size,
                             },
                             &compression_parameters,
+                            parallel,
                         )?
                     }
                     (ContextModelArgument::Zuckerli, true) => {
@@ -628,6 +637,7 @@ fn main() -> Result<()> {
                             max_bits,
                             CompressorType::Greedy,
                             &compression_parameters,
+                            parallel,
                         )?
                     }
                 }

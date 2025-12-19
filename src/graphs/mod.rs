@@ -328,19 +328,15 @@ pub fn serialize_eliasfano(
 
 /// Read a BVGraph from `basename` and convert it to a Huffman-encoded graph.
 /// The converted graph is written to `output_basename`.
-pub fn convert_graph_file<C: ContextModel + Default + Copy>(
+pub fn sequential_convert_graph_file<C: ContextModel + Default + Copy>(
     basename: impl AsRef<Path>,
     output_basename: impl AsRef<Path>,
     max_bits: usize,
     compressor_type: CompressorType,
     compression_parameters: &CompressionParameters,
 ) -> Result<()> {
-    let seq_graph = BvGraphSeq::with_basename(&basename)
-        .endianness::<BE>()
-        .load()?;
-
-    convert_graph::<C, _>(
-        &seq_graph,
+    convert_graph_file::<C>(
+        basename,
         output_basename,
         max_bits,
         compressor_type,
@@ -358,6 +354,27 @@ pub fn parallel_convert_graph_file<C: ContextModel + Default + Copy>(
     compressor_type: CompressorType,
     compression_parameters: &CompressionParameters,
 ) -> Result<()> {
+    convert_graph_file::<C>(
+        basename,
+        output_basename,
+        max_bits,
+        compressor_type,
+        compression_parameters,
+        true,
+    )
+}
+
+/// Read a BVGraph from `basename` and convert it to a Huffman-encoded graph.
+/// The converted graph is written to `output_basename`.
+/// The `parallel` arguments controls if the estimation rounds are executed in parallel or sequentially.
+pub fn convert_graph_file<C: ContextModel + Default + Copy>(
+    basename: impl AsRef<Path>,
+    output_basename: impl AsRef<Path>,
+    max_bits: usize,
+    compressor_type: CompressorType,
+    compression_parameters: &CompressionParameters,
+    parallel: bool,
+) -> Result<()> {
     let seq_graph = BvGraphSeq::with_basename(&basename)
         .endianness::<BE>()
         .load()?;
@@ -368,7 +385,7 @@ pub fn parallel_convert_graph_file<C: ContextModel + Default + Copy>(
         max_bits,
         compressor_type,
         compression_parameters,
-        true,
+        parallel,
     )
 }
 
