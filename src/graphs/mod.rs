@@ -35,6 +35,51 @@ use crate::huffman::{CostModel, DefaultEncodeParams, EncodeParams, IntegerHistog
 type HuffmanEstimatedEncoderBuilder<EP, C> =
     HuffmanGraphEncoderBuilder<HuffmanEstimator<EP, CostModel<EP>, C>, C, EP>;
 
+/// A factory trait for creating thread-local estimators of a specific encoders.
+///
+/// This trait is used to instantiate estimators in parallel contexts where each thread
+/// needs its own independent estimator instance. The estimator type `E` must implement
+trait ThreadEstimatorFactory<'a, E: Encode + Send + Sync> {
+    fn create_estimator(&self) -> E;
+}
+
+struct DefaultEstimatorFactory<E: Encode + Send + Sync + Default> {
+    _marker: core::marker::PhantomData<E>,
+}
+
+impl<'a, E: Encode + Send + Sync + Default> ThreadEstimatorFactory<'a, E>
+    for DefaultEstimatorFactory<E>
+{
+    fn create_estimator(&self) -> E {
+        E::default()
+    }
+}
+
+impl<E: Encode + Send + Sync + Default> Default for DefaultEstimatorFactory<E> {
+    fn default() -> Self {
+        Self {
+            _marker: std::marker::PhantomData,
+        }
+    }
+}
+
+/// Factory for creating `HuffmanEstimator` instances with a captured cost model reference.
+/// This factory captures a reference to the cost model from a previous estimation round and creates
+/// thread-local `HuffmanEstimator` instances for parallel compression.
+struct HuffmanEstimatorFactory<'a, EP: EncodeParams, C: ContextModel> {
+    cost_model: &'a CostModel<EP>,
+    _marker: core::marker::PhantomData<C>,
+}
+
+impl<'a, EP: EncodeParams + Send + Sync, C: ContextModel + Default + Copy + Send + Sync>
+    ThreadEstimatorFactory<'a, HuffmanEstimator<EP, &'a CostModel<EP>, C>>
+    for HuffmanEstimatorFactory<'a, EP, C>
+{
+    fn create_estimator(&self) -> HuffmanEstimator<EP, &'a CostModel<EP>, C> {
+        HuffmanEstimator::new(self.cost_model, C::default())
+    }
+}
+
 /// Run one reference-selection pass: collect symbols with the given estimator.
 /// Returns a builder seeded with frequency estimates for the next stage.
 fn reference_selection_round<
@@ -96,17 +141,20 @@ fn reference_selection_round<
     Ok(huffman_graph_encoder_builder)
 }
 
-/// Run the first compression round in parallel using the given estimator type.
-/// Splits the graph, compresses each chunk with its own builder, then merges histograms.
-fn parallel_first_reference_selection_round<
-    EP: EncodeParams + Send + Sync,
-    E: Encode + Default + Send + Sync,
-    C: ContextModel + Default + Copy + Send + Sync,
-    G: SequentialGraph + for<'a> SplitLabeling<SplitLender<'a>: ExactSizeLender + Send>,
->(
+/// Generic helper for parallel compression: it iterates over a split lender and computes the symbols' frequencies
+/// with the given estimator factory, and in the end, returns the merged histograms.
+fn parallel_compression_round_helper<'a, EP, E, C, G, Factory>(
     graph: &G,
     compression_parameters: &CompressionParameters,
-) -> Result<HuffmanGraphEncoderBuilder<E, C, EP>> {
+    factory: &Factory,
+) -> Result<IntegerHistograms<EP>>
+where
+    EP: EncodeParams + Send + Sync,
+    E: Encode + Send + Sync,
+    C: ContextModel + Default + Copy + Send + Sync,
+    G: SequentialGraph + for<'b> SplitLabeling<SplitLender<'b>: ExactSizeLender + Send>,
+    Factory: ThreadEstimatorFactory<'a, E> + Send + Sync,
+{
     let num_symbols = 1 << compression_parameters.max_bits;
     let num_threads = current_num_threads();
     let split_iter = graph
@@ -129,10 +177,10 @@ fn parallel_first_reference_selection_round<
                 };
                 let first_node = node_id;
 
-                // Initialize local builder with the starting estimator
+                // Initialize local builder with the estimator from factory
                 let mut thread_builder = HuffmanGraphEncoderBuilder::<_, _, EP>::new(
                     num_symbols,
-                    E::default(),
+                    factory.create_estimator(),
                     C::default(),
                 );
                 let offsets_writer = OffsetsWriter::from_write(io::empty(), true)?;
@@ -176,11 +224,32 @@ fn parallel_first_reference_selection_round<
         )
         .collect::<Result<Vec<_>>>()?;
 
-    // combine all threads' histograms into one
+    // Merge Phase: Combine all local histograms into one
     let mut shared_histograms = IntegerHistograms::<EP>::new(C::num_contexts(), num_symbols);
     for h in thread_histograms {
         shared_histograms.add_all(&h);
     }
+
+    Ok(shared_histograms)
+}
+
+/// Run the first compression round in parallel using the given estimator type.
+/// Splits the graph, compresses each chunk with its own builder, then merges histograms.
+fn parallel_first_reference_selection_round<
+    EP: EncodeParams + Send + Sync,
+    E: Encode + Default + Send + Sync,
+    C: ContextModel + Default + Copy + Send + Sync,
+    G: SequentialGraph + for<'a> SplitLabeling<SplitLender<'a>: ExactSizeLender + Send>,
+>(
+    graph: &G,
+    compression_parameters: &CompressionParameters,
+) -> Result<HuffmanGraphEncoderBuilder<E, C, EP>> {
+    let factory = DefaultEstimatorFactory::<E>::default();
+    let shared_histograms = parallel_compression_round_helper::<EP, E, C, G, _>(
+        graph,
+        compression_parameters,
+        &factory,
+    )?;
 
     let builder = HuffmanGraphEncoderBuilder::<_, _, EP>::from_histograms(
         shared_histograms,
@@ -196,7 +265,7 @@ fn parallel_first_reference_selection_round<
 fn parallel_reference_selection_round<
     EP: EncodeParams + Send + Sync,
     E: Encode,
-    C: ContextModel + Default,
+    C: ContextModel + Default + Copy + Send + Sync,
 >(
     graph: &(impl SequentialGraph + for<'a> SplitLabeling<SplitLender<'a>: ExactSizeLender + Send>),
     huffman_graph_encoder_builder: HuffmanGraphEncoderBuilder<E, C, EP>,
@@ -205,86 +274,21 @@ fn parallel_reference_selection_round<
     // TODO: use a concurrent_progress_logger
     _pl: &mut ProgressLogger,
 ) -> Result<HuffmanEstimatedEncoderBuilder<EP, C>> {
-    let num_symbols = 1 << compression_parameters.max_bits;
-    let num_threads = current_num_threads();
-    let split_iter = graph
-        .split_iter(num_threads)
-        .into_iter()
-        .collect::<Vec<_>>();
-
     // obtain cost model of the previous iteration
     let cost_model = huffman_graph_encoder_builder.histograms().cost();
 
-    // iterate the split iter in parallel
-    let thread_histograms: Vec<IntegerHistograms<EP>> = split_iter
-        .into_iter()
-        .enumerate()
-        .par_bridge()
-        .map(
-            |(thread_id, mut thread_lender)| -> Result<IntegerHistograms<EP>> {
-                let Some((node_id, successors)) = thread_lender.next() else {
-                    return Err(anyhow::anyhow!(
-                        "Empty chunked size of compressors in thread {}",
-                        thread_id
-                    ));
-                };
-                let first_node = node_id;
+    // Run parallel compression with Huffman estimator factory
+    let factory = HuffmanEstimatorFactory::<'_, EP, C> {
+        cost_model: &cost_model,
+        _marker: std::marker::PhantomData,
+    };
+    let shared_histograms = parallel_compression_round_helper::<EP, _, C, _, _>(
+        graph,
+        compression_parameters,
+        &factory,
+    )?;
 
-                // Initialize local builder
-                let huffman_estimator = HuffmanEstimator::new(&cost_model, C::default());
-                let mut thread_huffman_builder = HuffmanGraphEncoderBuilder::<_, _, EP>::new(
-                    num_symbols,
-                    huffman_estimator,
-                    C::default(),
-                );
-                let offsets_writer = OffsetsWriter::from_write(io::empty(), false)?;
-
-                match compression_parameters.compressor {
-                    CompressorType::Approximated { chunk_size } => {
-                        let mut compressor = BvCompZ::new(
-                            &mut thread_huffman_builder,
-                            offsets_writer,
-                            compression_parameters.compression_window,
-                            chunk_size,
-                            compression_parameters.max_ref_count,
-                            compression_parameters.min_interval_length,
-                            first_node,
-                        );
-                        compressor.push(successors).unwrap();
-                        for_![ (_, succ) in thread_lender {
-                            compressor.push(succ)?;
-                        }];
-                        compressor.flush()?;
-                    }
-                    CompressorType::Greedy => {
-                        let mut compressor = BvComp::new(
-                            &mut thread_huffman_builder,
-                            offsets_writer,
-                            compression_parameters.compression_window,
-                            compression_parameters.max_ref_count,
-                            compression_parameters.min_interval_length,
-                            first_node,
-                        );
-                        compressor.push(successors).unwrap();
-                        for_![ (_, succ) in thread_lender {
-                            compressor.push(succ)?;
-                        }];
-                        compressor.flush()?;
-                    }
-                }
-
-                Ok(thread_huffman_builder.histograms())
-            },
-        )
-        .collect::<Result<Vec<_>>>()?;
-
-    // 3. Merge Phase: Combine all local histograms into one
-    let mut shared_histograms = IntegerHistograms::<EP>::new(C::num_contexts(), num_symbols);
-    for h in thread_histograms {
-        shared_histograms.add_all(&h);
-    }
-
-    // Finalize builder
+    // Finalize builder with Huffman estimator and merged histograms
     let huffman_estimator = HuffmanEstimator::new(cost_model, C::default());
     let builder = HuffmanGraphEncoderBuilder::<_, _, EP>::from_histograms(
         shared_histograms,
