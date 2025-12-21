@@ -49,7 +49,6 @@ fn reference_selection_round<
     max_bits: usize,
     compression_parameters: &CompressionParameters,
     msg: impl AsRef<str>,
-    compressor_type: CompressorType,
     pl: &mut ProgressLogger,
 ) -> Result<HuffmanEstimatedEncoderBuilder<EP, C>> {
     let num_symbols = 1 << max_bits;
@@ -62,7 +61,7 @@ fn reference_selection_round<
     pl.item_name("node")
         .expected_updates(Some(graph.num_nodes()));
     pl.start(msg);
-    match compressor_type {
+    match compression_parameters.compressor {
         CompressorType::Approximated { chunk_size } => {
             let mut compressor = BvCompZ::new(
                 &mut huffman_graph_encoder_builder,
@@ -112,7 +111,6 @@ fn parallel_reference_selection_round<
     max_bits: usize,
     compression_parameters: &CompressionParameters,
     _msg: impl AsRef<str>,
-    compressor_type: CompressorType,
     // TODO: use a concurrent_progress_logger
     _pl: &mut ProgressLogger,
 ) -> Result<HuffmanEstimatedEncoderBuilder<EP, C>> {
@@ -150,7 +148,7 @@ fn parallel_reference_selection_round<
                 );
                 let offsets_writer = OffsetsWriter::from_write(io::empty(), false)?;
 
-                match compressor_type {
+                match compression_parameters.compressor {
                     CompressorType::Approximated { chunk_size } => {
                         let mut compressor = BvCompZ::new(
                             &mut thread_huffman_builder,
@@ -332,14 +330,12 @@ pub fn sequential_convert_graph_file<C: ContextModel + Default + Copy>(
     basename: impl AsRef<Path>,
     output_basename: impl AsRef<Path>,
     max_bits: usize,
-    compressor_type: CompressorType,
     compression_parameters: &CompressionParameters,
 ) -> Result<()> {
     convert_graph_file::<C>(
         basename,
         output_basename,
         max_bits,
-        compressor_type,
         compression_parameters,
         false,
     )
@@ -351,14 +347,12 @@ pub fn parallel_convert_graph_file<C: ContextModel + Default + Copy>(
     basename: impl AsRef<Path>,
     output_basename: impl AsRef<Path>,
     max_bits: usize,
-    compressor_type: CompressorType,
     compression_parameters: &CompressionParameters,
 ) -> Result<()> {
     convert_graph_file::<C>(
         basename,
         output_basename,
         max_bits,
-        compressor_type,
         compression_parameters,
         true,
     )
@@ -371,7 +365,6 @@ pub fn convert_graph_file<C: ContextModel + Default + Copy>(
     basename: impl AsRef<Path>,
     output_basename: impl AsRef<Path>,
     max_bits: usize,
-    compressor_type: CompressorType,
     compression_parameters: &CompressionParameters,
     parallel: bool,
 ) -> Result<()> {
@@ -383,7 +376,6 @@ pub fn convert_graph_file<C: ContextModel + Default + Copy>(
         &seq_graph,
         output_basename,
         max_bits,
-        compressor_type,
         compression_parameters,
         parallel,
     )
@@ -398,13 +390,12 @@ pub fn convert_graph<
     seq_graph: &G,
     output_basename: impl AsRef<Path>,
     max_bits: usize,
-    compressor_type: CompressorType,
     compression_parameters: &CompressionParameters,
     parallel: bool,
 ) -> Result<()> {
     assert!(
         compression_parameters.num_rounds >= 1,
-        "num_rounds must be at least 1"
+        "Needed at least one estimation round to compress the graph using a Huffman-based encoding."
     );
     let mut pl = progress_logger!(
         display_memory = true,
@@ -427,7 +418,8 @@ pub fn convert_graph<
 
     // first iteration: build a encoder with Log2Estimator
     // TODO: parallelize even the first round with non-Huffman estimators
-    match compressor_type {
+    // TODO: we should choose between log2 and fixed estimators in the first round
+    match compression_parameters.compressor {
         CompressorType::Approximated { chunk_size } => {
             let mut compressor = BvCompZ::new(
                 &mut huffman_graph_encoder_builder,
@@ -473,7 +465,6 @@ pub fn convert_graph<
             huffman_graph_encoder_builder,
             seq_graph,
             max_bits,
-            compressor_type,
             compression_parameters,
             &mut pl,
         );
@@ -487,7 +478,6 @@ pub fn convert_graph<
             max_bits,
             compression_parameters,
             "Pushing symbols into encoder builder on first round with Huffman estimator...",
-            compressor_type,
             &mut pl,
         )?
     } else {
@@ -497,7 +487,6 @@ pub fn convert_graph<
             max_bits,
             compression_parameters,
             "Pushing symbols into encoder builder on first round with Huffman estimator...",
-            compressor_type,
             &mut pl,
         )?
     };
@@ -515,7 +504,6 @@ pub fn convert_graph<
                     round + 1
                 )
                 .as_str(),
-                compressor_type,
                 &mut pl,
             )?
         } else {
@@ -529,7 +517,6 @@ pub fn convert_graph<
                     round + 1
                 )
                 .as_str(),
-                compressor_type,
                 &mut pl,
             )?
         };
@@ -540,7 +527,6 @@ pub fn convert_graph<
         huffman_graph_encoder_builder,
         seq_graph,
         max_bits,
-        compressor_type,
         compression_parameters,
         &mut pl,
     )?;
@@ -558,7 +544,6 @@ fn write_graph_to_disk<
     huffman_graph_encoder_builder: HuffmanGraphEncoderBuilder<E, C, EP>,
     seq_graph: &G,
     max_bits: usize,
-    compressor_type: CompressorType,
     compression_parameters: &CompressionParameters,
     pl: &mut ProgressLogger,
 ) -> Result<()> {
@@ -583,7 +568,7 @@ fn write_graph_to_disk<
         .expected_updates(Some(seq_graph.num_nodes()));
     pl.start("Compressing the graph...");
 
-    match compressor_type {
+    match compression_parameters.compressor {
         CompressorType::Approximated { chunk_size } => {
             let mut compressor = BvCompZ::new(
                 huffman_graph_encoder,

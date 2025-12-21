@@ -10,6 +10,8 @@ pub struct CompressionParameters {
     pub min_interval_length: usize,
     /// The number of compression rounds to perform.
     pub num_rounds: usize,
+    /// The type of reference selection algorithm to use: greedy or approximate.
+    pub compressor: CompressorType,
 }
 
 impl CompressionParameters {
@@ -41,6 +43,13 @@ impl CompressionParameters {
         let context_model_name = context_model_name.as_ref();
         s.push_str(&format!("contextmodel={context_model_name}\n"));
         s.push_str(&format!("maxhuffmanbits={max_bits}\n"));
+        match self.compressor {
+            CompressorType::Greedy => s.push_str("compressortype=greedy\n"),
+            CompressorType::Approximated { chunk_size } => {
+                s.push_str("compressortype=approximated\n");
+                s.push_str(&format!("chunksize={chunk_size}\n"));
+            }
+        };
         Ok(s)
     }
 }

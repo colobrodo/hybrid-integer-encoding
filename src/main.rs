@@ -85,7 +85,7 @@ enum Command {
 
 #[derive(Debug, Subcommand)]
 enum GraphCommand {
-    /// Measure the time taken to decode an encoded sample of random numbers
+    /// Convert a BVGraph graph into a one based on hybrid Huffman encoding.
     Convert {
         /// The basename of the graph to compress
         basename: PathBuf,
@@ -119,11 +119,6 @@ enum GraphCommand {
         /// Number of iteration of the graph compression using the huffman estimator for reference selection.
         #[arg(long, default_value = "1")]
         num_rounds: usize,
-        /// Creates the offsets file at the end of the conversion.
-        /// This is available only with greedy compressor, if the approximated one is employed, this parameter
-        /// is ignored.
-        #[arg(long, default_value = "false")]
-        build_offsets: bool,
         /// If `true` executes the estimation rounds in parallel.
         #[arg(long, default_value = "false")]
         parallel: bool,
@@ -555,7 +550,6 @@ fn main() -> Result<()> {
                 greedy_compressor,
                 max_bits,
                 num_rounds,
-                build_offsets,
                 context_model,
                 block_size,
                 parallel,
@@ -565,77 +559,34 @@ fn main() -> Result<()> {
                     max_ref_count,
                     min_interval_length,
                     num_rounds,
+                    compressor: if greedy_compressor {
+                        CompressorType::Greedy
+                    } else {
+                        CompressorType::Approximated {
+                            chunk_size: block_size,
+                        }
+                    },
                 };
-                // Unlike the BVGraph greedy one, the Zuckerli reference selection algorithm does not work in a streaming fashion.
-                // Therefore, it is currently impossible to determine the number of bits used to write a node each time it is pushed,
-                // only when each chunk is flushed.
-                if build_offsets && !greedy_compressor {
-                    log::warn!("Cannot build offsets during conversion of graph '{}', when compressing it with Zuckerli reference selection algorithm.", basename.display());
-                }
-                match (context_model, greedy_compressor) {
-                    (ContextModelArgument::Single, false) => {
-                        convert_graph_file::<ConstantContextModel>(
-                            &basename,
-                            &output_basename,
-                            max_bits,
-                            CompressorType::Approximated {
-                                chunk_size: block_size,
-                            },
-                            &compression_parameters,
-                            parallel,
-                        )?
-                    }
-                    (ContextModelArgument::Single, true) => {
-                        convert_graph_file::<ConstantContextModel>(
-                            &basename,
-                            &output_basename,
-                            max_bits,
-                            CompressorType::Greedy,
-                            &compression_parameters,
-                            parallel,
-                        )?
-                    }
-
-                    (ContextModelArgument::Simple, false) => {
-                        convert_graph_file::<SimpleContextModel>(
-                            &basename,
-                            &output_basename,
-                            max_bits,
-                            CompressorType::Approximated {
-                                chunk_size: block_size,
-                            },
-                            &compression_parameters,
-                            parallel,
-                        )?
-                    }
-                    (ContextModelArgument::Simple, true) => {
-                        convert_graph_file::<SimpleContextModel>(
-                            &basename,
-                            &output_basename,
-                            max_bits,
-                            CompressorType::Greedy,
-                            &compression_parameters,
-                            parallel,
-                        )?
-                    }
-                    (ContextModelArgument::Zuckerli, false) => {
+                match context_model {
+                    ContextModelArgument::Single => convert_graph_file::<ConstantContextModel>(
+                        &basename,
+                        &output_basename,
+                        max_bits,
+                        &compression_parameters,
+                        parallel,
+                    )?,
+                    ContextModelArgument::Simple => convert_graph_file::<SimpleContextModel>(
+                        &basename,
+                        &output_basename,
+                        max_bits,
+                        &compression_parameters,
+                        parallel,
+                    )?,
+                    ContextModelArgument::Zuckerli => {
                         convert_graph_file::<ZuckerliContextModel<DefaultEncodeParams>>(
                             &basename,
                             &output_basename,
                             max_bits,
-                            CompressorType::Approximated {
-                                chunk_size: block_size,
-                            },
-                            &compression_parameters,
-                            parallel,
-                        )?
-                    }
-                    (ContextModelArgument::Zuckerli, true) => {
-                        convert_graph_file::<ZuckerliContextModel<DefaultEncodeParams>>(
-                            &basename,
-                            &output_basename,
-                            max_bits,
-                            CompressorType::Greedy,
                             &compression_parameters,
                             parallel,
                         )?

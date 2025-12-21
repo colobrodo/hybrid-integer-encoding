@@ -20,7 +20,6 @@ mod tests {
     fn compress_cnr_2000<C: ContextModel + Default + Copy + 'static>(
         compression_parameters: CompressionParameters,
         max_bits: usize,
-        greedily: bool,
         access_random: bool,
         parallel: bool,
     ) -> anyhow::Result<()> {
@@ -36,11 +35,6 @@ mod tests {
                 &basename,
                 &output_basename,
                 max_bits,
-                if greedily {
-                    CompressorType::Greedy
-                } else {
-                    CompressorType::Approximated { chunk_size: 10000 }
-                },
                 &compression_parameters,
             )?;
         } else {
@@ -48,11 +42,6 @@ mod tests {
                 &basename,
                 &output_basename,
                 max_bits,
-                if greedily {
-                    CompressorType::Greedy
-                } else {
-                    CompressorType::Approximated { chunk_size: 10000 }
-                },
                 &compression_parameters,
             )?;
         }
@@ -75,7 +64,6 @@ mod tests {
     fn compress_random_graph<C: ContextModel + Default + Copy + 'static>(
         compression_parameters: CompressionParameters,
         max_bits: usize,
-        greedily: bool,
         seed: u64,
     ) -> anyhow::Result<()> {
         // Create a temporary directory
@@ -87,25 +75,13 @@ mod tests {
         let mut graph = VecGraph::new();
         graph.add_lender(random_graph.iter());
 
-        if greedily {
-            convert_graph::<C, _>(
-                &graph,
-                &output_basename,
-                max_bits,
-                CompressorType::Greedy,
-                &compression_parameters,
-                false,
-            )?;
-        } else {
-            convert_graph::<C, _>(
-                &graph,
-                &output_basename,
-                max_bits,
-                CompressorType::Approximated { chunk_size: 10000 },
-                &compression_parameters,
-                false,
-            )?;
-        }
+        convert_graph::<C, _>(
+            &graph,
+            &output_basename,
+            max_bits,
+            &compression_parameters,
+            false,
+        )?;
         let huffman_graph = load_graph_seq::<C>(&output_basename, max_bits)?;
         assert!(graph::eq(&graph, &huffman_graph).is_ok());
 
@@ -142,8 +118,9 @@ mod tests {
             max_ref_count: 3,
             min_interval_length: 4,
             num_rounds: 1,
+            compressor: CompressorType::Approximated { chunk_size: 10000 },
         };
-        compress_random_graph::<SimpleContextModel>(compression_parameters, 12, false, 0)
+        compress_random_graph::<SimpleContextModel>(compression_parameters, 12, 0)
             .with_context(|| "Converting a random graph")?;
         Ok(())
     }
@@ -155,8 +132,9 @@ mod tests {
             max_ref_count: 3,
             min_interval_length: 4,
             num_rounds: 1,
+            compressor: CompressorType::Approximated { chunk_size: 10000 },
         };
-        compress_random_graph::<SimpleContextModel>(compression_parameters, 12, false, 31415)
+        compress_random_graph::<SimpleContextModel>(compression_parameters, 12, 31415)
             .with_context(|| "Converting a random graph")?;
         Ok(())
     }
@@ -168,8 +146,9 @@ mod tests {
             max_ref_count: 3,
             min_interval_length: 4,
             num_rounds: 1,
+            compressor: CompressorType::Approximated { chunk_size: 10000 },
         };
-        compress_cnr_2000::<SimpleContextModel>(compression_parameters, 12, false, true, false)
+        compress_cnr_2000::<SimpleContextModel>(compression_parameters, 12, true, false)
             .with_context(|| "Converting the graph and reading accessing randomly")?;
         Ok(())
     }
@@ -181,8 +160,9 @@ mod tests {
             max_ref_count: 3,
             min_interval_length: 4,
             num_rounds: 1,
+            compressor: CompressorType::Approximated { chunk_size: 10000 },
         };
-        compress_cnr_2000::<SimpleContextModel>(compression_parameters, 12, false, false, false)
+        compress_cnr_2000::<SimpleContextModel>(compression_parameters, 12, false, false)
             .with_context(|| "Converting cnr-2000 with max 12 bits per word")?;
         Ok(())
     }
@@ -194,8 +174,9 @@ mod tests {
             max_ref_count: 3,
             min_interval_length: 4,
             num_rounds: 1,
+            compressor: CompressorType::Approximated { chunk_size: 10000 },
         };
-        compress_cnr_2000::<SimpleContextModel>(compression_parameters, 12, false, false, true)
+        compress_cnr_2000::<SimpleContextModel>(compression_parameters, 12, false, true)
             .with_context(|| "Converting cnr-2000 running the estimation rounds in parallel")?;
         Ok(())
     }
@@ -207,8 +188,9 @@ mod tests {
             max_ref_count: 3,
             min_interval_length: 4,
             num_rounds: 3,
+            compressor: CompressorType::Approximated { chunk_size: 10000 },
         };
-        compress_random_graph::<SimpleContextModel>(compression_parameters, 12, false, 0)
+        compress_random_graph::<SimpleContextModel>(compression_parameters, 12, 0)
             .with_context(|| "Converting the graph with multiple rounds")?;
         Ok(())
     }
@@ -220,8 +202,9 @@ mod tests {
             max_ref_count: 3,
             min_interval_length: 4,
             num_rounds: 1,
+            compressor: CompressorType::Approximated { chunk_size: 10000 },
         };
-        compress_random_graph::<SimpleContextModel>(compression_parameters, 8, false, 0)
+        compress_random_graph::<SimpleContextModel>(compression_parameters, 8, 0)
             .with_context(|| "Converting the graph with 8-bit maximum size")?;
         Ok(())
     }
@@ -252,8 +235,9 @@ mod tests {
             max_ref_count: 3,
             min_interval_length: 4,
             num_rounds: 1,
+            compressor: CompressorType::Approximated { chunk_size: 10000 },
         };
-        compress_random_graph::<SimpleContextModel>(compression_parameters, 12, false, 0)
+        compress_random_graph::<SimpleContextModel>(compression_parameters, 12, 0)
             .with_context(|| "Converting the graph with bigger window size")?;
         Ok(())
     }
@@ -265,8 +249,9 @@ mod tests {
             max_ref_count: 3,
             min_interval_length: 4,
             num_rounds: 1,
+            compressor: CompressorType::Greedy,
         };
-        compress_random_graph::<SimpleContextModel>(compression_parameters, 12, true, 0)
+        compress_random_graph::<SimpleContextModel>(compression_parameters, 12, 0)
             .with_context(|| "Converting the graph with greedy reference selection")?;
         Ok(())
     }
@@ -284,6 +269,7 @@ mod tests {
             max_ref_count: 3,
             min_interval_length: 4,
             num_rounds: 1,
+            compressor: CompressorType::Approximated { chunk_size: 10000 },
         };
 
         // Create and save a graph with SimpleContextModel
@@ -292,7 +278,6 @@ mod tests {
             &graph,
             &output_basename,
             expected_max_bits,
-            CompressorType::Approximated { chunk_size: 10000 },
             &compression_parameters,
             false,
         )?;
@@ -332,13 +317,13 @@ mod tests {
             max_ref_count: 3,
             min_interval_length: 4,
             num_rounds: 2,
+            compressor: CompressorType::Approximated { chunk_size: 10000 },
         };
         let max_bits = 12;
         sequential_convert_graph_file::<SimpleContextModel>(
             &basename,
             &output_basename,
             max_bits,
-            CompressorType::Approximated { chunk_size: 10000 },
             &compression_parameters,
         )?;
         let graph = load_graph_seq::<SimpleContextModel>(&output_basename, max_bits)?;
