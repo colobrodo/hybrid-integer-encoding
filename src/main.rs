@@ -21,7 +21,9 @@ use rand::prelude::*;
 use rand_distr::Zipf;
 
 use hybrid_integer_encoding::{
-    graphs::{build_offsets, compare_graphs, convert_graph_file, measure_stats, CompressorType},
+    graphs::{
+        build_offsets, compare_graphs, convert_graph_file, measure_stats, CompressorType, Estimator,
+    },
     utils::IntegerData,
 };
 use hybrid_integer_encoding::{
@@ -119,6 +121,9 @@ enum GraphCommand {
         /// Number of iteration of the graph compression using the huffman estimator for reference selection.
         #[arg(long, default_value = "1")]
         num_rounds: usize,
+        /// The type of estimator to use in the first reference selection round.
+        #[arg(long, default_value = "log2")]
+        starting_estimator: EstimatorArgument,
         /// If `true` executes the estimation rounds in parallel.
         #[arg(long, default_value = "false")]
         parallel: bool,
@@ -271,6 +276,14 @@ enum ContextModelArgument {
     /// Implements a partial version of context model described in zuckerli
     /// using only the information available in the current adjacency list
     Zuckerli,
+}
+
+#[derive(clap::ValueEnum, Debug, Clone)]
+enum EstimatorArgument {
+    /// Estimate the symbol based on his binary representation
+    Log2,
+    /// Assign a fixed cost to each symbol
+    Fixed,
 }
 
 fn encode_file(
@@ -553,6 +566,7 @@ fn main() -> Result<()> {
                 context_model,
                 block_size,
                 parallel,
+                starting_estimator,
             } => {
                 let compression_parameters = CompressionParameters {
                     compression_window,
@@ -565,6 +579,10 @@ fn main() -> Result<()> {
                         CompressorType::Approximated {
                             chunk_size: block_size,
                         }
+                    },
+                    starting_estimator: match starting_estimator {
+                        EstimatorArgument::Log2 => Estimator::Log2,
+                        EstimatorArgument::Fixed => Estimator::Fixed,
                     },
                 };
                 match context_model {

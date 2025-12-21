@@ -403,7 +403,7 @@ pub fn convert_graph<
     );
 
     let num_symbols = 1 << max_bits;
-    // setup for the first iteration with Log2Estimator
+    // setup for the first iteration with Fixed or Log2Estimator
     let mut huffman_graph_encoder_builder =
         HuffmanGraphEncoderBuilder::<_, _, DefaultEncodeParams>::new(
             num_symbols,

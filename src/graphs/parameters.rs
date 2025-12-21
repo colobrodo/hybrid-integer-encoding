@@ -12,6 +12,8 @@ pub struct CompressionParameters {
     pub num_rounds: usize,
     /// The type of reference selection algorithm to use: greedy or approximate.
     pub compressor: CompressorType,
+    /// The type of reference selection algorithm to use: greedy or approximate.
+    pub starting_estimator: Estimator,
 }
 
 impl CompressionParameters {
@@ -22,6 +24,7 @@ impl CompressionParameters {
             min_interval_length: 4,
             num_rounds: 1,
             compressor: CompressorType::Approximated { chunk_size: 10000 },
+            starting_estimator: Estimator::Log2,
         }
     }
 
@@ -57,6 +60,16 @@ impl CompressionParameters {
 
     pub fn with_chunk_size(mut self, chunk_size: usize) -> Self {
         self.compressor = CompressorType::Approximated { chunk_size };
+        self
+    }
+
+    pub fn with_fixed_estimator(mut self) -> Self {
+        self.starting_estimator = Estimator::Fixed;
+        self
+    }
+
+    pub fn with_log2_estimator(mut self) -> Self {
+        self.starting_estimator = Estimator::Log2;
         self
     }
 
@@ -105,4 +118,13 @@ impl CompressionParameters {
 pub enum CompressorType {
     Approximated { chunk_size: usize },
     Greedy,
+}
+
+/// Determine the starting type estimator used in the first round of reference selection.
+/// It can be of two types: the first log2 estimate the size of each symbol based on his binary representation
+/// the other, "fixed" used by Zuckerli, assign the same probability to each symbol.
+#[derive(Debug, Copy, Clone)]
+pub enum Estimator {
+    Log2,
+    Fixed,
 }
