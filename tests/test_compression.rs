@@ -167,6 +167,14 @@ mod tests {
     }
 
     #[test]
+    fn test_compress_and_decompress_with_fixed_estimator() -> Result<()> {
+        let compression_parameters = CompressionParameters::new().with_fixed_estimator();
+        compress_random_graph::<SimpleContextModel>(compression_parameters, 12, 0)
+            .with_context(|| "Converting the graph with a fixed model in the first round")?;
+        Ok(())
+    }
+
+    #[test]
     fn test_compress_and_decompress_with_bigger_window_size() -> Result<()> {
         let compression_parameters = CompressionParameters::new().with_compression_window(32);
         compress_random_graph::<SimpleContextModel>(compression_parameters, 12, 0)

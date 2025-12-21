@@ -381,44 +381,32 @@ pub fn convert_graph_file<C: ContextModel + Default + Copy>(
     )
 }
 
-/// Convert a sequential graph to Huffman-encoded form and save to disk.
-/// Runs estimation rounds, builds the encoder and writes the compressed graph with its offsets.
-pub fn convert_graph<
+#[allow(clippy::too_many_arguments)]
+/// Run the iterative estimation process after the first builder for the first round is created.
+fn run_conversion_rounds<
+    EP: EncodeParams + Send + Sync,
+    E: Encode,
     C: ContextModel + Default + Copy,
     G: SequentialGraph + for<'a> SplitLabeling<SplitLender<'a>: ExactSizeLender + Send>,
 >(
+    mut huffman_graph_encoder_builder: HuffmanGraphEncoderBuilder<E, C, EP>,
     seq_graph: &G,
     output_basename: impl AsRef<Path>,
     max_bits: usize,
     compression_parameters: &CompressionParameters,
     parallel: bool,
+    starting_estimator_name: &str,
+    pl: &mut ProgressLogger,
 ) -> Result<()> {
-    assert!(
-        compression_parameters.num_rounds >= 1,
-        "Needed at least one estimation round to compress the graph using a Huffman-based encoding."
-    );
-    let mut pl = progress_logger!(
-        display_memory = true,
-        log_interval = Duration::from_secs(5 * 60)
-    );
-
-    let num_symbols = 1 << max_bits;
-    // setup for the first iteration with Fixed or Log2Estimator
-    let mut huffman_graph_encoder_builder =
-        HuffmanGraphEncoderBuilder::<_, _, DefaultEncodeParams>::new(
-            num_symbols,
-            Log2Estimator,
-            C::default(),
-        );
-
     let offsets_writer = OffsetsWriter::from_write(io::empty(), true)?;
     pl.item_name("node")
         .expected_updates(Some(seq_graph.num_nodes()));
-    pl.start("Pushing symbols into encoder builder with Log2Estimator...");
+    pl.start(format!(
+        "Pushing symbols into encoder builder with {}...",
+        starting_estimator_name
+    ));
 
-    // first iteration: build a encoder with Log2Estimator
     // TODO: parallelize even the first round with non-Huffman estimators
-    // TODO: we should choose between log2 and fixed estimators in the first round
     match compression_parameters.compressor {
         CompressorType::Approximated { chunk_size } => {
             let mut compressor = BvCompZ::new(
@@ -455,18 +443,13 @@ pub fn convert_graph<
     pl.done();
 
     if compression_parameters.num_rounds == 1 {
-        // kinda sad duplication, the huffman encoder builder we use here
-        // is parametrized with a log2/fixed estimator in contrast to the one
-        // passed in the same call at the end of this function that is parametrized
-        // with an `HuffmanEstimator` and so they are different types.
-        // probably there is a better way to do it...
         return write_graph_to_disk(
             &output_basename,
             huffman_graph_encoder_builder,
             seq_graph,
             max_bits,
             compression_parameters,
-            &mut pl,
+            pl,
         );
     }
 
@@ -478,7 +461,7 @@ pub fn convert_graph<
             max_bits,
             compression_parameters,
             "Pushing symbols into encoder builder on first round with Huffman estimator...",
-            &mut pl,
+            pl,
         )?
     } else {
         reference_selection_round(
@@ -487,7 +470,7 @@ pub fn convert_graph<
             max_bits,
             compression_parameters,
             "Pushing symbols into encoder builder on first round with Huffman estimator...",
-            &mut pl,
+            pl,
         )?
     };
 
@@ -504,7 +487,7 @@ pub fn convert_graph<
                     round + 1
                 )
                 .as_str(),
-                &mut pl,
+                pl,
             )?
         } else {
             reference_selection_round(
@@ -517,7 +500,7 @@ pub fn convert_graph<
                     round + 1
                 )
                 .as_str(),
-                &mut pl,
+                pl,
             )?
         };
     }
@@ -528,8 +511,73 @@ pub fn convert_graph<
         seq_graph,
         max_bits,
         compression_parameters,
-        &mut pl,
+        pl,
     )?;
+
+    Ok(())
+}
+
+/// Convert a sequential graph to Huffman-encoded form and save to disk.
+/// Runs estimation rounds, builds the encoder and writes the compressed graph with its offsets.
+pub fn convert_graph<
+    C: ContextModel + Default + Copy,
+    G: SequentialGraph + for<'a> SplitLabeling<SplitLender<'a>: ExactSizeLender + Send>,
+>(
+    seq_graph: &G,
+    output_basename: impl AsRef<Path>,
+    max_bits: usize,
+    compression_parameters: &CompressionParameters,
+    parallel: bool,
+) -> Result<()> {
+    assert!(
+        compression_parameters.num_rounds >= 1,
+        "Needed at least one estimation round to compress the graph using a Huffman-based encoding."
+    );
+    let mut pl = progress_logger!(
+        display_memory = true,
+        log_interval = Duration::from_secs(5 * 60)
+    );
+
+    let num_symbols = 1 << max_bits;
+
+    match compression_parameters.starting_estimator {
+        Estimator::Log2 => {
+            let huffman_graph_encoder_builder =
+                HuffmanGraphEncoderBuilder::<_, _, DefaultEncodeParams>::new(
+                    num_symbols,
+                    Log2Estimator,
+                    C::default(),
+                );
+            run_conversion_rounds(
+                huffman_graph_encoder_builder,
+                seq_graph,
+                &output_basename,
+                max_bits,
+                compression_parameters,
+                parallel,
+                "Log2Estimator",
+                &mut pl,
+            )?;
+        }
+        Estimator::Fixed => {
+            let huffman_graph_encoder_builder =
+                HuffmanGraphEncoderBuilder::<_, _, DefaultEncodeParams>::new(
+                    num_symbols,
+                    FixedEstimator,
+                    C::default(),
+                );
+            run_conversion_rounds(
+                huffman_graph_encoder_builder,
+                seq_graph,
+                &output_basename,
+                max_bits,
+                compression_parameters,
+                parallel,
+                "FixedEstimator",
+                &mut pl,
+            )?;
+        }
+    }
 
     Ok(())
 }

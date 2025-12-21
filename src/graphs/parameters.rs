@@ -16,6 +16,12 @@ pub struct CompressionParameters {
     pub starting_estimator: Estimator,
 }
 
+impl Default for CompressionParameters {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CompressionParameters {
     pub fn new() -> Self {
         Self {
