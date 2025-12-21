@@ -393,7 +393,6 @@ pub fn convert_graph_file<C: ContextModel + Default + Copy>(
 /// Runs estimation rounds, builds the encoder and writes the compressed graph with its offsets.
 pub fn convert_graph<
     C: ContextModel + Default + Copy,
-    // TODO: for<'a> SplitLabeling<SplitLender<'a>: ExactSizeLender> trait bound is temporary
     G: SequentialGraph + for<'a> SplitLabeling<SplitLender<'a>: ExactSizeLender + Send>,
 >(
     seq_graph: &G,
@@ -427,6 +426,7 @@ pub fn convert_graph<
     pl.start("Pushing symbols into encoder builder with Log2Estimator...");
 
     // first iteration: build a encoder with Log2Estimator
+    // TODO: parallelize even the first round with non-Huffman estimators
     match compressor_type {
         CompressorType::Approximated { chunk_size } => {
             let mut compressor = BvCompZ::new(
@@ -462,6 +462,24 @@ pub fn convert_graph<
     }
     pl.done();
 
+    if compression_parameters.num_rounds == 1 {
+        // kinda sad duplication, the huffman encoder builder we use here
+        // is parametrized with a log2/fixed estimator in contrast to the one
+        // passed in the same call at the end of this function that is parametrized
+        // with an `HuffmanEstimator` and so they are different types.
+        // probably there is a better way to do it...
+        return write_graph_to_disk(
+            &output_basename,
+            huffman_graph_encoder_builder,
+            seq_graph,
+            max_bits,
+            compressor_type,
+            compression_parameters,
+            &mut pl,
+        );
+    }
+
+    // second round build the graph with the first Huffman estimator
     let mut huffman_graph_encoder_builder = if parallel {
         parallel_reference_selection_round(
             seq_graph,
@@ -483,6 +501,8 @@ pub fn convert_graph<
             &mut pl,
         )?
     };
+
+    // execute all the subsequence rounds
     for round in 2..compression_parameters.num_rounds {
         huffman_graph_encoder_builder = if parallel {
             parallel_reference_selection_round(
@@ -515,7 +535,34 @@ pub fn convert_graph<
         };
     }
 
-    pl.start("Building the encoder after estimation rounds...");
+    write_graph_to_disk(
+        &output_basename,
+        huffman_graph_encoder_builder,
+        seq_graph,
+        max_bits,
+        compressor_type,
+        compression_parameters,
+        &mut pl,
+    )?;
+
+    Ok(())
+}
+
+fn write_graph_to_disk<
+    EP: EncodeParams,
+    E: Encode,
+    C: ContextModel,
+    G: SequentialGraph + for<'a> SplitLabeling<SplitLender<'a>: ExactSizeLender + Send>,
+>(
+    output_basename: impl AsRef<Path>,
+    huffman_graph_encoder_builder: HuffmanGraphEncoderBuilder<E, C, EP>,
+    seq_graph: &G,
+    max_bits: usize,
+    compressor_type: CompressorType,
+    compression_parameters: &CompressionParameters,
+    pl: &mut ProgressLogger,
+) -> Result<()> {
+    pl.start("Building the encoder with the cost model obtained from estimation rounds...");
 
     let output_path = output_basename.as_ref().with_extension(GRAPH_EXTENSION);
     let outfile = File::create(output_path)?;
@@ -569,6 +616,7 @@ pub fn convert_graph<
             compressor.flush()?;
         }
     }
+
     pl.info(format_args!(
         "After last round with Huffman estimator: Recompressed graph using {} bits ({} bits of header)",
         writer.bits_written, header_size
@@ -590,7 +638,6 @@ pub fn convert_graph<
         .with_context(|| format!("Could not write {}", properties_path.display()))?;
 
     pl.done();
-
     Ok(())
 }
 

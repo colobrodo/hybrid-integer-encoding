@@ -331,7 +331,7 @@ mod tests {
             compression_window: 32,
             max_ref_count: 3,
             min_interval_length: 4,
-            num_rounds: 1,
+            num_rounds: 2,
         };
         let max_bits = 12;
         sequential_convert_graph_file::<SimpleContextModel>(
