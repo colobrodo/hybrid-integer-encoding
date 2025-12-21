@@ -16,7 +16,7 @@ mod tests {
     use webgraph::graphs::random::ErdosRenyi;
     use webgraph::prelude::*;
 
-    fn compress_cnr_2000<C: ContextModel + Default + Copy + 'static>(
+    fn compress_cnr_2000<C: ContextModel + Default + Copy + 'static + Send + Sync>(
         compression_parameters: CompressionParameters,
         access_random: bool,
         parallel: bool,
@@ -58,7 +58,7 @@ mod tests {
         Ok(())
     }
 
-    fn compress_random_graph<C: ContextModel + Default + Copy + 'static>(
+    fn compress_random_graph<C: ContextModel + Default + Copy + 'static + Send + Sync>(
         compression_parameters: CompressionParameters,
         seed: u64,
     ) -> anyhow::Result<()> {
@@ -78,7 +78,7 @@ mod tests {
         Ok(())
     }
 
-    fn compare_graph_randomly<C: ContextModel + Default + Copy + 'static>(
+    fn compare_graph_randomly<C: ContextModel + Default + Copy + 'static + Send + Sync>(
         max_bits: usize,
         original_graph: BvGraphSeq<
             DynCodesDecoderFactory<BE, MmapHelper<u32>, Owned<EmptyDict<usize, usize>>>,

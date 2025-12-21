@@ -35,7 +35,6 @@ use crate::huffman::{CostModel, DefaultEncodeParams, EncodeParams, IntegerHistog
 type HuffmanEstimatedEncoderBuilder<EP, C> =
     HuffmanGraphEncoderBuilder<HuffmanEstimator<EP, CostModel<EP>, C>, C, EP>;
 
-#[allow(clippy::too_many_arguments)]
 /// Run one reference-selection pass: collect symbols with the given estimator.
 /// Returns a builder seeded with frequency estimates for the next stage.
 fn reference_selection_round<
@@ -95,6 +94,100 @@ fn reference_selection_round<
     }
     pl.done();
     Ok(huffman_graph_encoder_builder)
+}
+
+/// Run the first compression round in parallel using the given estimator type.
+/// Splits the graph, compresses each chunk with its own builder, then merges histograms.
+fn parallel_first_reference_selection_round<
+    EP: EncodeParams + Send + Sync,
+    E: Encode + Default + Send + Sync,
+    C: ContextModel + Default + Copy + Send + Sync,
+    G: SequentialGraph + for<'a> SplitLabeling<SplitLender<'a>: ExactSizeLender + Send>,
+>(
+    graph: &G,
+    compression_parameters: &CompressionParameters,
+) -> Result<HuffmanGraphEncoderBuilder<E, C, EP>> {
+    let num_symbols = 1 << compression_parameters.max_bits;
+    let num_threads = current_num_threads();
+    let split_iter = graph
+        .split_iter(num_threads)
+        .into_iter()
+        .collect::<Vec<_>>();
+
+    // iterate the splitted version of the graph in parallel
+    let thread_histograms: Vec<IntegerHistograms<EP>> = split_iter
+        .into_iter()
+        .enumerate()
+        .par_bridge()
+        .map(
+            |(thread_id, mut thread_lender)| -> Result<IntegerHistograms<EP>> {
+                let Some((node_id, successors)) = thread_lender.next() else {
+                    return Err(anyhow::anyhow!(
+                        "Empty chunked size of compressors in thread {}",
+                        thread_id
+                    ));
+                };
+                let first_node = node_id;
+
+                // Initialize local builder with the starting estimator
+                let mut thread_builder = HuffmanGraphEncoderBuilder::<_, _, EP>::new(
+                    num_symbols,
+                    E::default(),
+                    C::default(),
+                );
+                let offsets_writer = OffsetsWriter::from_write(io::empty(), true)?;
+
+                match compression_parameters.compressor {
+                    CompressorType::Approximated { chunk_size } => {
+                        let mut compressor = BvCompZ::new(
+                            &mut thread_builder,
+                            offsets_writer,
+                            compression_parameters.compression_window,
+                            chunk_size,
+                            compression_parameters.max_ref_count,
+                            compression_parameters.min_interval_length,
+                            first_node,
+                        );
+                        compressor.push(successors).unwrap();
+                        for_![ (_, succ) in thread_lender {
+                            compressor.push(succ)?;
+                        }];
+                        compressor.flush()?;
+                    }
+                    CompressorType::Greedy => {
+                        let mut compressor = BvComp::new(
+                            &mut thread_builder,
+                            offsets_writer,
+                            compression_parameters.compression_window,
+                            compression_parameters.max_ref_count,
+                            compression_parameters.min_interval_length,
+                            first_node,
+                        );
+                        compressor.push(successors).unwrap();
+                        for_![ (_, succ) in thread_lender {
+                            compressor.push(succ)?;
+                        }];
+                        compressor.flush()?;
+                    }
+                }
+
+                Ok(thread_builder.histograms())
+            },
+        )
+        .collect::<Result<Vec<_>>>()?;
+
+    // combine all threads' histograms into one
+    let mut shared_histograms = IntegerHistograms::<EP>::new(C::num_contexts(), num_symbols);
+    for h in thread_histograms {
+        shared_histograms.add_all(&h);
+    }
+
+    let builder = HuffmanGraphEncoderBuilder::<_, _, EP>::from_histograms(
+        shared_histograms,
+        E::default(),
+        C::default(),
+    );
+    Ok(builder)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -324,7 +417,7 @@ pub fn serialize_eliasfano(
 
 /// Read a BVGraph from `basename` and convert it to a Huffman-encoded graph.
 /// The converted graph is written to `output_basename`.
-pub fn sequential_convert_graph_file<C: ContextModel + Default + Copy>(
+pub fn sequential_convert_graph_file<C: ContextModel + Default + Copy + Send + Sync>(
     basename: impl AsRef<Path>,
     output_basename: impl AsRef<Path>,
     compression_parameters: &CompressionParameters,
@@ -334,7 +427,7 @@ pub fn sequential_convert_graph_file<C: ContextModel + Default + Copy>(
 
 /// Read a BVGraph from `basename` and convert it to a Huffman-encoded graph running the estimation rounds in parallel.
 /// The converted graph is written to `output_basename`.
-pub fn parallel_convert_graph_file<C: ContextModel + Default + Copy>(
+pub fn parallel_convert_graph_file<C: ContextModel + Default + Copy + Send + Sync>(
     basename: impl AsRef<Path>,
     output_basename: impl AsRef<Path>,
     compression_parameters: &CompressionParameters,
@@ -345,7 +438,7 @@ pub fn parallel_convert_graph_file<C: ContextModel + Default + Copy>(
 /// Read a BVGraph from `basename` and convert it to a Huffman-encoded graph.
 /// The converted graph is written to `output_basename`.
 /// The `parallel` arguments controls if the estimation rounds are executed in parallel or sequentially.
-pub fn convert_graph_file<C: ContextModel + Default + Copy>(
+pub fn convert_graph_file<C: ContextModel + Default + Copy + Send + Sync>(
     basename: impl AsRef<Path>,
     output_basename: impl AsRef<Path>,
     compression_parameters: &CompressionParameters,
@@ -364,14 +457,15 @@ pub fn convert_graph_file<C: ContextModel + Default + Copy>(
 }
 
 #[allow(clippy::too_many_arguments)]
-/// Run the iterative estimation process after the first builder for the first round is created.
+/// Run the iterative estimation process, starting from the first compression round.
+/// Creates the initial builder with the given estimator type and handles both sequential
+/// and parallel processing for all rounds.
 fn run_conversion_rounds<
     EP: EncodeParams + Send + Sync,
-    E: Encode,
-    C: ContextModel + Default + Copy,
+    E: Encode + Default + Send + Sync,
+    C: ContextModel + Default + Copy + Send + Sync,
     G: SequentialGraph + for<'a> SplitLabeling<SplitLender<'a>: ExactSizeLender + Send>,
 >(
-    mut huffman_graph_encoder_builder: HuffmanGraphEncoderBuilder<E, C, EP>,
     seq_graph: &G,
     output_basename: impl AsRef<Path>,
     compression_parameters: &CompressionParameters,
@@ -379,7 +473,8 @@ fn run_conversion_rounds<
     starting_estimator_name: &str,
     pl: &mut ProgressLogger,
 ) -> Result<()> {
-    let offsets_writer = OffsetsWriter::from_write(io::empty(), true)?;
+    let num_symbols = 1 << compression_parameters.max_bits;
+
     pl.item_name("node")
         .expected_updates(Some(seq_graph.num_nodes()));
     pl.start(format!(
@@ -387,40 +482,48 @@ fn run_conversion_rounds<
         starting_estimator_name
     ));
 
-    // TODO: parallelize even the first round with non-Huffman estimators
-    match compression_parameters.compressor {
-        CompressorType::Approximated { chunk_size } => {
-            let mut compressor = BvCompZ::new(
-                &mut huffman_graph_encoder_builder,
-                offsets_writer,
-                compression_parameters.compression_window,
-                chunk_size,
-                compression_parameters.max_ref_count,
-                compression_parameters.min_interval_length,
-                0,
-            );
-            for_![ (_, succ) in seq_graph.iter() {
-                compressor.push(succ)?;
-                pl.update();
-            }];
-            compressor.flush()?;
+    // Run compression for the first round (sequential or parallel)
+    let huffman_graph_encoder_builder = if parallel {
+        parallel_first_reference_selection_round::<EP, E, C, _>(seq_graph, compression_parameters)?
+    } else {
+        let mut builder =
+            HuffmanGraphEncoderBuilder::<_, _, EP>::new(num_symbols, E::default(), C::default());
+        let offsets_writer = OffsetsWriter::from_write(io::empty(), true)?;
+        match compression_parameters.compressor {
+            CompressorType::Approximated { chunk_size } => {
+                let mut compressor = BvCompZ::new(
+                    &mut builder,
+                    offsets_writer,
+                    compression_parameters.compression_window,
+                    chunk_size,
+                    compression_parameters.max_ref_count,
+                    compression_parameters.min_interval_length,
+                    0,
+                );
+                for_![ (_, succ) in seq_graph.iter() {
+                    compressor.push(succ)?;
+                    pl.update();
+                }];
+                compressor.flush()?;
+            }
+            CompressorType::Greedy => {
+                let mut compressor = BvComp::new(
+                    &mut builder,
+                    offsets_writer,
+                    compression_parameters.compression_window,
+                    compression_parameters.max_ref_count,
+                    compression_parameters.min_interval_length,
+                    0,
+                );
+                for_![ (_, succ) in seq_graph.iter() {
+                    compressor.push(succ)?;
+                    pl.update();
+                }];
+                compressor.flush()?;
+            }
         }
-        CompressorType::Greedy => {
-            let mut compressor = BvComp::new(
-                &mut huffman_graph_encoder_builder,
-                offsets_writer,
-                compression_parameters.compression_window,
-                compression_parameters.max_ref_count,
-                compression_parameters.min_interval_length,
-                0,
-            );
-            for_![ (_, succ) in seq_graph.iter() {
-                compressor.push(succ)?;
-                pl.update();
-            }];
-            compressor.flush()?;
-        }
-    }
+        builder
+    };
     pl.done();
 
     if compression_parameters.num_rounds == 1 {
@@ -495,7 +598,7 @@ fn run_conversion_rounds<
 /// Convert a sequential graph to Huffman-encoded form and save to disk.
 /// Runs estimation rounds, builds the encoder and writes the compressed graph with its offsets.
 pub fn convert_graph<
-    C: ContextModel + Default + Copy,
+    C: ContextModel + Default + Copy + Send + Sync,
     G: SequentialGraph + for<'a> SplitLabeling<SplitLender<'a>: ExactSizeLender + Send>,
 >(
     seq_graph: &G,
@@ -512,18 +615,9 @@ pub fn convert_graph<
         log_interval = Duration::from_secs(5 * 60)
     );
 
-    let num_symbols = 1 << compression_parameters.max_bits;
-
     match compression_parameters.starting_estimator {
         Estimator::Log2 => {
-            let huffman_graph_encoder_builder =
-                HuffmanGraphEncoderBuilder::<_, _, DefaultEncodeParams>::new(
-                    num_symbols,
-                    Log2Estimator,
-                    C::default(),
-                );
-            run_conversion_rounds(
-                huffman_graph_encoder_builder,
+            run_conversion_rounds::<DefaultEncodeParams, Log2Estimator, C, _>(
                 seq_graph,
                 &output_basename,
                 compression_parameters,
@@ -533,14 +627,7 @@ pub fn convert_graph<
             )?;
         }
         Estimator::Fixed => {
-            let huffman_graph_encoder_builder =
-                HuffmanGraphEncoderBuilder::<_, _, DefaultEncodeParams>::new(
-                    num_symbols,
-                    FixedEstimator,
-                    C::default(),
-                );
-            run_conversion_rounds(
-                huffman_graph_encoder_builder,
+            run_conversion_rounds::<DefaultEncodeParams, FixedEstimator, C, _>(
                 seq_graph,
                 &output_basename,
                 compression_parameters,

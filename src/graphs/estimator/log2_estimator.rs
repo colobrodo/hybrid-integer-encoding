@@ -2,6 +2,7 @@ use std::convert::Infallible;
 
 use webgraph::prelude::*;
 
+#[derive(Default)]
 pub struct Log2Estimator;
 
 impl Encode for Log2Estimator {
