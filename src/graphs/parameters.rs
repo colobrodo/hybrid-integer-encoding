@@ -15,6 +15,51 @@ pub struct CompressionParameters {
 }
 
 impl CompressionParameters {
+    pub fn new() -> Self {
+        Self {
+            compression_window: 7,
+            max_ref_count: 3,
+            min_interval_length: 4,
+            num_rounds: 1,
+            compressor: CompressorType::Approximated { chunk_size: 10000 },
+        }
+    }
+
+    pub fn with_compression_window(mut self, compression_window: usize) -> Self {
+        self.compression_window = compression_window;
+        self
+    }
+
+    pub fn with_max_reference_count(mut self, max_ref_count: usize) -> Self {
+        self.max_ref_count = max_ref_count;
+        self
+    }
+
+    pub fn with_min_interval_length(mut self, min_interval_length: usize) -> Self {
+        self.min_interval_length = min_interval_length;
+        self
+    }
+
+    pub fn with_rounds(mut self, rounds: usize) -> Self {
+        self.num_rounds = rounds;
+        self
+    }
+
+    pub fn with_greedy_compressor(mut self) -> Self {
+        self.compressor = CompressorType::Greedy;
+        self
+    }
+
+    pub fn with_approximated_compressor(mut self) -> Self {
+        self.compressor = CompressorType::Approximated { chunk_size: 10000 };
+        self
+    }
+
+    pub fn with_chunk_size(mut self, chunk_size: usize) -> Self {
+        self.compressor = CompressorType::Approximated { chunk_size };
+        self
+    }
+
     // sadly somehow duplicated from webgraph's CompFlags
     pub fn to_properties(
         &self,

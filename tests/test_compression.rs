@@ -5,8 +5,7 @@ mod tests {
     use hybrid_integer_encoding::graphs::{
         build_offsets, check_compression_parameters, compare_graphs, convert_graph, load_graph,
         load_graph_seq, measure_stats, parallel_convert_graph_file, sequential_convert_graph_file,
-        CompressionParameters, CompressorType, ConstantContextModel, ContextModel,
-        SimpleContextModel,
+        CompressionParameters, ConstantContextModel, ContextModel, SimpleContextModel,
     };
     use lender::Lender;
     use std::{
@@ -113,13 +112,7 @@ mod tests {
 
     #[test]
     fn test_compress_and_decompress_random_graph() -> Result<()> {
-        let compression_parameters = CompressionParameters {
-            compression_window: 7,
-            max_ref_count: 3,
-            min_interval_length: 4,
-            num_rounds: 1,
-            compressor: CompressorType::Approximated { chunk_size: 10000 },
-        };
+        let compression_parameters = CompressionParameters::new();
         compress_random_graph::<SimpleContextModel>(compression_parameters, 12, 0)
             .with_context(|| "Converting a random graph")?;
         Ok(())
@@ -127,13 +120,7 @@ mod tests {
 
     #[test]
     fn test_compress_and_decompress_random_graph2() -> Result<()> {
-        let compression_parameters = CompressionParameters {
-            compression_window: 7,
-            max_ref_count: 3,
-            min_interval_length: 4,
-            num_rounds: 1,
-            compressor: CompressorType::Approximated { chunk_size: 10000 },
-        };
+        let compression_parameters = CompressionParameters::new();
         compress_random_graph::<SimpleContextModel>(compression_parameters, 12, 31415)
             .with_context(|| "Converting a random graph")?;
         Ok(())
@@ -141,13 +128,7 @@ mod tests {
 
     #[test]
     fn test_compress_and_decompress_accessing_randomly() -> Result<()> {
-        let compression_parameters = CompressionParameters {
-            compression_window: 7,
-            max_ref_count: 3,
-            min_interval_length: 4,
-            num_rounds: 1,
-            compressor: CompressorType::Approximated { chunk_size: 10000 },
-        };
+        let compression_parameters = CompressionParameters::new();
         compress_cnr_2000::<SimpleContextModel>(compression_parameters, 12, true, false)
             .with_context(|| "Converting the graph and reading accessing randomly")?;
         Ok(())
@@ -155,13 +136,7 @@ mod tests {
 
     #[test]
     fn test_compress_and_decompress_cnr_2000_with_12_bits() -> Result<()> {
-        let compression_parameters = CompressionParameters {
-            compression_window: 7,
-            max_ref_count: 3,
-            min_interval_length: 4,
-            num_rounds: 1,
-            compressor: CompressorType::Approximated { chunk_size: 10000 },
-        };
+        let compression_parameters = CompressionParameters::new();
         compress_cnr_2000::<SimpleContextModel>(compression_parameters, 12, false, false)
             .with_context(|| "Converting cnr-2000 with max 12 bits per word")?;
         Ok(())
@@ -169,13 +144,7 @@ mod tests {
 
     #[test]
     fn test_compress_and_decompress_cnr_2000_parallel() -> Result<()> {
-        let compression_parameters = CompressionParameters {
-            compression_window: 7,
-            max_ref_count: 3,
-            min_interval_length: 4,
-            num_rounds: 1,
-            compressor: CompressorType::Approximated { chunk_size: 10000 },
-        };
+        let compression_parameters = CompressionParameters::new().with_rounds(2);
         compress_cnr_2000::<SimpleContextModel>(compression_parameters, 12, false, true)
             .with_context(|| "Converting cnr-2000 running the estimation rounds in parallel")?;
         Ok(())
@@ -183,13 +152,7 @@ mod tests {
 
     #[test]
     fn test_compress_and_decompress_with_multiple_rounds() -> Result<()> {
-        let compression_parameters = CompressionParameters {
-            compression_window: 7,
-            max_ref_count: 3,
-            min_interval_length: 4,
-            num_rounds: 3,
-            compressor: CompressorType::Approximated { chunk_size: 10000 },
-        };
+        let compression_parameters = CompressionParameters::new().with_rounds(3);
         compress_random_graph::<SimpleContextModel>(compression_parameters, 12, 0)
             .with_context(|| "Converting the graph with multiple rounds")?;
         Ok(())
@@ -197,46 +160,15 @@ mod tests {
 
     #[test]
     fn test_compress_and_decompress_with_8_bits() -> Result<()> {
-        let compression_parameters = CompressionParameters {
-            compression_window: 7,
-            max_ref_count: 3,
-            min_interval_length: 4,
-            num_rounds: 1,
-            compressor: CompressorType::Approximated { chunk_size: 10000 },
-        };
+        let compression_parameters = CompressionParameters::new();
         compress_random_graph::<SimpleContextModel>(compression_parameters, 8, 0)
             .with_context(|| "Converting the graph with 8-bit maximum size")?;
         Ok(())
     }
 
-    // TODO: to remove when convert_graphs uses sequential encoding again
-    // #[test]
-    // fn test_compress_and_decompress_with_zuckerli_context_model() -> Result<()> {
-    //     let compression_parameters = CompressionParameters {
-    //         compression_window: 7,
-    //         max_ref_count: 3,
-    //         min_interval_length: 4,
-    //         num_rounds: 1,
-    //     };
-    //     compress_random_graph::<ZuckerliContextModel<DefaultEncodeParams>>(
-    //         compression_parameters,
-    //         12,
-    //         false,
-    //         0,
-    //     )
-    //     .with_context(|| "Converting the graph with Zuckerli-like context model")?;
-    //     Ok(())
-    // }
-
     #[test]
     fn test_compress_and_decompress_with_bigger_window_size() -> Result<()> {
-        let compression_parameters = CompressionParameters {
-            compression_window: 32,
-            max_ref_count: 3,
-            min_interval_length: 4,
-            num_rounds: 1,
-            compressor: CompressorType::Approximated { chunk_size: 10000 },
-        };
+        let compression_parameters = CompressionParameters::new().with_compression_window(32);
         compress_random_graph::<SimpleContextModel>(compression_parameters, 12, 0)
             .with_context(|| "Converting the graph with bigger window size")?;
         Ok(())
@@ -244,13 +176,9 @@ mod tests {
 
     #[test]
     fn test_compress_and_decompress_greedily() -> Result<()> {
-        let compression_parameters = CompressionParameters {
-            compression_window: 32,
-            max_ref_count: 3,
-            min_interval_length: 4,
-            num_rounds: 1,
-            compressor: CompressorType::Greedy,
-        };
+        let compression_parameters = CompressionParameters::new()
+            .with_greedy_compressor()
+            .with_compression_window(32);
         compress_random_graph::<SimpleContextModel>(compression_parameters, 12, 0)
             .with_context(|| "Converting the graph with greedy reference selection")?;
         Ok(())
@@ -264,13 +192,7 @@ mod tests {
         let temp_dir = TempDir::new()?;
         let output_basename = temp_dir.path().join("property_test");
 
-        let compression_parameters = CompressionParameters {
-            compression_window: 7,
-            max_ref_count: 3,
-            min_interval_length: 4,
-            num_rounds: 1,
-            compressor: CompressorType::Approximated { chunk_size: 10000 },
-        };
+        let compression_parameters = CompressionParameters::new();
 
         // Create and save a graph with SimpleContextModel
         let expected_max_bits = 12;
@@ -312,13 +234,9 @@ mod tests {
         // Get output basename with the same full path as the but in the temp folder
         let output_basename = temp_dir.path().join(basename.file_name().unwrap());
 
-        let compression_parameters = CompressionParameters {
-            compression_window: 32,
-            max_ref_count: 3,
-            min_interval_length: 4,
-            num_rounds: 2,
-            compressor: CompressorType::Approximated { chunk_size: 10000 },
-        };
+        let compression_parameters = CompressionParameters::new()
+            .with_compression_window(32)
+            .with_rounds(2);
         let max_bits = 12;
         sequential_convert_graph_file::<SimpleContextModel>(
             &basename,
