@@ -8,6 +8,8 @@ pub struct CompressionParameters {
     pub max_ref_count: usize,
     /// The minimum length of consecutive items to be encoded as intervals during compression.
     pub min_interval_length: usize,
+    /// The maximum number of bits for each Huffman codeword.
+    pub max_bits: usize,
     /// The number of compression rounds to perform.
     pub num_rounds: usize,
     /// The type of reference selection algorithm to use: greedy or approximate.
@@ -29,6 +31,7 @@ impl CompressionParameters {
             max_ref_count: 3,
             min_interval_length: 4,
             num_rounds: 1,
+            max_bits: 8,
             compressor: CompressorType::Approximated { chunk_size: 10000 },
             starting_estimator: Estimator::Log2,
         }
@@ -46,6 +49,11 @@ impl CompressionParameters {
 
     pub fn with_min_interval_length(mut self, min_interval_length: usize) -> Self {
         self.min_interval_length = min_interval_length;
+        self
+    }
+
+    pub fn with_max_huffman_bits(mut self, max_huffman_bits: usize) -> Self {
+        self.max_bits = max_huffman_bits;
         self
     }
 
@@ -86,7 +94,6 @@ impl CompressionParameters {
         num_arcs: u64,
         bitstream_len: u64,
         context_model_name: impl AsRef<str>,
-        max_bits: usize,
     ) -> Result<String> {
         let mut s = String::new();
         s.push_str(&format!("nodes={num_nodes}\n"));
@@ -106,7 +113,7 @@ impl CompressionParameters {
         s.push_str(&format!("length={bitstream_len}\n"));
         let context_model_name = context_model_name.as_ref();
         s.push_str(&format!("contextmodel={context_model_name}\n"));
-        s.push_str(&format!("maxhuffmanbits={max_bits}\n"));
+        s.push_str(&format!("maxhuffmanbits={}\n", self.max_bits));
         match self.compressor {
             CompressorType::Greedy => s.push_str("compressortype=greedy\n"),
             CompressorType::Approximated { chunk_size } => {

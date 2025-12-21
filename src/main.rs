@@ -571,6 +571,7 @@ fn main() -> Result<()> {
                 let compression_parameters = CompressionParameters {
                     compression_window,
                     max_ref_count,
+                    max_bits,
                     min_interval_length,
                     num_rounds,
                     compressor: if greedy_compressor {
@@ -589,14 +590,12 @@ fn main() -> Result<()> {
                     ContextModelArgument::Single => convert_graph_file::<ConstantContextModel>(
                         &basename,
                         &output_basename,
-                        max_bits,
                         &compression_parameters,
                         parallel,
                     )?,
                     ContextModelArgument::Simple => convert_graph_file::<SimpleContextModel>(
                         &basename,
                         &output_basename,
-                        max_bits,
                         &compression_parameters,
                         parallel,
                     )?,
@@ -604,7 +603,6 @@ fn main() -> Result<()> {
                         convert_graph_file::<ZuckerliContextModel<DefaultEncodeParams>>(
                             &basename,
                             &output_basename,
-                            max_bits,
                             &compression_parameters,
                             parallel,
                         )?

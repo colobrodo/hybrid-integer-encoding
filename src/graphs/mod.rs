@@ -46,12 +46,11 @@ fn reference_selection_round<
 >(
     graph: &G,
     huffman_graph_encoder_builder: HuffmanGraphEncoderBuilder<E, C, EP>,
-    max_bits: usize,
     compression_parameters: &CompressionParameters,
     msg: impl AsRef<str>,
     pl: &mut ProgressLogger,
 ) -> Result<HuffmanEstimatedEncoderBuilder<EP, C>> {
-    let num_symbols = 1 << max_bits;
+    let num_symbols = 1 << compression_parameters.max_bits;
     let huffman_estimator = huffman_graph_encoder_builder.build_estimator();
     // setup for the new iteration with huffman estimator
     let mut huffman_graph_encoder_builder =
@@ -108,13 +107,12 @@ fn parallel_reference_selection_round<
 >(
     graph: &(impl SequentialGraph + for<'a> SplitLabeling<SplitLender<'a>: ExactSizeLender + Send>),
     huffman_graph_encoder_builder: HuffmanGraphEncoderBuilder<E, C, EP>,
-    max_bits: usize,
     compression_parameters: &CompressionParameters,
     _msg: impl AsRef<str>,
     // TODO: use a concurrent_progress_logger
     _pl: &mut ProgressLogger,
 ) -> Result<HuffmanEstimatedEncoderBuilder<EP, C>> {
-    let num_symbols = 1 << max_bits;
+    let num_symbols = 1 << compression_parameters.max_bits;
     let num_threads = current_num_threads();
     let split_iter = graph
         .split_iter(num_threads)
@@ -329,16 +327,9 @@ pub fn serialize_eliasfano(
 pub fn sequential_convert_graph_file<C: ContextModel + Default + Copy>(
     basename: impl AsRef<Path>,
     output_basename: impl AsRef<Path>,
-    max_bits: usize,
     compression_parameters: &CompressionParameters,
 ) -> Result<()> {
-    convert_graph_file::<C>(
-        basename,
-        output_basename,
-        max_bits,
-        compression_parameters,
-        false,
-    )
+    convert_graph_file::<C>(basename, output_basename, compression_parameters, false)
 }
 
 /// Read a BVGraph from `basename` and convert it to a Huffman-encoded graph running the estimation rounds in parallel.
@@ -346,16 +337,9 @@ pub fn sequential_convert_graph_file<C: ContextModel + Default + Copy>(
 pub fn parallel_convert_graph_file<C: ContextModel + Default + Copy>(
     basename: impl AsRef<Path>,
     output_basename: impl AsRef<Path>,
-    max_bits: usize,
     compression_parameters: &CompressionParameters,
 ) -> Result<()> {
-    convert_graph_file::<C>(
-        basename,
-        output_basename,
-        max_bits,
-        compression_parameters,
-        true,
-    )
+    convert_graph_file::<C>(basename, output_basename, compression_parameters, true)
 }
 
 /// Read a BVGraph from `basename` and convert it to a Huffman-encoded graph.
@@ -364,7 +348,6 @@ pub fn parallel_convert_graph_file<C: ContextModel + Default + Copy>(
 pub fn convert_graph_file<C: ContextModel + Default + Copy>(
     basename: impl AsRef<Path>,
     output_basename: impl AsRef<Path>,
-    max_bits: usize,
     compression_parameters: &CompressionParameters,
     parallel: bool,
 ) -> Result<()> {
@@ -375,7 +358,6 @@ pub fn convert_graph_file<C: ContextModel + Default + Copy>(
     convert_graph::<C, _>(
         &seq_graph,
         output_basename,
-        max_bits,
         compression_parameters,
         parallel,
     )
@@ -392,7 +374,6 @@ fn run_conversion_rounds<
     mut huffman_graph_encoder_builder: HuffmanGraphEncoderBuilder<E, C, EP>,
     seq_graph: &G,
     output_basename: impl AsRef<Path>,
-    max_bits: usize,
     compression_parameters: &CompressionParameters,
     parallel: bool,
     starting_estimator_name: &str,
@@ -447,7 +428,6 @@ fn run_conversion_rounds<
             &output_basename,
             huffman_graph_encoder_builder,
             seq_graph,
-            max_bits,
             compression_parameters,
             pl,
         );
@@ -458,7 +438,6 @@ fn run_conversion_rounds<
         parallel_reference_selection_round(
             seq_graph,
             huffman_graph_encoder_builder,
-            max_bits,
             compression_parameters,
             "Pushing symbols into encoder builder on first round with Huffman estimator...",
             pl,
@@ -467,7 +446,6 @@ fn run_conversion_rounds<
         reference_selection_round(
             seq_graph,
             huffman_graph_encoder_builder,
-            max_bits,
             compression_parameters,
             "Pushing symbols into encoder builder on first round with Huffman estimator...",
             pl,
@@ -480,7 +458,6 @@ fn run_conversion_rounds<
             parallel_reference_selection_round(
                 seq_graph,
                 huffman_graph_encoder_builder,
-                max_bits,
                 compression_parameters,
                 format!(
                     "Pushing symbols into encoder builder with Huffman estimator for round {}...",
@@ -493,7 +470,6 @@ fn run_conversion_rounds<
             reference_selection_round(
                 seq_graph,
                 huffman_graph_encoder_builder,
-                max_bits,
                 compression_parameters,
                 format!(
                     "Pushing symbols into encoder builder with Huffman estimator for round {}...",
@@ -509,7 +485,6 @@ fn run_conversion_rounds<
         &output_basename,
         huffman_graph_encoder_builder,
         seq_graph,
-        max_bits,
         compression_parameters,
         pl,
     )?;
@@ -525,7 +500,6 @@ pub fn convert_graph<
 >(
     seq_graph: &G,
     output_basename: impl AsRef<Path>,
-    max_bits: usize,
     compression_parameters: &CompressionParameters,
     parallel: bool,
 ) -> Result<()> {
@@ -538,7 +512,7 @@ pub fn convert_graph<
         log_interval = Duration::from_secs(5 * 60)
     );
 
-    let num_symbols = 1 << max_bits;
+    let num_symbols = 1 << compression_parameters.max_bits;
 
     match compression_parameters.starting_estimator {
         Estimator::Log2 => {
@@ -552,7 +526,6 @@ pub fn convert_graph<
                 huffman_graph_encoder_builder,
                 seq_graph,
                 &output_basename,
-                max_bits,
                 compression_parameters,
                 parallel,
                 "Log2Estimator",
@@ -570,7 +543,6 @@ pub fn convert_graph<
                 huffman_graph_encoder_builder,
                 seq_graph,
                 &output_basename,
-                max_bits,
                 compression_parameters,
                 parallel,
                 "FixedEstimator",
@@ -591,7 +563,6 @@ fn write_graph_to_disk<
     output_basename: impl AsRef<Path>,
     huffman_graph_encoder_builder: HuffmanGraphEncoderBuilder<E, C, EP>,
     seq_graph: &G,
-    max_bits: usize,
     compression_parameters: &CompressionParameters,
     pl: &mut ProgressLogger,
 ) -> Result<()> {
@@ -601,7 +572,8 @@ fn write_graph_to_disk<
     let outfile = File::create(output_path)?;
     let writer = BufBitWriter::<LE, _>::new(WordAdapter::<u32, _>::new(BufWriter::new(outfile)));
     let mut writer = CountBitWriter::<LE, _>::new(writer);
-    let mut huffman_graph_encoder = huffman_graph_encoder_builder.build(&mut writer, max_bits);
+    let mut huffman_graph_encoder =
+        huffman_graph_encoder_builder.build(&mut writer, compression_parameters.max_bits);
 
     pl.done();
 
@@ -663,7 +635,6 @@ fn write_graph_to_disk<
                 .expect("Cannot know how many arcs the source graph contains"),
             writer.bits_written as _,
             C::NAME,
-            max_bits,
         )
         .context("Cannot serialize properties file")?;
     let properties_path = output_basename.as_ref().with_extension("properties");
