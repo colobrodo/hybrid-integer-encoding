@@ -191,6 +191,9 @@ enum GraphCommand {
         /// The number of repetition performed on the test
         #[arg(short = 'R', long, default_value = "10")]
         repeats: usize,
+        /// test just the random access needed to decode the first successor.
+        #[arg(short = 'f', long)]
+        first: bool,
         /// Seed to reproduce the experiment
         #[arg(short = 's', long, default_value = "0")]
         seed: u64,
@@ -709,23 +712,24 @@ fn main() -> Result<()> {
                 context_model,
                 random,
                 repeats,
+                first,
                 seed,
                 tsv,
             } => {
                 let bench_result = match context_model {
                     ContextModelArgument::Single => {
                         let graph = load_graph::<ConstantContextModel>(basename, max_bits)?;
-                        bench_random_graph(graph, seed, random, repeats)
+                        bench_random_graph(graph, seed, random, repeats, first)
                     }
                     ContextModelArgument::Simple => {
                         let graph = load_graph::<SimpleContextModel>(basename, max_bits)?;
-                        bench_random_graph(graph, seed, random, repeats)
+                        bench_random_graph(graph, seed, random, repeats, first)
                     }
                     ContextModelArgument::Zuckerli => {
                         let graph = load_graph::<ZuckerliContextModel<DefaultEncodeParams>>(
                             basename, max_bits,
                         )?;
-                        bench_random_graph(graph, seed, random, repeats)
+                        bench_random_graph(graph, seed, random, repeats, first)
                     }
                 };
                 if tsv {
@@ -836,6 +840,7 @@ fn bench_random_graph(
     seed: u64,
     samples: usize,
     repeats: usize,
+    first: bool,
 ) -> BenchResult {
     let mut bench_result = BenchResult::new("Random", "ns/arc");
     // Random-access speed test
@@ -843,14 +848,19 @@ fn bench_random_graph(
         let mut rng = SmallRng::seed_from_u64(seed);
         let mut c: u64 = 0;
         let num_nodes = graph.num_nodes();
+        let sampled_nodes = (0..samples)
+            .map(|_| rng.random_range(0..num_nodes))
+            .collect::<Vec<_>>();
         let start = std::time::Instant::now();
-        for _ in 0..samples {
-            c += black_box(
-                graph
-                    .successors(rng.random_range(0..num_nodes))
-                    .into_iter()
-                    .count() as u64,
-            );
+        if first {
+            for node in sampled_nodes {
+                black_box(graph.successors(node).into_iter().next().unwrap_or(0));
+            }
+            c = samples as u64;
+        } else {
+            for node in sampled_nodes {
+                c += black_box(graph.successors(node).into_iter().count() as u64);
+            }
         }
 
         bench_result.add((start.elapsed().as_secs_f64() / c as f64) * 1e9)

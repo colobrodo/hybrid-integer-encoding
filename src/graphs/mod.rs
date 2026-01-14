@@ -319,7 +319,6 @@ where
     let file_len = 8 * file
         .seek(std::io::SeekFrom::End(0))
         .with_context(|| format!("Could not seek in {}", graph_path.display()))?;
-    log::info!("Graph file size: {} bits", file_len);
 
     // if the num_of_nodes is not present, read it from the properties file
     // otherwise use the provided value, this is so we can build the Elias-Fano
@@ -823,7 +822,6 @@ pub fn load_graph<C: ContextModel + Default + Copy>(
     }
 
     let graph_path = basename.with_extension(GRAPH_EXTENSION);
-    println!("graph file size: {} bytes", graph_path.metadata()?.len());
     let flags = MemoryFlags::TRANSPARENT_HUGE_PAGES | MemoryFlags::RANDOM_ACCESS;
     let mmap_factory = MmapHelper::mmap(&graph_path, flags.into())?;
 
