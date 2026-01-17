@@ -174,14 +174,20 @@ where
         .map_with(
             cpl.clone(),
             |pl, (thread_id, mut thread_lender)| -> Result<IntegerHistograms<EP>> {
+                pl.info(format_args!("Started thread with id {}", thread_id));
+
                 let Some((node_id, successors)) = thread_lender.next() else {
                     return Err(anyhow::anyhow!(
                         "Empty chunked size of compressors in thread {}",
                         thread_id
                     ));
                 };
-                pl.info(format_args!("Started thread with id {}", thread_id));
+
                 let first_node = node_id;
+                pl.info(format_args!(
+                    "[{}] Starting compressing chunk from {}",
+                    thread_id, first_node
+                ));
 
                 // Initialize local builder with the estimator from factory
                 let mut thread_builder = HuffmanGraphEncoderBuilder::<_, _, EP>::new(
