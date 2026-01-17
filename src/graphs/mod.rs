@@ -161,8 +161,8 @@ where
     let num_threads = current_num_threads();
     let to_skip = graph.num_nodes().div_ceil(num_threads);
     for _ in 0..5 {
-        iter.advance_by(to_skip).unwrap();
         cpl.info(format_args!("Skipping {} items", to_skip));
+        iter.advance_by(to_skip).unwrap();
         let _ = iter.next();
     }
 
