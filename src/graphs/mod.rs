@@ -8,7 +8,7 @@ mod stats;
 
 use anyhow::{Context, Result};
 use dsi_bitstream::prelude::*;
-use dsi_progress_logger::prelude::*;
+use dsi_progress_logger::{concurrent_progress_logger, prelude::*};
 use epserde::deser::{Deserialize, Owned};
 use epserde::prelude::*;
 use lender::*;
@@ -147,6 +147,7 @@ fn parallel_compression_round_helper<'a, EP, E, C, G, Factory>(
     graph: &G,
     compression_parameters: &CompressionParameters,
     factory: &Factory,
+    msg: impl AsRef<str>,
 ) -> Result<IntegerHistograms<EP>>
 where
     EP: EncodeParams + Send + Sync,
@@ -162,6 +163,16 @@ where
         .into_iter()
         .collect::<Vec<_>>();
 
+    let mut pl = concurrent_progress_logger!(
+        display_memory = true,
+        item_name = "node",
+        local_speed = true,
+        expected_updates = Some(graph.num_nodes()),
+        // log every five minutes
+        log_interval = Duration::from_secs(5 * 60),
+    );
+    pl.start(msg);
+
     // iterate the splitted version of the graph in parallel
     let thread_histograms: Vec<IntegerHistograms<EP>> = split_iter
         .into_iter()
@@ -176,6 +187,8 @@ where
                     ));
                 };
                 let first_node = node_id;
+
+                let mut pl = pl.clone();
 
                 // Initialize local builder with the estimator from factory
                 let mut thread_builder = HuffmanGraphEncoderBuilder::<_, _, EP>::new(
@@ -197,8 +210,10 @@ where
                             first_node,
                         );
                         compressor.push(successors).unwrap();
+                        pl.update();
                         for_![ (_, succ) in thread_lender {
                             compressor.push(succ)?;
+                            pl.update();
                         }];
                         compressor.flush()?;
                     }
@@ -214,6 +229,7 @@ where
                         compressor.push(successors).unwrap();
                         for_![ (_, succ) in thread_lender {
                             compressor.push(succ)?;
+                            pl.update();
                         }];
                         compressor.flush()?;
                     }
@@ -224,11 +240,16 @@ where
         )
         .collect::<Result<Vec<_>>>()?;
 
+    pl.info(format_args!(
+        "Merging histograms from separate threads"
+    ));
+
     // Merge Phase: Combine all local histograms into one
     let mut shared_histograms = IntegerHistograms::<EP>::new(C::num_contexts(), num_symbols);
     for h in thread_histograms {
         shared_histograms.add_all(&h);
     }
+    pl.done();
 
     Ok(shared_histograms)
 }
@@ -249,6 +270,7 @@ fn parallel_first_reference_selection_round<
         graph,
         compression_parameters,
         &factory,
+        "Starting first reference selection round in parallel",
     )?;
 
     let builder = HuffmanGraphEncoderBuilder::<_, _, EP>::from_histograms(
@@ -270,9 +292,7 @@ fn parallel_reference_selection_round<
     graph: &(impl SequentialGraph + for<'a> SplitLabeling<SplitLender<'a>: ExactSizeLender + Send>),
     huffman_graph_encoder_builder: HuffmanGraphEncoderBuilder<E, C, EP>,
     compression_parameters: &CompressionParameters,
-    _msg: impl AsRef<str>,
-    // TODO: use a concurrent_progress_logger
-    _pl: &mut ProgressLogger,
+    msg: impl AsRef<str>,
 ) -> Result<HuffmanEstimatedEncoderBuilder<EP, C>> {
     // obtain cost model of the previous iteration
     let cost_model = huffman_graph_encoder_builder.histograms().cost();
@@ -286,6 +306,7 @@ fn parallel_reference_selection_round<
         graph,
         compression_parameters,
         &factory,
+        msg,
     )?;
 
     // Finalize builder with Huffman estimator and merged histograms
@@ -546,7 +567,6 @@ fn run_conversion_rounds<
             huffman_graph_encoder_builder,
             compression_parameters,
             "Pushing symbols into encoder builder on first round with Huffman estimator...",
-            pl,
         )?
     } else {
         reference_selection_round(
@@ -570,7 +590,6 @@ fn run_conversion_rounds<
                     round + 1
                 )
                 .as_str(),
-                pl,
             )?
         } else {
             reference_selection_round(

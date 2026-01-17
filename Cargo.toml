@@ -8,7 +8,7 @@ anyhow = "1.0.93"
 clap = { version = "4.5.21", features = ["derive"] }
 common_traits = "0.12.0"
 dsi-bitstream = "0.6.0"
-dsi-progress-logger = "0.2.5"
+dsi-progress-logger = "0.8.2"
 env_logger = "0.11.5"
 epserde = "0.11.1"
 sux = { version = "0.10.1", features = ["epserde", "rayon", "mmap"] }

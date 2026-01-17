@@ -304,12 +304,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "core-foundation-sys"
-version = "0.8.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
-
-[[package]]
 name = "crc32fast"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -473,26 +467,14 @@ dependencies = [
 
 [[package]]
 name = "dsi-progress-logger"
-version = "0.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "529902be33fac9791543d1801e8f24b4310899fbcd8654b57e4b8f593d7bebbe"
-dependencies = [
- "log",
- "num-format",
- "pluralizer 0.4.0",
- "sysinfo 0.29.11",
-]
-
-[[package]]
-name = "dsi-progress-logger"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cc2f08728b2005dd95f078e2d775a91b5339839833057b6404b58f47e6ee6ac5"
 dependencies = [
  "log",
  "num-format",
- "pluralizer 0.5.0",
- "sysinfo 0.35.2",
+ "pluralizer",
+ "sysinfo",
 ]
 
 [[package]]
@@ -668,7 +650,7 @@ dependencies = [
  "clap",
  "common_traits",
  "dsi-bitstream",
- "dsi-progress-logger 0.2.5",
+ "dsi-progress-logger",
  "env_logger",
  "epserde",
  "java-properties",
@@ -1150,16 +1132,6 @@ dependencies = [
 
 [[package]]
 name = "pluralizer"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35e4616e94b67b8b61846ea69d4bf041a62147d569d16f437689229e2677d38c"
-dependencies = [
- "lazy_static",
- "regex",
-]
-
-[[package]]
-name = "pluralizer"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4b3eba432a00a1f6c16f39147847a870e94e2e9b992759b503e330efec778cbe"
@@ -1497,7 +1469,7 @@ dependencies = [
  "crossbeam-channel",
  "derivative",
  "derive_setters",
- "dsi-progress-logger 0.8.2",
+ "dsi-progress-logger",
  "env_logger",
  "epserde",
  "fallible-iterator",
@@ -1563,21 +1535,6 @@ dependencies = [
  "libc",
  "thiserror 1.0.69",
  "walkdir",
-]
-
-[[package]]
-name = "sysinfo"
-version = "0.29.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd727fc423c2060f6c92d9534cef765c65a6ed3f428a03d7def74a8c4348e666"
-dependencies = [
- "cfg-if",
- "core-foundation-sys",
- "libc",
- "ntapi",
- "once_cell",
- "rayon",
- "winapi",
 ]
 
 [[package]]
@@ -1832,7 +1789,7 @@ dependencies = [
  "crossbeam-channel",
  "dary_heap",
  "dsi-bitstream",
- "dsi-progress-logger 0.8.2",
+ "dsi-progress-logger",
  "epserde",
  "impl-tools",
  "itertools 0.14.0",
@@ -1851,7 +1808,7 @@ dependencies = [
  "sealed",
  "sux",
  "sync-cell-slice",
- "sysinfo 0.35.2",
+ "sysinfo",
  "tempfile",
  "thiserror 2.0.17",
  "thread_local",
