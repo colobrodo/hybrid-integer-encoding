@@ -166,8 +166,16 @@ where
     ));
     let split_iter = graph.split_iter(num_threads);
     cpl.info(format_args!("We obtained the split iter"));
-    let split_iter = split_iter.into_iter();
-    cpl.info(format_args!("Called into_iter()"));
+    let mut split_iter = split_iter.into_iter();
+    cpl.info(format_args!(
+        "Called into_iter() on iter with {}",
+        split_iter.len()
+    ));
+    let mut i = 0;
+    while let Some(thread_lender) = split_iter.next() {
+        cpl.info(format_args!("iterated {} items", i));
+        i += 1;
+    }
     let split_iter = split_iter.collect::<Vec<_>>();
     cpl.info(format_args!("now collected the iterator in a vec"));
 
