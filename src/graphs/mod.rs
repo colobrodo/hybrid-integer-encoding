@@ -160,6 +160,10 @@ where
     cpl.info(format_args!("Started parallel compression helper"));
     let num_symbols = 1 << compression_parameters.max_bits;
     let num_threads = current_num_threads();
+    cpl.info(format_args!(
+        "Now we know that we have {} threads",
+        num_threads
+    ));
     let split_iter = graph
         .split_iter(num_threads)
         .into_iter()
