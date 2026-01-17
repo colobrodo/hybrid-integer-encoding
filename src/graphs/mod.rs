@@ -163,6 +163,7 @@ where
     for _ in 0..5 {
         cpl.info(format_args!("Skipping {} items", to_skip));
         iter.advance_by(to_skip).unwrap();
+        cpl.info(format_args!("Skipped"));
         let _ = iter.next();
     }
 
