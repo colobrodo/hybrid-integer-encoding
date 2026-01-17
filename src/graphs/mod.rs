@@ -158,10 +158,12 @@ where
     Factory: ThreadEstimatorFactory<'a, E> + Send + Sync,
 {
     let mut iter = graph.iter();
+    let num_threads = current_num_threads();
+    let to_skip = graph.num_nodes().div_ceil(num_threads);
     for _ in 0..5 {
-        iter.advance_by(200).unwrap();
+        iter.advance_by(to_skip).unwrap();
         let _ = iter.next();
-        cpl.info(format_args!("Iterate after skipping 200 items"));
+        cpl.info(format_args!("Iterate after skipping {} items", to_skip));
     }
 
     cpl.info(format_args!("Started parallel compression helper"));
