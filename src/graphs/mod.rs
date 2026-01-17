@@ -162,8 +162,8 @@ where
     let to_skip = graph.num_nodes().div_ceil(num_threads);
     for _ in 0..5 {
         iter.advance_by(to_skip).unwrap();
+        cpl.info(format_args!("Skipping {} items", to_skip));
         let _ = iter.next();
-        cpl.info(format_args!("Iterate after skipping {} items", to_skip));
     }
 
     cpl.info(format_args!("Started parallel compression helper"));
