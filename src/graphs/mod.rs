@@ -164,14 +164,12 @@ where
         "Now we know that we have {} threads",
         num_threads
     ));
-    let split_iter = graph
-        .split_iter(num_threads)
-        .into_iter()
-        .collect::<Vec<_>>();
-    cpl.info(format_args!(
-        "After split-iter, starting compression with {} threads",
-        num_threads
-    ));
+    let split_iter = graph.split_iter(num_threads);
+    cpl.info(format_args!("We obtained the split iter"));
+    let split_iter = split_iter.into_iter();
+    cpl.info(format_args!("Called into_iter()"));
+    let split_iter = split_iter.collect::<Vec<_>>();
+    cpl.info(format_args!("now collected the iterator in a vec"));
 
     cpl.start(msg);
 
