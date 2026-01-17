@@ -641,7 +641,7 @@ pub fn convert_graph<
         local_speed = true,
         expected_updates = Some(seq_graph.num_nodes()),
         // log every five minutes
-        log_interval = Duration::from_secs(1),
+        log_interval = Duration::from_secs(5 * 60),
     );
 
     match compression_parameters.starting_estimator {
