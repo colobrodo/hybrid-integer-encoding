@@ -157,12 +157,17 @@ where
     G: SequentialGraph + for<'b> SplitLabeling<SplitLender<'b>: ExactSizeLender + Send>,
     Factory: ThreadEstimatorFactory<'a, E> + Send + Sync,
 {
+    cpl.info(format_args!("Started parallel compression helper"));
     let num_symbols = 1 << compression_parameters.max_bits;
     let num_threads = current_num_threads();
     let split_iter = graph
         .split_iter(num_threads)
         .into_iter()
         .collect::<Vec<_>>();
+    cpl.info(format_args!(
+        "After split-iter, starting compression with {} threads",
+        num_threads
+    ));
 
     cpl.start(msg);
 
@@ -265,7 +270,11 @@ fn parallel_first_reference_selection_round<
     pl: &mut ConcurrentWrapper,
     msg: impl AsRef<str>,
 ) -> Result<HuffmanGraphEncoderBuilder<E, C, EP>> {
+    pl.info(format_args!(
+        "called parallel_first_reference_selection_round"
+    ));
     let factory = DefaultEstimatorFactory::<E>::default();
+    pl.info(format_args!("Created default estimator"));
     let shared_histograms = parallel_compression_round_helper::<EP, E, C, G, _>(
         graph,
         compression_parameters,
@@ -504,20 +513,23 @@ fn run_conversion_rounds<
 
     pl.item_name("node")
         .expected_updates(Some(seq_graph.num_nodes()));
-    pl.start(format!(
+    let msg = format!(
         "Pushing symbols into encoder builder with {}...",
         starting_estimator_name
-    ));
+    );
 
     // Run compression for the first round (sequential or parallel)
     let huffman_graph_encoder_builder = if parallel {
+        pl.info(format_args!("Starting the first round in parallel!"));
         parallel_first_reference_selection_round::<EP, E, C, _>(
             seq_graph,
             compression_parameters,
             pl,
-            "",
+            msg,
         )?
     } else {
+        pl.info(format_args!("Starting the first round sequentially"));
+        pl.start(msg);
         let mut builder =
             HuffmanGraphEncoderBuilder::<_, _, EP>::new(num_symbols, E::default(), C::default());
         let offsets_writer = OffsetsWriter::from_write(io::empty(), true)?;
