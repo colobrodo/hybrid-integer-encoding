@@ -148,7 +148,7 @@ fn parallel_compression_round_helper<'a, EP, E, C, G, Factory>(
     compression_parameters: &CompressionParameters,
     factory: &Factory,
     msg: impl AsRef<str>,
-    pl: &mut ConcurrentWrapper,
+    cpl: &mut ConcurrentWrapper,
 ) -> Result<IntegerHistograms<EP>>
 where
     EP: EncodeParams + Send + Sync,
@@ -164,24 +164,24 @@ where
         .into_iter()
         .collect::<Vec<_>>();
 
-    pl.start(msg);
+    cpl.start(msg);
 
     // iterate the splitted version of the graph in parallel
     let thread_histograms: Vec<IntegerHistograms<EP>> = split_iter
         .into_iter()
         .enumerate()
         .par_bridge()
-        .map(
-            |(thread_id, mut thread_lender)| -> Result<IntegerHistograms<EP>> {
+        .map_with(
+            cpl.clone(),
+            |pl, (thread_id, mut thread_lender)| -> Result<IntegerHistograms<EP>> {
                 let Some((node_id, successors)) = thread_lender.next() else {
                     return Err(anyhow::anyhow!(
                         "Empty chunked size of compressors in thread {}",
                         thread_id
                     ));
                 };
+                pl.info(format_args!("Started thread with id {}", thread_id));
                 let first_node = node_id;
-
-                let mut pl = pl.clone();
 
                 // Initialize local builder with the estimator from factory
                 let mut thread_builder = HuffmanGraphEncoderBuilder::<_, _, EP>::new(
@@ -220,6 +220,7 @@ where
                             first_node,
                         );
                         compressor.push(successors).unwrap();
+                        pl.update();
                         for_![ (_, succ) in thread_lender {
                             compressor.push(succ)?;
                             pl.update();
@@ -233,14 +234,14 @@ where
         )
         .collect::<Result<Vec<_>>>()?;
 
-    pl.info(format_args!("Merging histograms from separate threads"));
+    cpl.info(format_args!("Merging histograms from separate threads"));
 
     // Merge Phase: Combine all local histograms into one
     let mut shared_histograms = IntegerHistograms::<EP>::new(C::num_contexts(), num_symbols);
     for h in thread_histograms {
         shared_histograms.add_all(&h);
     }
-    pl.done();
+    cpl.done();
 
     Ok(shared_histograms)
 }
