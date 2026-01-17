@@ -92,7 +92,7 @@ fn reference_selection_round<
     huffman_graph_encoder_builder: HuffmanGraphEncoderBuilder<E, C, EP>,
     compression_parameters: &CompressionParameters,
     msg: impl AsRef<str>,
-    pl: &mut ProgressLogger,
+    pl: &mut ConcurrentWrapper,
 ) -> Result<HuffmanEstimatedEncoderBuilder<EP, C>> {
     let num_symbols = 1 << compression_parameters.max_bits;
     let huffman_estimator = huffman_graph_encoder_builder.build_estimator();
@@ -148,6 +148,7 @@ fn parallel_compression_round_helper<'a, EP, E, C, G, Factory>(
     compression_parameters: &CompressionParameters,
     factory: &Factory,
     msg: impl AsRef<str>,
+    pl: &mut ConcurrentWrapper,
 ) -> Result<IntegerHistograms<EP>>
 where
     EP: EncodeParams + Send + Sync,
@@ -163,14 +164,6 @@ where
         .into_iter()
         .collect::<Vec<_>>();
 
-    let mut pl = concurrent_progress_logger!(
-        display_memory = true,
-        item_name = "node",
-        local_speed = true,
-        expected_updates = Some(graph.num_nodes()),
-        // log every five minutes
-        log_interval = Duration::from_secs(5 * 60),
-    );
     pl.start(msg);
 
     // iterate the splitted version of the graph in parallel
@@ -240,9 +233,7 @@ where
         )
         .collect::<Result<Vec<_>>>()?;
 
-    pl.info(format_args!(
-        "Merging histograms from separate threads"
-    ));
+    pl.info(format_args!("Merging histograms from separate threads"));
 
     // Merge Phase: Combine all local histograms into one
     let mut shared_histograms = IntegerHistograms::<EP>::new(C::num_contexts(), num_symbols);
@@ -264,13 +255,16 @@ fn parallel_first_reference_selection_round<
 >(
     graph: &G,
     compression_parameters: &CompressionParameters,
+    pl: &mut ConcurrentWrapper,
+    msg: impl AsRef<str>,
 ) -> Result<HuffmanGraphEncoderBuilder<E, C, EP>> {
     let factory = DefaultEstimatorFactory::<E>::default();
     let shared_histograms = parallel_compression_round_helper::<EP, E, C, G, _>(
         graph,
         compression_parameters,
         &factory,
-        "Starting first reference selection round in parallel",
+        msg,
+        pl,
     )?;
 
     let builder = HuffmanGraphEncoderBuilder::<_, _, EP>::from_histograms(
@@ -293,6 +287,7 @@ fn parallel_reference_selection_round<
     huffman_graph_encoder_builder: HuffmanGraphEncoderBuilder<E, C, EP>,
     compression_parameters: &CompressionParameters,
     msg: impl AsRef<str>,
+    pl: &mut ConcurrentWrapper,
 ) -> Result<HuffmanEstimatedEncoderBuilder<EP, C>> {
     // obtain cost model of the previous iteration
     let cost_model = huffman_graph_encoder_builder.histograms().cost();
@@ -307,6 +302,7 @@ fn parallel_reference_selection_round<
         compression_parameters,
         &factory,
         msg,
+        pl,
     )?;
 
     // Finalize builder with Huffman estimator and merged histograms
@@ -495,7 +491,7 @@ fn run_conversion_rounds<
     compression_parameters: &CompressionParameters,
     parallel: bool,
     starting_estimator_name: &str,
-    pl: &mut ProgressLogger,
+    pl: &mut ConcurrentWrapper,
 ) -> Result<()> {
     let num_symbols = 1 << compression_parameters.max_bits;
 
@@ -508,7 +504,12 @@ fn run_conversion_rounds<
 
     // Run compression for the first round (sequential or parallel)
     let huffman_graph_encoder_builder = if parallel {
-        parallel_first_reference_selection_round::<EP, E, C, _>(seq_graph, compression_parameters)?
+        parallel_first_reference_selection_round::<EP, E, C, _>(
+            seq_graph,
+            compression_parameters,
+            pl,
+            "",
+        )?
     } else {
         let mut builder =
             HuffmanGraphEncoderBuilder::<_, _, EP>::new(num_symbols, E::default(), C::default());
@@ -567,6 +568,7 @@ fn run_conversion_rounds<
             huffman_graph_encoder_builder,
             compression_parameters,
             "Pushing symbols into encoder builder on first round with Huffman estimator...",
+            pl,
         )?
     } else {
         reference_selection_round(
@@ -590,6 +592,7 @@ fn run_conversion_rounds<
                     round + 1
                 )
                 .as_str(),
+                pl,
             )?
         } else {
             reference_selection_round(
@@ -632,9 +635,13 @@ pub fn convert_graph<
         compression_parameters.num_rounds >= 1,
         "Needed at least one estimation round to compress the graph using a Huffman-based encoding."
     );
-    let mut pl = progress_logger!(
+    let mut pl = concurrent_progress_logger!(
         display_memory = true,
-        log_interval = Duration::from_secs(5 * 60)
+        item_name = "node",
+        local_speed = true,
+        expected_updates = Some(seq_graph.num_nodes()),
+        // log every five minutes
+        log_interval = Duration::from_secs(1),
     );
 
     match compression_parameters.starting_estimator {
@@ -673,7 +680,7 @@ fn write_graph_to_disk<
     huffman_graph_encoder_builder: HuffmanGraphEncoderBuilder<E, C, EP>,
     seq_graph: &G,
     compression_parameters: &CompressionParameters,
-    pl: &mut ProgressLogger,
+    pl: &mut ConcurrentWrapper,
 ) -> Result<()> {
     pl.start("Building the encoder with the cost model obtained from estimation rounds...");
 
