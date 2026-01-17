@@ -157,6 +157,13 @@ where
     G: SequentialGraph + for<'b> SplitLabeling<SplitLender<'b>: ExactSizeLender + Send>,
     Factory: ThreadEstimatorFactory<'a, E> + Send + Sync,
 {
+    let mut iter = graph.iter();
+    for _ in 0..5 {
+        iter.advance_by(200).unwrap();
+        let _ = iter.next();
+        cpl.info(format_args!("Iterate after skipping 200 items"));
+    }
+
     cpl.info(format_args!("Started parallel compression helper"));
     let num_symbols = 1 << compression_parameters.max_bits;
     let num_threads = current_num_threads();
@@ -168,11 +175,11 @@ where
     cpl.info(format_args!("We obtained the split iter"));
     let mut split_iter = split_iter.into_iter();
     cpl.info(format_args!(
-        "Called into_iter() on iter with {}",
+        "Called into_iter() on iter with length {}",
         split_iter.len()
     ));
     let mut i = 0;
-    while let Some(thread_lender) = split_iter.next() {
+    while let Some(_thread_lender) = split_iter.next() {
         cpl.info(format_args!("iterated {} items", i));
         i += 1;
     }
