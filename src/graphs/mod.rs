@@ -174,7 +174,10 @@ where
         .map_with(
             cpl.clone(),
             |pl, (thread_id, mut thread_lender)| -> Result<IntegerHistograms<EP>> {
-                pl.info(format_args!("Started thread with id {}", thread_id));
+                pl.info(format_args!(
+                    "Started compression with thread {}",
+                    thread_id
+                ));
 
                 let Some((node_id, successors)) = thread_lender.next() else {
                     return Err(anyhow::anyhow!(
@@ -184,10 +187,6 @@ where
                 };
 
                 let first_node = node_id;
-                pl.info(format_args!(
-                    "[{}] Starting compressing chunk from {}",
-                    thread_id, first_node
-                ));
 
                 // Initialize local builder with the estimator from factory
                 let mut thread_builder = HuffmanGraphEncoderBuilder::<_, _, EP>::new(
@@ -471,16 +470,24 @@ pub fn convert_graph_file<C: ContextModel + Default + Copy + Send + Sync>(
     compression_parameters: &CompressionParameters,
     parallel: bool,
 ) -> Result<()> {
-    let seq_graph = BvGraphSeq::with_basename(&basename)
-        .endianness::<BE>()
-        .load()?;
+    if basename.as_ref().with_extension(EF_EXTENSION).exists() {
+        let graph = BvGraph::with_basename(&basename)
+            .endianness::<BE>()
+            .load()?;
 
-    convert_graph::<C, _>(
-        &seq_graph,
-        output_basename,
-        compression_parameters,
-        parallel,
-    )
+        convert_graph::<C, _>(&graph, output_basename, compression_parameters, parallel)
+    } else {
+        let seq_graph = BvGraphSeq::with_basename(&basename)
+            .endianness::<BE>()
+            .load()?;
+
+        convert_graph::<C, _>(
+            &seq_graph,
+            output_basename,
+            compression_parameters,
+            parallel,
+        )
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
