@@ -127,7 +127,7 @@ impl<EP: EncodeParams> IntegerHistograms<EP> {
     }
 
     /// Adds a symbol count for a specific context.
-    pub fn add(&mut self, context: u8, value: u32) {
+    pub fn add(&mut self, context: u8, value: u64) {
         debug_assert!(
             (context as usize) < self.num_contexts,
             "Context out of bounds trying to add symbol {} on context {}, but only {} contexts are available",
@@ -193,7 +193,7 @@ impl<EP: EncodeParams> IntegerHistograms<EP> {
     }
 }
 
-type Bag = (usize, Vec<u8>);
+type Bag = (usize, Vec<u16>);
 
 // Compute the optimal number of bits for each symbol given the input
 // distribution. Uses a (quadratic version) of the package-merge/coin-collector
@@ -225,7 +225,7 @@ fn compute_symbol_num_bits(histogram: &[usize], max_bits: usize, infos: &mut [Hu
             if info.present == 0 {
                 continue;
             }
-            let sym = vec![s as u8];
+            let sym = vec![s as u16];
             bag.push((histogram[s], sym));
         }
     }
@@ -283,7 +283,7 @@ impl<EP: EncodeParams> HuffmanEncoder<EP> {
         let (token, n_bits, bits) = encode::<EP>(value);
         debug_assert!(
             self.info_[ctx as usize][token].present == 1,
-            "Unknown value {value} in context {ctx}"
+            "Unknown value {value} in context {ctx}, encoded as {token} with {n_bits} trailing bits on the stream"
         );
         let n_bits_per_token = self.info_[ctx as usize][token].n_bits as usize;
         writer.write_bits(

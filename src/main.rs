@@ -306,7 +306,7 @@ fn encode_file(
     for line in reader.lines().map_while(Result::ok) {
         // Split the line by whitespace and parse each number as u8
         for num in line.split_whitespace() {
-            match num.parse::<u32>() {
+            match num.parse::<u64>() {
                 Ok(n) => {
                     let context = choose_context::<DefaultEncodeParams>(last_sample, num_contexts);
                     integers.push((context, n));
@@ -391,7 +391,7 @@ fn bench_file<EP: EncodeParams>(
     let mut integer_data = IntegerData::<EP>::new(num_contexts, num_symbols);
     for &n in items {
         let context = choose_context::<EP>(last_integer, num_contexts);
-        integer_data.add(context, n as u32);
+        integer_data.add(context, n);
         last_integer = n;
     }
 
@@ -414,7 +414,7 @@ fn bench_random_sample<EP: EncodeParams>(
     let mut integer_data = IntegerData::<EP>::new(num_contexts, num_symbols);
     let mut last_sample = 0;
     for _ in 0..n_samples {
-        let sample = rng.sample(zipf) as u32;
+        let sample = rng.sample(zipf) as u64;
         let context = choose_context::<EP>(last_sample as u64, num_contexts);
         integer_data.add(context, sample);
         last_sample = sample;

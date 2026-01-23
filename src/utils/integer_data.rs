@@ -10,7 +10,7 @@ use crate::huffman::{DefaultEncodeParams, EncodeParams, IntegerHistograms};
 /// encoding frequencies.
 pub struct IntegerData<EP: EncodeParams = DefaultEncodeParams> {
     histograms: IntegerHistograms<EP>,
-    values: Vec<u32>,
+    values: Vec<u64>,
     contexts: Vec<u8>,
     _marker: PhantomData<EP>,
 }
@@ -29,7 +29,7 @@ impl<EP: EncodeParams> IntegerData<EP> {
 
     /// Adds a new integer value with its associated context to the collection.
     /// Updates the internal histogram for the given context with the new value.
-    pub fn add(&mut self, context: u8, value: u32) {
+    pub fn add(&mut self, context: u8, value: u64) {
         self.values.push(value);
         self.contexts.push(context);
         self.histograms.add(context, value);
@@ -37,7 +37,7 @@ impl<EP: EncodeParams> IntegerData<EP> {
 
     /// Returns an iterator over pairs of (context, value) stored in the collection.
     /// The iterator yields tuples containing each value and its associated context.
-    pub fn iter(&self) -> impl Iterator<Item = (u8, u32)> + '_ {
+    pub fn iter(&self) -> impl Iterator<Item = (u8, u64)> + '_ {
         self.contexts
             .iter()
             .zip(self.values.iter())

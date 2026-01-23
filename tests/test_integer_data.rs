@@ -40,7 +40,7 @@ mod tests {
         assert!(!data.is_empty());
 
         // Collect the iterator results to verify the values
-        let results: Vec<(u8, u32)> = data.iter().collect();
+        let results: Vec<_> = data.iter().collect();
         assert_eq!(results, vec![(0, 5), (1, 3), (0, 7), (2, 1)]);
 
         Ok(())

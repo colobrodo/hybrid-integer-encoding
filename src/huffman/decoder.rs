@@ -46,7 +46,7 @@ pub trait EntropyCoder {
 #[derive(Clone, Copy, Default, Debug)]
 struct HuffmanDecoderInfo {
     nbits: u8,
-    symbol: u8,
+    symbol: u16,
 }
 
 /// Struct representing a Huffman decoder.
@@ -105,7 +105,7 @@ fn compute_decoder_table(
     if cnt <= 1 {
         for info in infos.iter_mut() {
             info.nbits = sym_infos[s].n_bits;
-            info.symbol = s as u8;
+            info.symbol = s as u16;
         }
         return Ok(());
     }
@@ -129,7 +129,7 @@ fn compute_decoder_table(
         }
         assert!(sym_infos[s].n_bits > 0);
         info.nbits = sym_infos[s].n_bits;
-        info.symbol = s as u8;
+        info.symbol = s as u16;
     }
     Ok(())
 }

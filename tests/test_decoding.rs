@@ -27,7 +27,7 @@ mod tests {
         let default_context = 0;
         let mut integers = Vec::with_capacity(nsamples);
         for _ in 0..nsamples {
-            let sample = zipf.sample(&mut rng) as u32;
+            let sample = zipf.sample(&mut rng) as u64;
             data.add(default_context, sample);
             integers.push((default_context, sample));
         }
@@ -91,6 +91,44 @@ mod tests {
         let (token, n_bits, _) = encode::<DefaultEncodeParams>(17179902313);
         assert_eq!(n_bits, 31);
         assert_eq!(token, 257);
+        Ok(())
+    }
+
+    #[test]
+    fn test_encode_and_decode_large_number_with_12_bits() -> Result<()> {
+        const MAX_BITS: usize = 12;
+        const NUM_SYMBOLS: usize = 1 << MAX_BITS;
+        const NUM_CONTEXT: usize = 1;
+
+        let value_to_encode = 49903891086u64;
+        // let value_to_encode = 8888888884u64;
+
+        let mut data = IntegerHistograms::new(NUM_CONTEXT, NUM_SYMBOLS);
+        let context = 0;
+        data.add(context, 1);
+        data.add(context, value_to_encode);
+
+        let encoder = HuffmanEncoder::<DefaultEncodeParams>::new(data, MAX_BITS);
+        let word_write = MemWordWriterVec::new(Vec::<u64>::new());
+        let mut writer = BufBitWriter::<LE, _>::new(word_write);
+
+        encoder.write_header(&mut writer)?;
+        encoder.write(context, value_to_encode, &mut writer)?;
+        writer.flush()?;
+
+        let binary_data = writer.into_inner()?.into_inner();
+        let binary_data = unsafe {
+            core::slice::from_raw_parts(binary_data.as_ptr() as *const u32, binary_data.len() * 2)
+        };
+
+        let mut reader = HuffmanDecoder::from_bitreader(
+            BufBitReader::<LE, _>::new(MemWordReader::new(binary_data)),
+            MAX_BITS,
+            NUM_CONTEXT,
+        )?;
+
+        let decoded_value = reader.read::<DefaultEncodeParams>(context as _)?;
+        assert_eq!(decoded_value, value_to_encode as usize);
         Ok(())
     }
 }

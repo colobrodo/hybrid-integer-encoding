@@ -198,7 +198,7 @@ impl<EP: EncodeParams, E: Encode, C: ContextModel> HuffmanGraphEncoderBuilder<E,
 
     fn add_data(&mut self, component: BvGraphComponent, value: u64) {
         let context = self.context_model.choose_context(component);
-        self.data.add(context, value as u32);
+        self.data.add(context, value);
         self.context_model.update(component, value);
     }
 }
