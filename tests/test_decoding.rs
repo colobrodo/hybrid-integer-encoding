@@ -101,7 +101,6 @@ mod tests {
         const NUM_CONTEXT: usize = 1;
 
         let value_to_encode = 49903891086u64;
-        // let value_to_encode = 8888888884u64;
 
         let mut data = IntegerHistograms::new(NUM_CONTEXT, NUM_SYMBOLS);
         let context = 0;
