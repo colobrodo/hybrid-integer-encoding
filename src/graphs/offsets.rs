@@ -1,3 +1,8 @@
+// Like the ones in `utils`, these functions are duplicates of the ones in `webgraph`
+// because we need loaders for Huffman-encoded graphs.
+// Some of the original functionalities are hidden by the `cli` module and are
+// therefore inaccessible.
+
 use anyhow::{Context, Result};
 use dsi_bitstream::prelude::*;
 use dsi_progress_logger::prelude::*;

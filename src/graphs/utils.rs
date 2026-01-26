@@ -1,3 +1,11 @@
+// The functions in this module are provided by the WebGraph CLI, but they
+// should be duplicated here with slight modifications because of the Huffman encoding.
+// Currently, compare_graph is equivalent to `webgraph::traits::eq`, so we can use this
+// function, but unfortunately, it does not provide any indication of the progress made
+// during the comparison.
+// `measure_stats` instead, has no direct mapping with webgraph it report the number of
+// bits used to encode each component of the graph.
+
 use super::*;
 use anyhow::{Context, Result};
 use dsi_bitstream::prelude::*;
