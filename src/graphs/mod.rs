@@ -959,5 +959,32 @@ pub fn compare_graphs<C: ContextModel + Default + Copy + 'static>(
         .endianness::<BE>()
         .load()?;
 
-    Ok(eq(&first_graph, &second_graph))
+    let mut pl = ProgressLogger::default();
+    pl.display_memory(true)
+        .item_name("compare graphs")
+        .expected_updates(Some(first_graph.num_nodes()));
+
+    pl.start("Start comparing the graphs...");
+
+    if first_graph.num_nodes() != second_graph.num_nodes() {
+        return Ok(Err(EqError::NumNodes {
+            first: first_graph.num_nodes(),
+            second: second_graph.num_nodes(),
+        }));
+    }
+    for_!(((node0, succ0), (node1, succ1)) in first_graph.iter().zip(second_graph.iter()) {
+        debug_assert_eq!(node0, node1);
+        pl.light_update();
+        let mut succ0 = succ0.into_iter().collect::<Vec<_>>();
+        let mut succ1 = succ1.into_iter().collect::<Vec<_>>();
+        succ0.sort();
+        succ1.sort();
+        let result = labels::eq_succs(node0, succ0, succ1);
+        if let Err(eq_error) = result {
+            return Ok(Err(eq_error))
+        }
+    });
+
+    pl.done();
+    Ok(Ok(()))
 }
