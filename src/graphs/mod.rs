@@ -20,6 +20,7 @@ use std::io::{self, BufReader, BufWriter, Seek};
 use std::path::Path;
 use std::time::Duration;
 use sux::prelude::*;
+use sux::traits::IndexedSeq;
 use webgraph::prelude::{SequentialLabeling, *};
 
 use component::*;
@@ -918,6 +919,84 @@ where
         .context("Could not write final gamma")?;
     pl.light_update();
     pl.start("Done!");
+    Ok(())
+}
+
+/// Compare the `ef` file against the `offsets` file, and if it is equal also against
+/// the original graph.
+/// If some differences are found it prints an error to the stderr and exits.
+pub fn check_ef<C: ContextModel + Default + Copy + 'static>(
+    basename: impl AsRef<Path>,
+    max_bits: usize,
+) -> Result<()> {
+    let properties_path = basename.as_ref().with_extension(PROPERTIES_EXTENSION);
+    let f = File::open(&properties_path).with_context(|| {
+        format!(
+            "Could not load properties file: {}",
+            properties_path.display()
+        )
+    })?;
+    let map = java_properties::read(BufReader::new(f))?;
+    let num_nodes = map.get("nodes").unwrap().parse::<usize>()?;
+
+    // Creates the offsets file
+    let of_file_path = basename.as_ref().with_extension(OFFSETS_EXTENSION);
+
+    let ef = unsafe {
+        EF::mmap(
+            basename.as_ref().with_extension(EF_EXTENSION),
+            Flags::default(),
+        )
+    }?;
+    let ef = ef.uncase();
+
+    let mut pl = ProgressLogger::default();
+    pl.display_memory(true)
+        .item_name("offset")
+        .expected_updates(Some(num_nodes));
+
+    // if the offset files exists, read it to build elias-fano
+    if of_file_path.exists() {
+        // create a bit reader on the file
+        let mut reader = buf_bit_reader::from_path::<BE, u32>(of_file_path)?;
+        // progress bar
+        pl.start("Checking offsets file against Elias-Fano...");
+        // read the graph a write the offsets
+        let mut offset = 0;
+        for node_id in 0..num_nodes + 1 {
+            // write where
+            offset += reader.read_gamma()?;
+            // read ef
+            let ef_res = ef.get(node_id as _);
+            assert_eq!(offset, ef_res as u64, "node_id: {}", node_id);
+            // decode the next nodes so we know where the next node_id starts
+            pl.light_update();
+        }
+    } else {
+        pl.info(format_args!(
+            "No offsets file, checking against graph file only"
+        ));
+    }
+
+    // progress bar
+    let mut pl = ProgressLogger::default();
+    pl.display_memory(true)
+        .item_name("offset")
+        .expected_updates(Some(num_nodes));
+
+    pl.start("Checking graph against Elias-Fano...");
+
+    // otherwise directly read the graph
+    let graph = load_graph_seq::<C>(&basename, max_bits)?;
+    // read the graph a write the offsets
+    for (node, (new_offset, _degree)) in graph.offset_deg_iter().enumerate() {
+        // decode the next nodes so we know where the next node_id starts
+        // read ef
+        let ef_res = ef.get(node as _);
+        assert_eq!(new_offset, ef_res as u64, "node_id: {}", node);
+        pl.light_update();
+    }
+    pl.done();
     Ok(())
 }
 

@@ -22,7 +22,8 @@ use rand_distr::Zipf;
 
 use hybrid_integer_encoding::{
     graphs::{
-        build_offsets, compare_graphs, convert_graph_file, measure_stats, CompressorType, Estimator,
+        build_offsets, check_ef, compare_graphs, convert_graph_file, measure_stats, CompressorType,
+        Estimator,
     },
     utils::IntegerData,
 };
@@ -136,6 +137,17 @@ enum GraphCommand {
         first_basename: PathBuf,
         /// The basename of the BvGraph to read and compare
         second_basename: PathBuf,
+        /// The maximum number of bits for each word of the huffman code used to compress the first graph.
+        #[arg(short = 'b', long, default_value = "8")]
+        max_bits: usize,
+        /// The type of context model used to encode the Huffman graph.
+        #[arg(long, default_value = "simple")]
+        context_model: ContextModelArgument,
+    },
+    /// Checks the `ef` file against the `offsets`` file and, if successful, against the graph
+    CheckEf {
+        /// The basename of the Huffman graph to read and check the Elias-Fano file
+        basename: PathBuf,
         /// The maximum number of bits for each word of the huffman code used to compress the first graph.
         #[arg(short = 'b', long, default_value = "8")]
         max_bits: usize,
@@ -611,6 +623,23 @@ fn main() -> Result<()> {
                         )?
                     }
                 }
+            }
+            GraphCommand::CheckEf {
+                basename,
+                max_bits,
+                context_model,
+            } => {
+                match context_model {
+                    ContextModelArgument::Single => {
+                        check_ef::<ConstantContextModel>(basename, max_bits)?
+                    }
+                    ContextModelArgument::Simple => {
+                        check_ef::<SimpleContextModel>(basename, max_bits)?
+                    }
+                    ContextModelArgument::Zuckerli => {
+                        check_ef::<ConstantContextModel>(basename, max_bits)?
+                    }
+                };
             }
             GraphCommand::Eq {
                 first_basename,
