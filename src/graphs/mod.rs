@@ -101,7 +101,7 @@ fn reference_selection_round<
     let mut huffman_graph_encoder_builder =
         HuffmanGraphEncoderBuilder::<_, _, EP>::new(num_symbols, huffman_estimator, C::default());
     // discard all the offsets
-    let offsets_writer = OffsetsWriter::from_write(io::empty(), true)?;
+    let offsets_writer = OffsetsWriter::from_write(io::empty(), false)?;
     pl.item_name("node")
         .expected_updates(Some(graph.num_nodes()));
     pl.start(msg);
@@ -195,7 +195,7 @@ where
                     factory.create_estimator(),
                     C::default(),
                 );
-                let offsets_writer = OffsetsWriter::from_write(io::empty(), true)?;
+                let offsets_writer = OffsetsWriter::from_write(io::empty(), false)?;
 
                 match compression_parameters.compressor {
                     CompressorType::Approximated { chunk_size } => {
@@ -528,7 +528,7 @@ fn run_conversion_rounds<
     } else {
         let mut builder =
             HuffmanGraphEncoderBuilder::<_, _, EP>::new(num_symbols, E::default(), C::default());
-        let offsets_writer = OffsetsWriter::from_write(io::empty(), true)?;
+        let offsets_writer = OffsetsWriter::from_write(io::empty(), false)?;
         match compression_parameters.compressor {
             CompressorType::Approximated { chunk_size } => {
                 let mut compressor = BvCompZ::new(
@@ -712,7 +712,7 @@ fn write_graph_to_disk<
     let header_size = huffman_graph_encoder.write_header()?;
     let offsets_writer = OffsetsWriter::from_path(
         output_basename.as_ref().with_extension(OFFSETS_EXTENSION),
-        true,
+        false,
     )?;
 
     pl.item_name("node")
