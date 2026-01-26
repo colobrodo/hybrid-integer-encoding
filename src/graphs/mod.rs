@@ -11,7 +11,7 @@ mod utils;
 
 use anyhow::{Context, Result};
 use dsi_bitstream::prelude::*;
-use epserde::deser::{Deserialize, Owned};
+use epserde::deser::Deserialize;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
@@ -94,7 +94,7 @@ pub fn check_compression_parameters(
     Ok(())
 }
 
-type HuffmanBvGraph<C> = BvGraph<RandomAccessHuffmanDecoderFactory<MmapHelper<u32>, Owned<EF>, C>>;
+type HuffmanBvGraph<C> = BvGraph<RandomAccessHuffmanDecoderFactory<MmapHelper<u32>, EF, C>>;
 
 /// Load a Huffman-compressed graph for random access.
 /// Ensures offsets/Elias-Fano exist and returns a `BvGraph`.
@@ -120,9 +120,8 @@ pub fn load_graph<C: ContextModel + Default + Copy>(
     let flags = MemoryFlags::TRANSPARENT_HUGE_PAGES | MemoryFlags::RANDOM_ACCESS;
     let mmap_factory = MmapHelper::mmap(&graph_path, flags.into())?;
 
-    let ef = unsafe { EF::load_full(eliasfano_path)? };
-    let factory =
-        RandomAccessHuffmanDecoderFactory::new(mmap_factory, C::default(), ef.into(), max_bits)?;
+    let ef = unsafe { EF::mmap(eliasfano_path, flags.into())? };
+    let factory = RandomAccessHuffmanDecoderFactory::new(mmap_factory, C::default(), ef, max_bits)?;
 
     let graph = BvGraph::new(
         factory,
