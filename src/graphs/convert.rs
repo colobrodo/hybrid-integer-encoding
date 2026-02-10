@@ -24,7 +24,7 @@ type HuffmanEstimatedEncoderBuilder<EP, C> =
 /// A factory trait for creating thread-local estimators of a specific encoders.
 ///
 /// This trait is used to instantiate estimators in parallel contexts where each thread
-/// needs its own independent estimator instance. The estimator type `E` must implement
+/// needs its own independent estimator instance of type `E`.
 trait ThreadEstimatorFactory<'a, E: Encode + Send + Sync> {
     fn create_estimator(&self) -> E;
 }

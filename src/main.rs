@@ -333,7 +333,7 @@ fn encode_file(
                     let context = choose_context::<DefaultEncodeParams>(last_sample, num_contexts);
                     integers.push((context, n));
                     integer_data.add(context, n);
-                    last_sample = n as u64;
+                    last_sample = n;
                 }
                 Err(_) => println!("Skipping invalid number: {}", num),
             }
@@ -348,7 +348,7 @@ fn encode_file(
     encoder.write_header(&mut writer)?;
     let header_size = writer.bits_written;
     for (ctx, number) in integers {
-        encoder.write(ctx, number as u64, &mut writer)?;
+        encoder.write(ctx, number, &mut writer)?;
     }
 
     writer.flush()?;
@@ -437,7 +437,7 @@ fn bench_random_sample<EP: EncodeParams>(
     let mut last_sample = 0;
     for _ in 0..n_samples {
         let sample = rng.sample(zipf) as u64;
-        let context = choose_context::<EP>(last_sample as u64, num_contexts);
+        let context = choose_context::<EP>(last_sample, num_contexts);
         integer_data.add(context, sample);
         last_sample = sample;
     }
@@ -471,7 +471,7 @@ fn bench<EP: EncodeParams>(
     }
 
     for &(ctx, value) in integers.iter() {
-        encoder.write(ctx, value as u64, &mut writer)?;
+        encoder.write(ctx, value, &mut writer)?;
     }
     writer.flush()?;
     let encoded_size = writer.bits_written;

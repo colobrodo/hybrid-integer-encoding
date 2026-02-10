@@ -133,7 +133,7 @@ impl<EP: EncodeParams> IntegerHistograms<EP> {
             "Context out of bounds trying to add symbol {} on context {}, but only {} contexts are available",
             value, context, self.num_contexts
         );
-        let (token, _, _) = encode::<EP>(value.into());
+        let (token, _, _) = encode::<EP>(value);
         self.ctx_histograms[context as usize].add(token)
     }
 
