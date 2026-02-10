@@ -2,7 +2,6 @@ use anyhow::{Context, Result};
 use dsi_bitstream::prelude::*;
 use dsi_progress_logger::{concurrent_progress_logger, prelude::*};
 use lender::*;
-use rayon::current_num_threads;
 use rayon::iter::{ParallelBridge, ParallelIterator};
 use std::fs::File;
 use std::io::{self, BufWriter};
@@ -134,6 +133,7 @@ fn parallel_compression_round_helper<'a, EP, E, C, G, Factory>(
     graph: &G,
     compression_parameters: &CompressionParameters,
     factory: &Factory,
+    num_threads: usize,
     msg: impl AsRef<str>,
     cpl: &mut ConcurrentWrapper,
 ) -> Result<IntegerHistograms<EP>>
@@ -145,7 +145,6 @@ where
     Factory: ThreadEstimatorFactory<'a, E> + Send + Sync,
 {
     let num_symbols = 1 << compression_parameters.max_bits;
-    let num_threads = current_num_threads();
     let split_iter = graph
         .split_iter(num_threads)
         .into_iter()
@@ -248,6 +247,7 @@ fn parallel_first_reference_selection_round<
 >(
     graph: &G,
     compression_parameters: &CompressionParameters,
+    num_threads: usize,
     pl: &mut ConcurrentWrapper,
     msg: impl AsRef<str>,
 ) -> Result<HuffmanGraphEncoderBuilder<E, C, EP>> {
@@ -256,6 +256,7 @@ fn parallel_first_reference_selection_round<
         graph,
         compression_parameters,
         &factory,
+        num_threads,
         msg,
         pl,
     )?;
@@ -279,6 +280,7 @@ fn parallel_reference_selection_round<
     graph: &(impl SequentialGraph + for<'a> SplitLabeling<SplitLender<'a>: ExactSizeLender + Send>),
     huffman_graph_encoder_builder: HuffmanGraphEncoderBuilder<E, C, EP>,
     compression_parameters: &CompressionParameters,
+    num_threads: usize,
     msg: impl AsRef<str>,
     pl: &mut ConcurrentWrapper,
 ) -> Result<HuffmanEstimatedEncoderBuilder<EP, C>> {
@@ -294,6 +296,7 @@ fn parallel_reference_selection_round<
         graph,
         compression_parameters,
         &factory,
+        num_threads,
         msg,
         pl,
     )?;
@@ -316,7 +319,7 @@ pub fn sequential_convert_graph_file<C: ContextModel + Default + Copy + Send + S
     output_basename: impl AsRef<Path>,
     compression_parameters: &CompressionParameters,
 ) -> Result<()> {
-    convert_graph_file::<C>(basename, output_basename, compression_parameters, false)
+    convert_graph_file::<C>(basename, output_basename, compression_parameters, 1)
 }
 
 /// Read a BVGraph from `basename` and convert it to a Huffman-encoded graph running the estimation rounds in parallel.
@@ -325,8 +328,14 @@ pub fn parallel_convert_graph_file<C: ContextModel + Default + Copy + Send + Syn
     basename: impl AsRef<Path>,
     output_basename: impl AsRef<Path>,
     compression_parameters: &CompressionParameters,
+    num_threads: usize,
 ) -> Result<()> {
-    convert_graph_file::<C>(basename, output_basename, compression_parameters, true)
+    convert_graph_file::<C>(
+        basename,
+        output_basename,
+        compression_parameters,
+        num_threads,
+    )
 }
 
 /// Read a BVGraph from `basename` and convert it to a Huffman-encoded graph.
@@ -336,14 +345,14 @@ pub fn convert_graph_file<C: ContextModel + Default + Copy + Send + Sync>(
     basename: impl AsRef<Path>,
     output_basename: impl AsRef<Path>,
     compression_parameters: &CompressionParameters,
-    parallel: bool,
+    num_threads: usize,
 ) -> Result<()> {
     if basename.as_ref().with_extension(EF_EXTENSION).exists() {
         let graph = BvGraph::with_basename(&basename)
             .endianness::<BE>()
             .load()?;
 
-        convert_graph::<C, _>(&graph, output_basename, compression_parameters, parallel)
+        convert_graph::<C, _>(&graph, output_basename, compression_parameters, num_threads)
     } else {
         let seq_graph = BvGraphSeq::with_basename(&basename)
             .endianness::<BE>()
@@ -353,7 +362,7 @@ pub fn convert_graph_file<C: ContextModel + Default + Copy + Send + Sync>(
             &seq_graph,
             output_basename,
             compression_parameters,
-            parallel,
+            num_threads,
         )
     }
 }
@@ -371,7 +380,7 @@ fn run_conversion_rounds<
     seq_graph: &G,
     output_basename: impl AsRef<Path>,
     compression_parameters: &CompressionParameters,
-    parallel: bool,
+    num_threads: usize,
     starting_estimator_name: &str,
     pl: &mut ConcurrentWrapper,
 ) -> Result<()> {
@@ -385,10 +394,11 @@ fn run_conversion_rounds<
     ));
 
     // Run compression for the first round (sequential or parallel)
-    let huffman_graph_encoder_builder = if parallel {
+    let huffman_graph_encoder_builder = if num_threads > 1 {
         parallel_first_reference_selection_round::<EP, E, C, _>(
             seq_graph,
             compression_parameters,
+            num_threads,
             pl,
             "",
         )?
@@ -444,11 +454,12 @@ fn run_conversion_rounds<
     }
 
     // second round build the graph with the first Huffman estimator
-    let mut huffman_graph_encoder_builder = if parallel {
+    let mut huffman_graph_encoder_builder = if num_threads > 1 {
         parallel_reference_selection_round(
             seq_graph,
             huffman_graph_encoder_builder,
             compression_parameters,
+            num_threads,
             "Pushing symbols into encoder builder on first round with Huffman estimator...",
             pl,
         )?
@@ -464,11 +475,12 @@ fn run_conversion_rounds<
 
     // execute all the subsequence rounds
     for round in 2..compression_parameters.num_rounds {
-        huffman_graph_encoder_builder = if parallel {
+        huffman_graph_encoder_builder = if num_threads > 1 {
             parallel_reference_selection_round(
                 seq_graph,
                 huffman_graph_encoder_builder,
                 compression_parameters,
+                num_threads,
                 format!(
                     "Pushing symbols into encoder builder with Huffman estimator for round {}...",
                     round + 1
@@ -511,7 +523,7 @@ pub fn convert_graph<
     seq_graph: &G,
     output_basename: impl AsRef<Path>,
     compression_parameters: &CompressionParameters,
-    parallel: bool,
+    num_threads: usize,
 ) -> Result<()> {
     assert!(
         compression_parameters.num_rounds >= 1,
@@ -532,7 +544,7 @@ pub fn convert_graph<
                 seq_graph,
                 &output_basename,
                 compression_parameters,
-                parallel,
+                num_threads,
                 "Log2Estimator",
                 &mut pl,
             )?;
@@ -542,7 +554,7 @@ pub fn convert_graph<
                 seq_graph,
                 &output_basename,
                 compression_parameters,
-                parallel,
+                num_threads,
                 "FixedEstimator",
                 &mut pl,
             )?;

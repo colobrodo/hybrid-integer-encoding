@@ -8,6 +8,7 @@ mod tests {
         CompressionParameters, ConstantContextModel, ContextModel, SimpleContextModel,
     };
     use lender::Lender;
+    use rayon::current_num_threads;
     use std::{
         path::{Path, PathBuf},
         str::FromStr,
@@ -29,7 +30,12 @@ mod tests {
         let output_basename = temp_dir.path().join(basename.file_name().unwrap());
 
         if parallel {
-            parallel_convert_graph_file::<C>(&basename, &output_basename, &compression_parameters)?;
+            parallel_convert_graph_file::<C>(
+                &basename,
+                &output_basename,
+                &compression_parameters,
+                current_num_threads(),
+            )?;
         } else {
             sequential_convert_graph_file::<C>(
                 &basename,
@@ -71,7 +77,7 @@ mod tests {
         let mut graph = VecGraph::new();
         graph.add_lender(random_graph.iter());
 
-        convert_graph::<C, _>(&graph, &output_basename, &compression_parameters, false)?;
+        convert_graph::<C, _>(&graph, &output_basename, &compression_parameters, 1)?;
         let huffman_graph = load_graph_seq::<C>(&output_basename, compression_parameters.max_bits)?;
         assert!(graph::eq(&graph, &huffman_graph).is_ok());
 
@@ -207,7 +213,7 @@ mod tests {
             &graph,
             &output_basename,
             &compression_parameters,
-            false,
+            1,
         )?;
 
         // Test with wrong max_bits

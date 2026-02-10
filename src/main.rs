@@ -14,7 +14,7 @@ use dsi_bitstream::{
 };
 use epserde::prelude::*;
 
-use anyhow::{Context, Result};
+use anyhow::{ensure, Context, Result};
 use clap::{Parser, Subcommand};
 use lender::{for_, Lender};
 use rand::prelude::*;
@@ -86,6 +86,16 @@ enum Command {
     },
 }
 
+/// Parses the number of threads from a string.
+///
+/// This function is meant to be used with `#[arg(...,  value_parser =
+/// num_threads_parser)]`.
+pub fn num_threads_parser(arg: &str) -> Result<usize> {
+    let num_threads = arg.parse::<usize>()?;
+    ensure!(num_threads > 0, "Number of threads must be greater than 0");
+    Ok(num_threads)
+}
+
 #[derive(Debug, Subcommand)]
 enum GraphCommand {
     /// Convert a BVGraph graph into a one based on hybrid Huffman encoding.
@@ -125,9 +135,9 @@ enum GraphCommand {
         /// The type of estimator to use in the first reference selection round.
         #[arg(long, default_value = "log2")]
         starting_estimator: EstimatorArgument,
-        /// If `true` executes the estimation rounds in parallel.
-        #[arg(long, default_value = "false")]
-        parallel: bool,
+        /// The number of threads to use.
+        #[arg(short = 'j', long, default_value_t = rayon::current_num_threads().max(1), value_parser = num_threads_parser)]
+        num_threads: usize,
     },
     /// Compare a Huffman graph and a graph in BvGraph format and checks that all the successor lists are equal.
     /// It returns a 0 exit code if the graphs are the same, otherwise it prints the first node that is different
@@ -580,7 +590,7 @@ fn main() -> Result<()> {
                 num_rounds,
                 context_model,
                 block_size,
-                parallel,
+                num_threads,
                 starting_estimator,
             } => {
                 let compression_parameters = CompressionParameters {
@@ -606,20 +616,20 @@ fn main() -> Result<()> {
                         &basename,
                         &output_basename,
                         &compression_parameters,
-                        parallel,
+                        num_threads,
                     )?,
                     ContextModelArgument::Simple => convert_graph_file::<SimpleContextModel>(
                         &basename,
                         &output_basename,
                         &compression_parameters,
-                        parallel,
+                        num_threads,
                     )?,
                     ContextModelArgument::Zuckerli => {
                         convert_graph_file::<ZuckerliContextModel<DefaultEncodeParams>>(
                             &basename,
                             &output_basename,
                             &compression_parameters,
-                            parallel,
+                            num_threads,
                         )?
                     }
                 }
