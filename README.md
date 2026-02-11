@@ -1,7 +1,7 @@
 
-This repository provides a Rust implementation of a Huffman encoder for integers using the Hybrid Integer Encoding technique described in Zuckerli<sup>_[1]_</sup> integrating it in the Rust framework of Webgraph<sup>_[2, 3]_</sup>.
+This repository provides a Rust implementation of a Huffman encoder for the Rust framework of Webgraph<sup>_[2, 3]_</sup> using the Hybrid Integer Encoding technique described in Zuckerli<sup>_[1]_</sup>.
 
-Unlike the proposed Huffman encoder, this implementation has no limit on word size and simpler context models, allowing for more flexible and faster encoding schemes.
+Unlike the proposed Huffman encoder, this implementation has no limit on word size and simpler context models, allowing for flexible and faster encoding schemes.
 
 ## References
 
