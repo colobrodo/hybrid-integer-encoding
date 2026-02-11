@@ -2,10 +2,11 @@ use anyhow::{Context, Result};
 use dsi_bitstream::prelude::*;
 use dsi_progress_logger::{concurrent_progress_logger, prelude::*};
 use lender::*;
+use rayon::in_place_scope;
 use rayon::iter::{ParallelBridge, ParallelIterator};
 use std::fs::File;
-use std::io::{self, BufWriter};
-use std::path::Path;
+use std::io::{self, BufReader, BufWriter};
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use webgraph::prelude::*;
@@ -13,13 +14,26 @@ use webgraph::prelude::*;
 use crate::huffman::*;
 
 use super::estimator::{FixedEstimator, HuffmanEstimator, Log2Estimator};
-use super::huffman_graph_encoder::HuffmanGraphEncoderBuilder;
+use super::huffman_graph_encoder::{HuffmanGraphEncoder, HuffmanGraphEncoderBuilder};
 use super::CompressorType;
 use super::Estimator;
 use super::{CompressionParameters, ContextModel};
 
 type HuffmanEstimatedEncoderBuilder<EP, C> =
     HuffmanGraphEncoderBuilder<HuffmanEstimator<EP, CostModel<EP>, C>, C, EP>;
+
+/// Result of compressing a chunk of the graph in parallel.
+/// Contains metadata about the compressed chunk files and their sizes.
+#[derive(Debug)]
+struct ChunkCompressionResult {
+    thread_id: usize,
+    first_node: usize,
+    last_node: usize,
+    chunk_dir: PathBuf,
+    graph_written_bits: u64,
+    offsets_written_bits: u64,
+    num_arcs: u64,
+}
 
 /// A factory trait for creating thread-local estimators of a specific encoders.
 ///
@@ -444,13 +458,24 @@ fn run_conversion_rounds<
     pl.done();
 
     if compression_parameters.num_rounds == 1 {
-        return write_graph_to_disk(
-            &output_basename,
-            huffman_graph_encoder_builder,
-            seq_graph,
-            compression_parameters,
-            pl,
-        );
+        return if num_threads > 1 {
+            parallel_write_graph_to_disk(
+                &output_basename,
+                huffman_graph_encoder_builder,
+                seq_graph,
+                compression_parameters,
+                num_threads,
+                pl,
+            )
+        } else {
+            write_graph_to_disk(
+                &output_basename,
+                huffman_graph_encoder_builder,
+                seq_graph,
+                compression_parameters,
+                pl,
+            )
+        };
     }
 
     // second round build the graph with the first Huffman estimator
@@ -503,13 +528,24 @@ fn run_conversion_rounds<
         };
     }
 
-    write_graph_to_disk(
-        &output_basename,
-        huffman_graph_encoder_builder,
-        seq_graph,
-        compression_parameters,
-        pl,
-    )?;
+    if num_threads > 1 {
+        parallel_write_graph_to_disk(
+            &output_basename,
+            huffman_graph_encoder_builder,
+            seq_graph,
+            compression_parameters,
+            num_threads,
+            pl,
+        )?;
+    } else {
+        write_graph_to_disk(
+            &output_basename,
+            huffman_graph_encoder_builder,
+            seq_graph,
+            compression_parameters,
+            pl,
+        )?;
+    }
 
     Ok(())
 }
@@ -560,6 +596,293 @@ pub fn convert_graph<
             )?;
         }
     }
+
+    Ok(())
+}
+
+/// Parallel version of write_graph_to_disk that compresses the graph in parallel.
+/// Each thread compresses a chunk of the graph to temporary files, then the files
+/// are concatenated in order to produce the final output.
+#[allow(clippy::too_many_arguments)]
+fn parallel_write_graph_to_disk<
+    EP: EncodeParams + Send + Sync,
+    E: Encode,
+    C: ContextModel + Default + Copy + Send + Sync,
+    G: SequentialGraph + for<'a> SplitLabeling<SplitLender<'a>: ExactSizeLender + Send>,
+>(
+    output_basename: impl AsRef<Path>,
+    huffman_graph_encoder_builder: HuffmanGraphEncoderBuilder<E, C, EP>,
+    seq_graph: &G,
+    compression_parameters: &CompressionParameters,
+    num_threads: usize,
+    pl: &mut ConcurrentWrapper,
+) -> Result<()> {
+    pl.start("Building the encoder with the cost model obtained from estimation rounds...");
+
+    // Create temporary directory for chunk files
+    let tmp_dir = tempfile::tempdir().context("Failed to create temporary directory")?;
+    let tmp_path = tmp_dir.path();
+
+    // Get histograms and compute cost model for creating per-thread estimators
+    let histograms = huffman_graph_encoder_builder.histograms();
+    let cost_model = histograms.cost();
+
+    // Build the HuffmanEncoder from the histograms
+    let huffman_encoder = HuffmanEncoder::<EP>::new(histograms, compression_parameters.max_bits);
+
+    // Create factory for thread-local HuffmanEstimators
+    let estimator_factory = HuffmanEstimatorFactory::<'_, EP, C> {
+        cost_model: &cost_model,
+        _marker: std::marker::PhantomData,
+    };
+
+    // Create output file and write header directly
+    // We will keep this writer open and copy chunk bits to it
+    let output_path = output_basename.as_ref().with_extension(GRAPH_EXTENSION);
+    let outfile = File::create(&output_path)
+        .with_context(|| format!("Could not create {}", output_path.display()))?;
+    let graph_writer =
+        BufBitWriter::<LE, _>::new(WordAdapter::<u32, _>::new(BufWriter::new(outfile)));
+    let mut graph_writer = CountBitWriter::<LE, _>::new(graph_writer);
+
+    pl.done();
+
+    pl.info(format_args!("Writing header for the graph..."));
+    let header_size = huffman_encoder
+        .write_header(&mut graph_writer)
+        .context("Failed to write Huffman encoder header")?;
+
+    pl.item_name("node")
+        .expected_updates(Some(seq_graph.num_nodes()));
+    pl.start("Compressing the graph in parallel...");
+
+    // Split the graph into chunks for parallel processing
+    let split_iter: Vec<_> = seq_graph.split_iter(num_threads).into_iter().collect();
+
+    // Channel to collect results from threads
+    let (tx, rx) = std::sync::mpsc::channel::<Result<ChunkCompressionResult>>();
+
+    // Expected first node for validation
+    let mut expected_first_node = 0;
+
+    in_place_scope(|s| {
+        for (thread_id, mut thread_lender) in split_iter.into_iter().enumerate() {
+            let tx = tx.clone();
+            let encoder = huffman_encoder.clone();
+            let chunk_dir = tmp_path.join(format!("{:016x}", thread_id));
+            let compression_params = compression_parameters.clone();
+            let mut thread_pl = pl.clone();
+            let lender_len = thread_lender.len();
+            let estimator = estimator_factory.create_estimator();
+
+            s.spawn(move |_| {
+                let result = (|| -> Result<ChunkCompressionResult> {
+                    // Create chunk directory
+                    std::fs::create_dir_all(&chunk_dir)
+                        .with_context(|| format!("Could not create {}", chunk_dir.display()))?;
+
+                    let Some((node_id, successors)) = thread_lender.next() else {
+                        return Err(anyhow::anyhow!("Empty chunk in thread {}", thread_id));
+                    };
+
+                    let first_node = node_id;
+
+                    // Create graph and offsets files for this chunk
+                    let chunk_graph_path = chunk_dir.join("chunk.graph");
+                    let chunk_offsets_path = chunk_dir.join("chunk.offsets");
+
+                    let chunk_file = File::create(&chunk_graph_path).with_context(|| {
+                        format!("Could not create {}", chunk_graph_path.display())
+                    })?;
+                    let chunk_writer = BufBitWriter::<LE, _>::new(WordAdapter::<u32, _>::new(
+                        BufWriter::new(chunk_file),
+                    ));
+                    let mut chunk_writer = CountBitWriter::<LE, _>::new(chunk_writer);
+
+                    // Create encoder for this thread using the HuffmanEstimator
+                    // constructed from the cost model of the previous estimation rounds
+                    let chunk_encoder = HuffmanGraphEncoder::new(
+                        encoder,
+                        estimator,
+                        C::default(),
+                        &mut chunk_writer,
+                    );
+
+                    // Create offsets writer for this chunk
+                    let chunk_offsets_writer =
+                        OffsetsWriter::from_path(&chunk_offsets_path, false)?;
+
+                    let stats;
+                    let mut last_node = first_node;
+
+                    match compression_params.compressor {
+                        CompressorType::Approximated { chunk_size } => {
+                            let mut compressor = BvCompZ::new(
+                                chunk_encoder,
+                                chunk_offsets_writer,
+                                compression_params.compression_window,
+                                chunk_size,
+                                compression_params.max_ref_count,
+                                compression_params.min_interval_length,
+                                first_node,
+                            );
+                            compressor.push(successors)?;
+                            thread_pl.update();
+                            for_![(node, succ) in thread_lender {
+                                last_node = node;
+                                compressor.push(succ)?;
+                                thread_pl.update();
+                            }];
+                            stats = compressor.flush()?;
+                        }
+                        CompressorType::Greedy => {
+                            let mut compressor = BvComp::new(
+                                chunk_encoder,
+                                chunk_offsets_writer,
+                                compression_params.compression_window,
+                                compression_params.max_ref_count,
+                                compression_params.min_interval_length,
+                                first_node,
+                            );
+                            compressor.push(successors)?;
+                            thread_pl.update();
+                            for_![(node, succ) in thread_lender {
+                                last_node = node;
+                                compressor.push(succ)?;
+                                thread_pl.update();
+                            }];
+                            stats = compressor.flush()?;
+                        }
+                    }
+
+                    Ok(ChunkCompressionResult {
+                        thread_id,
+                        first_node,
+                        last_node,
+                        chunk_dir,
+                        graph_written_bits: stats.written_bits,
+                        offsets_written_bits: stats.offsets_written_bits,
+                        num_arcs: stats.num_arcs,
+                    })
+                })();
+
+                tx.send(result).unwrap();
+            });
+
+            expected_first_node += lender_len;
+        }
+    });
+
+    drop(tx);
+
+    // Collect all results and sort by thread_id to maintain order
+    let mut chunk_results = rx.into_iter().collect::<Result<Vec<_>>>()?;
+    chunk_results.sort_by_key(|r| r.thread_id);
+
+    pl.done();
+
+    pl.start("Concatenating compressed chunks to final graph...");
+
+    let header_bits = graph_writer.bits_written as u64;
+
+    // Create offsets file
+    let offsets_path = output_basename.as_ref().with_extension(OFFSETS_EXTENSION);
+    let mut offsets_writer =
+        BufBitWriter::<BE, _>::new(WordAdapter::<usize, _>::new(BufWriter::new(
+            File::create(&offsets_path)
+                .with_context(|| format!("Could not create {}", offsets_path.display()))?,
+        )));
+    // Write initial offset (0, gamma-encoded)
+    offsets_writer.write_gamma(0)?;
+
+    let mut total_graph_bits = header_bits;
+    let mut _total_offsets_bits: u64 = 0;
+    let mut _total_arcs: u64 = 0;
+    let mut next_expected_node = 0;
+
+    // Concatenate chunks in order, deleting temp directories as we go
+    for chunk in chunk_results {
+        anyhow::ensure!(
+            chunk.first_node == next_expected_node,
+            "Non-adjacent chunks: chunk {} has first node {} instead of {}",
+            chunk.thread_id,
+            chunk.first_node,
+            next_expected_node
+        );
+        next_expected_node = chunk.last_node + 1;
+
+        // Copy graph bits
+        let chunk_graph_path = chunk.chunk_dir.join("chunk.graph");
+        let chunk_file = File::open(&chunk_graph_path)
+            .with_context(|| format!("Could not open {}", chunk_graph_path.display()))?;
+        let mut chunk_reader =
+            BufBitReader::<LE, _>::new(WordAdapter::<u32, _>::new(BufReader::new(chunk_file)));
+        graph_writer
+            .copy_from(&mut chunk_reader, chunk.graph_written_bits)
+            .with_context(|| {
+                format!(
+                    "Could not copy graph bits from {}",
+                    chunk_graph_path.display()
+                )
+            })?;
+        total_graph_bits += chunk.graph_written_bits;
+
+        // Copy offsets bits
+        let chunk_offsets_path = chunk.chunk_dir.join("chunk.offsets");
+        let chunk_offsets_file = File::open(&chunk_offsets_path)
+            .with_context(|| format!("Could not open {}", chunk_offsets_path.display()))?;
+        let mut chunk_offsets_reader = BufBitReader::<BE, _>::new(WordAdapter::<u32, _>::new(
+            BufReader::new(chunk_offsets_file),
+        ));
+        offsets_writer
+            .copy_from(&mut chunk_offsets_reader, chunk.offsets_written_bits)
+            .with_context(|| {
+                format!(
+                    "Could not copy offsets bits from {}",
+                    chunk_offsets_path.display()
+                )
+            })?;
+        _total_offsets_bits += chunk.offsets_written_bits;
+        _total_arcs += chunk.num_arcs;
+
+        // Delete the chunk directory immediately to save disk space
+        std::fs::remove_dir_all(&chunk.chunk_dir)
+            .with_context(|| format!("Could not remove {}", chunk.chunk_dir.display()))?;
+
+        pl.info(format_args!(
+            "Copied chunk {} ({} graph bits, {} offset bits)",
+            chunk.thread_id, chunk.graph_written_bits, chunk.offsets_written_bits
+        ));
+    }
+
+    // Flush writers
+    BitWrite::flush(&mut graph_writer)?;
+    BitWrite::flush(&mut offsets_writer)?;
+
+    pl.done();
+
+    pl.info(format_args!(
+        "After last round with Huffman estimator: Recompressed graph using {} bits ({} bits of header)",
+        total_graph_bits, header_size
+    ));
+
+    // Write properties file
+    let properties = compression_parameters
+        .to_properties(
+            seq_graph.num_nodes(),
+            seq_graph
+                .num_arcs_hint()
+                .expect("Cannot know how many arcs the source graph contains"),
+            total_graph_bits as _,
+            C::NAME,
+        )
+        .context("Cannot serialize properties file")?;
+    let properties_path = output_basename.as_ref().with_extension("properties");
+    std::fs::write(&properties_path, properties)
+        .with_context(|| format!("Could not write {}", properties_path.display()))?;
+
+    // Clean up temp directory (should already be empty)
+    drop(tmp_dir);
 
     Ok(())
 }

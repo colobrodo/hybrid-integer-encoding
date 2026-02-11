@@ -37,6 +37,16 @@ pub struct HuffmanEncoder<EP: EncodeParams = DefaultEncodeParams> {
     _marker: core::marker::PhantomData<EP>,
 }
 
+impl<EP: EncodeParams> Clone for HuffmanEncoder<EP> {
+    fn clone(&self) -> Self {
+        Self {
+            max_bits: self.max_bits,
+            info_: self.info_.clone(),
+            _marker: core::marker::PhantomData,
+        }
+    }
+}
+
 /// Stores an histogram for a set of integers in [0..n)
 pub struct Histogram {
     frequencies: Vec<usize>,

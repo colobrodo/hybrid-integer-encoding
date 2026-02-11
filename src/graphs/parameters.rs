@@ -1,6 +1,7 @@
 use anyhow::Result;
 
 /// Parameters used to configure the compression process.
+#[derive(Clone)]
 pub struct CompressionParameters {
     /// The window size in which chose the next reference.
     pub compression_window: usize,

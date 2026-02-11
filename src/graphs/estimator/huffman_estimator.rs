@@ -30,6 +30,24 @@ impl<EP: EncodeParams, S: ContextModel, M: Borrow<CostModel<EP>>> HuffmanEstimat
     }
 }
 
+impl<EP: EncodeParams, S: ContextModel> Copy for HuffmanEstimator<EP, &CostModel<EP>, S> where
+    S: Copy
+{
+}
+
+impl<EP: EncodeParams, S: ContextModel> Clone for HuffmanEstimator<EP, &CostModel<EP>, S>
+where
+    S: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            cost_model: self.cost_model,
+            context_model: self.context_model.clone(),
+            _marker: std::marker::PhantomData,
+        }
+    }
+}
+
 impl<EP: EncodeParams, M: Borrow<CostModel<EP>>, S: ContextModel> Encode
     for HuffmanEstimator<EP, M, S>
 {
