@@ -11,7 +11,7 @@ mod utils;
 
 use anyhow::{Context, Result};
 use dsi_bitstream::prelude::*;
-use epserde::deser::Deserialize;
+use epserde::prelude::*;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;

@@ -7,14 +7,14 @@ edition = "2021"
 anyhow = "1.0.93"
 clap = { version = "4.5.21", features = ["derive"] }
 common_traits = "0.12.0"
-dsi-bitstream = "0.6.0"
-dsi-progress-logger = "0.8.2"
+dsi-bitstream = "0.7.0"
+dsi-progress-logger = "=0.8.2"
 env_logger = "0.11.5"
-epserde = "0.11.1"
-sux = { version = "0.10.1", features = ["epserde", "rayon", "mmap"] }
-lender = "0.4.0"
+epserde = "0.12.0"
+sux = { version = "0.12.0", features = ["epserde", "rayon", "mmap"] }
+lender = "0.5.2"
 log = "0.4.22"
-mmap-rs = "0.6.0"
+mmap-rs = "0.7.0"
 rand = "0.9.0"
 rayon = "1.10.0"
 webgraph = { git = "https://github.com/vigna/webgraph-rs.git" }
