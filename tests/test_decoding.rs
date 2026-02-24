@@ -6,8 +6,8 @@ mod tests {
         traits::{BitWrite, LE},
     };
     use hybrid_integer_encoding::huffman::{
-        encode, DefaultEncodeParams, EntropyCoder, HuffmanDecoder, HuffmanEncoder,
-        IntegerHistograms, DEFAULT_MAX_HUFFMAN_BITS, DEFAULT_NUM_SYMBOLS,
+        encode, DefaultEncodeParams, HuffmanDecoder, HuffmanEncoder, IntegerHistograms,
+        DEFAULT_MAX_HUFFMAN_BITS, DEFAULT_NUM_SYMBOLS,
     };
     use rand::prelude::*;
     use rand_distr::Zipf;
@@ -47,14 +47,14 @@ mod tests {
             core::slice::from_raw_parts(binary_data.as_ptr() as *const u32, nsamples * 2)
         };
 
-        let mut reader = HuffmanDecoder::from_bitreader(
+        let mut reader = HuffmanDecoder::<_, DefaultEncodeParams>::from_bitreader(
             BufBitReader::<LE, _>::new(MemWordReader::new(binary_data)),
             MAX_BITS,
             NUM_CONTEXT,
         )?;
 
         for &(ctx, original) in integers.iter() {
-            let value = reader.read::<DefaultEncodeParams>(ctx as usize)?;
+            let value = reader.read(ctx as usize)?;
             assert_eq!(value, original as usize);
         }
         Ok(())
@@ -120,13 +120,13 @@ mod tests {
             core::slice::from_raw_parts(binary_data.as_ptr() as *const u32, binary_data.len() * 2)
         };
 
-        let mut reader = HuffmanDecoder::from_bitreader(
+        let mut reader = HuffmanDecoder::<_, DefaultEncodeParams>::from_bitreader(
             BufBitReader::<LE, _>::new(MemWordReader::new(binary_data)),
             MAX_BITS,
             NUM_CONTEXT,
         )?;
 
-        let decoded_value = reader.read::<DefaultEncodeParams>(context as _)?;
+        let decoded_value = reader.read(context as _)?;
         assert_eq!(decoded_value, value_to_encode as usize);
         Ok(())
     }

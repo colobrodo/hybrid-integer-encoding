@@ -33,7 +33,7 @@ use hybrid_integer_encoding::{
         SimpleContextModel, ZuckerliContextModel,
     },
     huffman::{
-        encode, DefaultEncodeParams, EncodeParams, EntropyCoder, HuffmanDecoder, HuffmanEncoder,
+        encode, DefaultEncodeParams, EncodeParams, HuffmanDecoder, HuffmanEncoder,
         IntegerHistograms,
     },
 };
@@ -371,7 +371,7 @@ fn decode_file(
     num_context: usize,
 ) -> Result<Vec<usize>> {
     let file = File::open(path)?;
-    let mut reader = HuffmanDecoder::from_bitreader(
+    let mut reader = HuffmanDecoder::<_, DefaultEncodeParams>::from_bitreader(
         BufBitReader::<LE, _>::new(WordAdapter::<u32, _>::new(BufReader::new(file))),
         max_bits,
         num_context,
@@ -379,7 +379,7 @@ fn decode_file(
     let mut i = 0;
     let mut integers = Vec::new();
     let mut next_context = 0;
-    while let Ok(value) = reader.read::<DefaultEncodeParams>(next_context) {
+    while let Ok(value) = reader.read(next_context) {
         // TODO: HACK: reading from mem word, read a 0 at the end of the bitstream but the length of the encoded file is not know
         if i == length {
             break;
@@ -487,7 +487,7 @@ fn bench<EP: EncodeParams>(
     let mut time_per_repeat = Vec::new();
 
     for _ in 0..repeats {
-        let mut reader = HuffmanDecoder::from_bitreader(
+        let mut reader = HuffmanDecoder::<_, EP>::from_bitreader(
             BufBitReader::<LE, _>::new(MemWordReader::new(&binary_data)),
             max_bits,
             num_contexts,
@@ -496,7 +496,7 @@ fn bench<EP: EncodeParams>(
         let start = std::time::Instant::now();
 
         for (ctx, _original) in integers.iter() {
-            let _value = black_box(reader.read::<DefaultEncodeParams>(*ctx as usize)?);
+            let _value = black_box(reader.read(*ctx as usize)?);
         }
         let elapsed_time = (start.elapsed().as_secs_f64() / num_values as f64) * 1e9;
         println!("Decode:    {:>20} ns/read", elapsed_time);

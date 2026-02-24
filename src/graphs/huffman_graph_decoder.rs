@@ -6,24 +6,20 @@ use epserde::deser::MemCase;
 use sux::traits::IndexedSeq;
 use webgraph::prelude::*;
 
-use crate::huffman::{
-    DefaultEncodeParams, EncodeParams, EntropyCoder, HuffmanDecoder, HuffmanTable,
-};
+use crate::huffman::{DefaultEncodeParams, EncodeParams, HuffmanDecoder, HuffmanTable};
 
 use super::{BvGraphComponent, ContextModel};
 
 pub struct HuffmanGraphDecoder<EP: EncodeParams, R: BitRead<LE>, M: ContextModel> {
     context_model: M,
-    decoder: HuffmanDecoder<R>,
-    _marker: core::marker::PhantomData<EP>,
+    decoder: HuffmanDecoder<R, EP>,
 }
 
 impl<EP: EncodeParams, R: BitRead<LE>, S: ContextModel> HuffmanGraphDecoder<EP, R, S> {
-    pub fn new(decoder: HuffmanDecoder<R>, model: S) -> Self {
+    pub fn new(decoder: HuffmanDecoder<R, EP>, model: S) -> Self {
         HuffmanGraphDecoder {
             decoder,
             context_model: model,
-            _marker: std::marker::PhantomData,
         }
     }
 
@@ -32,7 +28,7 @@ impl<EP: EncodeParams, R: BitRead<LE>, S: ContextModel> HuffmanGraphDecoder<EP, 
         let context = self.context_model.choose_context(component);
         let symbol = self
             .decoder
-            .read::<EP>(context as usize)
+            .read(context as usize)
             .expect("Reading symbol from huffman reader during graph decoding")
             as u64;
         self.context_model.update(component, symbol);
@@ -154,12 +150,12 @@ pub struct RandomAccessHuffmanDecoderFactory<
     C: ContextModel + Clone,
     EP: EncodeParams = DefaultEncodeParams,
 > {
-    _marker: core::marker::PhantomData<(EP, C)>,
+    _marker: core::marker::PhantomData<C>,
     factory: F,
     /// The offsets into the data.
     offsets: MemCase<OFF>,
     model: C,
-    table: HuffmanTable,
+    table: HuffmanTable<EP>,
 }
 
 impl<OFF: Offsets, F: CodesReaderFactory<LE>, C: ContextModel + Clone, EP: EncodeParams>
@@ -174,7 +170,8 @@ where
         max_bits: usize,
     ) -> anyhow::Result<Self> {
         let mut reader = factory.new_reader();
-        let table = HuffmanDecoder::decode_table(&mut reader, max_bits, C::num_contexts())?;
+        let table =
+            HuffmanDecoder::<_, EP>::decode_table(&mut reader, max_bits, C::num_contexts())?;
         drop(reader);
         Ok(RandomAccessHuffmanDecoderFactory {
             offsets,
