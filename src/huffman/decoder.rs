@@ -183,6 +183,7 @@ impl<R: BitRead<LE>> HuffmanDecoder<R> {
 }
 
 impl<R: BitRead<LE>> EntropyCoder for HuffmanDecoder<R> {
+    #[inline(always)]
     fn read_token(&mut self, context: usize) -> Result<usize> {
         let bits: u64 = self.reader.peek_bits(self.table.max_bits)?.cast();
         let info = self.table.info_[context][bits as usize];
