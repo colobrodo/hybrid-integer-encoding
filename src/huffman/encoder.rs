@@ -245,7 +245,7 @@ fn compute_symbol_num_bits(histogram: &[usize], max_bits: usize, infos: &mut [Hu
     // symbols consecutively in increasing order of cost.
     for i in 0..(max_bits - 1) {
         bags[i].sort();
-        for j in (0..bags[i].len() - 1).step_by(2) {
+        for j in (0..bags[i].len().saturating_sub(1)).step_by(2) {
             let nf = bags[i][j].0 + bags[i][j + 1].0;
             let mut n_sym = mem::take(&mut bags[i][j].1);
             n_sym.append(&mut bags[i][j + 1].1);
