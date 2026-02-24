@@ -111,7 +111,6 @@ impl CompressionParameters {
             bitstream_len as f64 / num_nodes as f64
         ));
         s.push_str(&format!("length={bitstream_len}\n"));
-        s.push_str(&format!("length={bitstream_len}\n"));
         let context_model_name = context_model_name.as_ref();
         s.push_str(&format!("contextmodel={context_model_name}\n"));
         s.push_str(&format!("maxhuffmanbits={}\n", self.max_bits));
