@@ -69,7 +69,7 @@ impl Histogram {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.len() > 0
+        self.len() == 0
     }
 
     /// Returns the total number of occurrences for all the elements in the interval.
